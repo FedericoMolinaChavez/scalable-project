@@ -1,0 +1,615 @@
+openapi: 3.1.0
+info:
+  title: API de reservas
+  version: 0.1.0
+  description: |
+    Contrato único entre el backend en Go y el frontend en React. Los tipos de
+    ambos lados se generan desde aquí, así que este archivo es la fuente de
+    verdad: un cambio que rompa el contrato rompe la compilación de los dos, en
+    vez de aparecer como un fallo en tiempo de ejecución.
+
+    Solo cubre la rebanada inicial —catálogo, disponibilidad y creación de
+    reservas—. El resto de los RF se añaden a medida que se implementan.
+servers:
+  - url: http://localhost:8080
+    description: Desarrollo local
+tags:
+  - name: catalogo
+    description: Sedes y servicios (RF-26)
+  - name: disponibilidad
+    description: Consulta de horarios libres (RF-26)
+  - name: reservas
+    description: Creación y consulta de reservas (RF-01, RF-02, RF-03)
+paths:
+  /v1/sedes:
+    get:
+      operationId: listarSedes
+      summary: Sedes del tenant
+      tags:
+        - catalogo
+      parameters:
+        - $ref: '#/components/parameters/Tenant'
+      responses:
+        '200':
+          description: Listado de sedes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListaSedes'
+        '400':
+          $ref: '#/components/responses/PeticionInvalida'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /v1/servicios:
+    get:
+      operationId: listarServicios
+      summary: Servicios ofrecidos, opcionalmente filtrados por sede
+      tags:
+        - catalogo
+      parameters:
+        - $ref: '#/components/parameters/Tenant'
+        - name: sede_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Listado de servicios
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListaServicios'
+        '400':
+          $ref: '#/components/responses/PeticionInvalida'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /v1/disponibilidad:
+    get:
+      operationId: consultarDisponibilidad
+      summary: Franjas libres de un servicio en un rango
+      description: |
+        Sirve el 90% del tráfico (RNF-03) desde caché, con los 2 s de
+        desactualización que RNF-10 autoriza.
+
+        La lectura es optimista a propósito: puede devolver una franja que otro
+        cliente acaba de tomar. Quien decide es el núcleo al insertar, contra la
+        restricción EXCLUDE (flujo alternativo 3 de RF-01). Un cliente que trate
+        esta respuesta como una reserva garantizada está mal escrito.
+      tags:
+        - disponibilidad
+      parameters:
+        - $ref: '#/components/parameters/Tenant'
+        - name: servicio_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: desde
+          in: query
+          required: true
+          description: Instante inicial, inclusive.
+          schema:
+            type: string
+            format: date-time
+        - name: hasta
+          in: query
+          required: true
+          description: Instante final, exclusive.
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Franjas libres
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Disponibilidad'
+        '400':
+          $ref: '#/components/responses/PeticionInvalida'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /v1/reservas:
+    get:
+      operationId: listarReservas
+      summary: Reservas de la cuenta (RF-02, filtros de RF-09)
+      tags:
+        - reservas
+      parameters:
+        - $ref: '#/components/parameters/Tenant'
+        - name: estado
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/EstadoReserva'
+          style: form
+          explode: false
+        - name: desde
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: hasta
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: limite
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: cursor
+          in: query
+          required: false
+          description: |
+            Cursor opaco de la página siguiente. Paginación por cursor y no por
+            desplazamiento: con OFFSET, insertar una fila mientras se pagina
+            desplaza el resto y el cliente ve duplicados o se salta filas.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Página de reservas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListaReservas'
+        '400':
+          $ref: '#/components/responses/PeticionInvalida'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+    post:
+      operationId: crearReserva
+      summary: Crear una reserva (RF-01)
+      description: |
+        Ruta crítica de RNF-01: presupuesto de 200 ms. Devuelve una reserva
+        **pendiente** con el cupo ya garantizado, sin esperar a que el pago se
+        confirme. La confirmación llega después por el webhook de Stripe (RF-33),
+        fuera de este presupuesto.
+
+        La reserva pendiente caduca en `expira_en`. Si el pago no llega antes, un
+        trabajador la marca expirada y libera el cupo (RF-27).
+      tags:
+        - reservas
+      parameters:
+        - $ref: '#/components/parameters/Tenant'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: |
+            Clave única de la operación. Obligatoria, no opcional: un agente que
+            reintenta un POST tras un timeout crearía dos bloqueos que nadie
+            libera hasta el TTL. Repetir la misma clave devuelve la reserva ya
+            creada en vez de crear otra.
+          schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NuevaReserva'
+      responses:
+        '201':
+          description: Reserva creada, pendiente de pago
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservaCreada'
+        '400':
+          $ref: '#/components/responses/PeticionInvalida'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |
+            El horario ya está tomado. Es la respuesta al rechazo de la
+            restricción EXCLUDE por otra transacción concurrente: no es un error
+            del cliente ni del servidor, es el resultado normal de perder una
+            carrera por el mismo cupo.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problema'
+        '422':
+          $ref: '#/components/responses/NoProcesable'
+        '429':
+          $ref: '#/components/responses/DemasiadasPeticiones'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /v1/reservas/{id}:
+    get:
+      operationId: obtenerReserva
+      summary: Detalle de una reserva (RF-03)
+      tags:
+        - reservas
+      parameters:
+        - $ref: '#/components/parameters/Tenant'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: La reserva
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reserva'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+components:
+  parameters:
+    Tenant:
+      name: X-Tenant-Id
+      in: header
+      required: true
+      description: |
+        Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+        (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+        de un cliente en producción permitiría leer los datos de cualquier otro
+        tenant.
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    EstadoCatalogo:
+      type: string
+      enum:
+        - activo
+        - inactivo
+    Sede:
+      type: object
+      required:
+        - id
+        - nombre
+        - zona_horaria
+        - estado
+      properties:
+        id:
+          type: string
+          format: uuid
+        nombre:
+          type: string
+        zona_horaria:
+          type: string
+          description: |
+            Identificador IANA. Se guarda por sede y no global porque un tenant
+            puede operar en varias zonas (RF-38), y una franja horaria sin zona es
+            ambigua dos veces al año.
+          examples:
+            - America/Bogota
+        direccion:
+          type: string
+        estado:
+          $ref: '#/components/schemas/EstadoCatalogo'
+    ListaSedes:
+      type: object
+      required:
+        - datos
+      properties:
+        datos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Sede'
+    Problema:
+      type: object
+      description: |
+        Formato de error único de la API, según RFC 9457 (problem details). Se usa
+        un estándar en vez de un formato propio para que el cliente pueda tratar los
+        errores de forma uniforme y para que una respuesta de error sea
+        indistinguible venga del componente de ARQ-01 que venga.
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+          format: uri
+          description: Identificador estable del tipo de problema.
+          examples:
+            - https://api.reservas/errores/horario-ocupado
+        title:
+          type: string
+          description: Resumen legible, constante para un mismo type.
+        status:
+          type: integer
+          description: Código HTTP, repetido en el cuerpo.
+        detail:
+          type: string
+          description: Explicación concreta de esta ocurrencia.
+        instance:
+          type: string
+          description: Identificador de la petición, para cruzar con las trazas.
+        errores:
+          type: array
+          description: Detalle por campo, cuando el problema es de validación.
+          items:
+            type: object
+            required:
+              - campo
+              - mensaje
+            properties:
+              campo:
+                type: string
+              mensaje:
+                type: string
+    Dinero:
+      type: object
+      description: |
+        El monto va como cadena decimal, no como número. En JSON los números son de
+        coma flotante y 80000.10 no se representa exactamente; con dinero eso acaba
+        en un céntimo de diferencia entre lo que se cobra y lo que se muestra. La
+        columna del esquema es `numeric`, que sí es exacta, y una cadena la preserva
+        de extremo a extremo.
+      required:
+        - monto
+        - moneda
+      properties:
+        monto:
+          type: string
+          pattern: ^-?\d+(\.\d{1,4})?$
+          examples:
+            - '80000.00'
+        moneda:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: Código ISO 4217.
+          examples:
+            - COP
+    Servicio:
+      type: object
+      required:
+        - id
+        - sede_id
+        - nombre
+        - duracion_min
+        - precio
+        - estado
+      properties:
+        id:
+          type: string
+          format: uuid
+        sede_id:
+          type: string
+          format: uuid
+        nombre:
+          type: string
+        descripcion:
+          type: string
+        duracion_min:
+          type: integer
+          minimum: 1
+          description: Duración en minutos.
+        precio:
+          $ref: '#/components/schemas/Dinero'
+        estado:
+          $ref: '#/components/schemas/EstadoCatalogo'
+    ListaServicios:
+      type: object
+      required:
+        - datos
+      properties:
+        datos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Servicio'
+    Periodo:
+      type: object
+      description: |
+        Intervalo semiabierto `[inicio, fin)`. El límite inferior entra, el superior
+        no.
+
+        No es un detalle de estilo: con ambos límites cerrados, 10:00–11:00 y
+        11:00–12:00 comparten un instante, el operador `&&` de PostgreSQL las declara
+        solapadas y la restricción EXCLUDE rechazaría dos citas consecutivas
+        perfectamente válidas.
+      required:
+        - inicio
+        - fin
+      properties:
+        inicio:
+          type: string
+          format: date-time
+        fin:
+          type: string
+          format: date-time
+    Franja:
+      type: object
+      required:
+        - periodo
+        - recurso_id
+      properties:
+        periodo:
+          $ref: '#/components/schemas/Periodo'
+        recurso_id:
+          type: string
+          format: uuid
+    Disponibilidad:
+      type: object
+      required:
+        - servicio_id
+        - franjas
+        - calculada_en
+      properties:
+        servicio_id:
+          type: string
+          format: uuid
+        franjas:
+          type: array
+          items:
+            $ref: '#/components/schemas/Franja'
+        calculada_en:
+          type: string
+          format: date-time
+          description: |
+            Cuándo se calculó esta vista. El cliente puede saber así cuánta
+            desactualización está viendo, dentro de los 2 s que RNF-10 permite.
+    EstadoReserva:
+      type: string
+      description: Estados de RF-28.
+      enum:
+        - pendiente
+        - confirmada
+        - en_curso
+        - completada
+        - cancelada
+        - no_show
+        - expirada
+    Contacto:
+      type: object
+      required:
+        - nombre
+        - email
+      properties:
+        nombre:
+          type: string
+          minLength: 1
+          maxLength: 200
+        email:
+          type: string
+          format: email
+        telefono:
+          type: string
+    Reserva:
+      type: object
+      required:
+        - id
+        - servicio_id
+        - recurso_id
+        - periodo
+        - estado
+        - precio_cobrado
+        - creada_en
+      properties:
+        id:
+          type: string
+          format: uuid
+        servicio_id:
+          type: string
+          format: uuid
+        recurso_id:
+          type: string
+          format: uuid
+        periodo:
+          $ref: '#/components/schemas/Periodo'
+        estado:
+          $ref: '#/components/schemas/EstadoReserva'
+        precio_cobrado:
+          $ref: '#/components/schemas/Dinero'
+        contacto:
+          $ref: '#/components/schemas/Contacto'
+        expira_en:
+          type: string
+          format: date-time
+          description: |
+            Solo mientras el estado es `pendiente`. Pasado ese instante el cupo
+            puede liberarse (RF-27).
+        creada_en:
+          type: string
+          format: date-time
+    ListaReservas:
+      type: object
+      required:
+        - datos
+      properties:
+        datos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reserva'
+        siguiente_cursor:
+          type: string
+          description: Ausente cuando no hay más páginas.
+    NuevaReserva:
+      type: object
+      required:
+        - servicio_id
+        - recurso_id
+        - periodo
+        - contacto
+      properties:
+        servicio_id:
+          type: string
+          format: uuid
+        recurso_id:
+          type: string
+          format: uuid
+        periodo:
+          $ref: '#/components/schemas/Periodo'
+        contacto:
+          $ref: '#/components/schemas/Contacto'
+        voucher_codigo:
+          type: string
+          description: Código de descuento, si aplica (RF-08).
+    ReservaCreada:
+      type: object
+      description: |
+        Lo que devuelve la ruta crítica: la reserva ya con el cupo garantizado, más
+        el secreto que el cliente necesita para confirmar el pago contra Stripe
+        directamente, sin que el importe pase por este backend.
+      required:
+        - reserva
+      properties:
+        reserva:
+          $ref: '#/components/schemas/Reserva'
+        pago_client_secret:
+          type: string
+          description: '`client_secret` del PaymentIntent de Stripe.'
+  responses:
+    PeticionInvalida:
+      description: La petición está mal formada
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+    ErrorInterno:
+      description: Error no previsto
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+    NoEncontrado:
+      description: |
+        No existe. Bajo RLS, "no existe" y "existe pero es de otro tenant" son
+        indistinguibles, y así debe ser: distinguirlos filtraría la existencia de
+        datos ajenos.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+    NoProcesable:
+      description: Sintácticamente válida pero viola una regla de negocio
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+    DemasiadasPeticiones:
+      description: Se superó la cuota de la cuenta o del agente (RNF-08)
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'

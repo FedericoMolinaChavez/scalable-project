@@ -1,0 +1,73 @@
+# Esquemas transversales: los que usan varias familias de rutas.
+
+Problema:
+  type: object
+  description: |
+    Formato de error único de la API, según RFC 9457 (problem details). Se usa
+    un estándar en vez de un formato propio para que el cliente pueda tratar los
+    errores de forma uniforme y para que una respuesta de error sea
+    indistinguible venga del componente de ARQ-01 que venga.
+  required: [type, title, status]
+  properties:
+    type:
+      type: string
+      format: uri
+      description: Identificador estable del tipo de problema.
+      examples: ['https://api.reservas/errores/horario-ocupado']
+    title:
+      type: string
+      description: Resumen legible, constante para un mismo type.
+    status:
+      type: integer
+      description: Código HTTP, repetido en el cuerpo.
+    detail:
+      type: string
+      description: Explicación concreta de esta ocurrencia.
+    instance:
+      type: string
+      description: Identificador de la petición, para cruzar con las trazas.
+    errores:
+      type: array
+      description: Detalle por campo, cuando el problema es de validación.
+      items:
+        type: object
+        required: [campo, mensaje]
+        properties:
+          campo: { type: string }
+          mensaje: { type: string }
+
+Periodo:
+  type: object
+  description: |
+    Intervalo semiabierto `[inicio, fin)`. El límite inferior entra, el superior
+    no.
+
+    No es un detalle de estilo: con ambos límites cerrados, 10:00–11:00 y
+    11:00–12:00 comparten un instante, el operador `&&` de PostgreSQL las declara
+    solapadas y la restricción EXCLUDE rechazaría dos citas consecutivas
+    perfectamente válidas.
+  required: [inicio, fin]
+  properties:
+    inicio: { type: string, format: date-time }
+    fin: { type: string, format: date-time }
+
+Dinero:
+  type: object
+  description: |
+    El monto va como cadena decimal, no como número. En JSON los números son de
+    coma flotante y 80000.10 no se representa exactamente; con dinero eso acaba
+    en un céntimo de diferencia entre lo que se cobra y lo que se muestra. La
+    columna del esquema es `numeric`, que sí es exacta, y una cadena la preserva
+    de extremo a extremo.
+  required: [monto, moneda]
+  properties:
+    monto:
+      type: string
+      pattern: '^-?\d+(\.\d{1,4})?$'
+      examples: ['80000.00']
+    moneda:
+      type: string
+      minLength: 3
+      maxLength: 3
+      description: Código ISO 4217.
+      examples: ['COP']

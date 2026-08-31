@@ -1,0 +1,12 @@
+# Parámetros compartidos por varias rutas.
+
+Tenant:
+  name: X-Tenant-Id
+  in: header
+  required: true
+  description: |
+    Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+    (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+    de un cliente en producción permitiría leer los datos de cualquier otro
+    tenant.
+  schema: { type: string, format: uuid }

@@ -78,11 +78,11 @@ export interface paths {
          * Crear una reserva (RF-01)
          * @description Ruta crítica de RNF-01: presupuesto de 200 ms. Devuelve una reserva
          *     **pendiente** con el cupo ya garantizado, sin esperar a que el pago se
-         *     confirme. La confirmación llega después por el webhook de Stripe
-         *     (RF-33), fuera de este presupuesto.
+         *     confirme. La confirmación llega después por el webhook de Stripe (RF-33),
+         *     fuera de este presupuesto.
          *
-         *     La reserva pendiente caduca en `expira_en`. Si el pago no llega antes,
-         *     un trabajador la marca expirada y libera el cupo (RF-27).
+         *     La reserva pendiente caduca en `expira_en`. Si el pago no llega antes, un
+         *     trabajador la marca expirada y libera el cupo (RF-27).
          */
         post: operations["crearReserva"];
         delete?: never;
@@ -112,11 +112,30 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @enum {string} */
+        EstadoCatalogo: "activo" | "inactivo";
+        Sede: {
+            /** Format: uuid */
+            id: string;
+            nombre: string;
+            /**
+             * @description Identificador IANA. Se guarda por sede y no global porque un tenant
+             *     puede operar en varias zonas (RF-38), y una franja horaria sin zona es
+             *     ambigua dos veces al año.
+             * @example America/Bogota
+             */
+            zona_horaria: string;
+            direccion?: string;
+            estado: components["schemas"]["EstadoCatalogo"];
+        };
+        ListaSedes: {
+            datos: components["schemas"]["Sede"][];
+        };
         /**
-         * @description Formato de error único de la API, según RFC 9457 (problem details). Se
-         *     usa un estándar en vez de un formato propio para que el cliente pueda
-         *     tratar los errores de forma uniforme y para que una respuesta de error
-         *     sea indistinguible venga del componente de ARQ-01 que venga.
+         * @description Formato de error único de la API, según RFC 9457 (problem details). Se usa
+         *     un estándar en vez de un formato propio para que el cliente pueda tratar los
+         *     errores de forma uniforme y para que una respuesta de error sea
+         *     indistinguible venga del componente de ARQ-01 que venga.
          */
         Problema: {
             /**
@@ -140,26 +159,11 @@ export interface components {
             }[];
         };
         /**
-         * @description Intervalo semiabierto `[inicio, fin)`. El límite inferior entra, el
-         *     superior no.
-         *
-         *     No es un detalle de estilo: con ambos límites cerrados, 10:00–11:00 y
-         *     11:00–12:00 comparten un instante, el operador `&&` de PostgreSQL las
-         *     declara solapadas y la restricción EXCLUDE rechazaría dos citas
-         *     consecutivas perfectamente válidas.
-         */
-        Periodo: {
-            /** Format: date-time */
-            inicio: string;
-            /** Format: date-time */
-            fin: string;
-        };
-        /**
-         * @description El monto va como cadena decimal, no como número. En JSON los números son
-         *     de coma flotante y 80000.10 no se representa exactamente; con dinero eso
-         *     acaba en un céntimo de diferencia entre lo que se cobra y lo que se
-         *     muestra. La columna del esquema es `numeric`, que sí es exacta, y una
-         *     cadena la preserva de extremo a extremo.
+         * @description El monto va como cadena decimal, no como número. En JSON los números son de
+         *     coma flotante y 80000.10 no se representa exactamente; con dinero eso acaba
+         *     en un céntimo de diferencia entre lo que se cobra y lo que se muestra. La
+         *     columna del esquema es `numeric`, que sí es exacta, y una cadena la preserva
+         *     de extremo a extremo.
          */
         Dinero: {
             /** @example 80000.00 */
@@ -169,30 +173,6 @@ export interface components {
              * @example COP
              */
             moneda: string;
-        };
-        /** @enum {string} */
-        EstadoCatalogo: "activo" | "inactivo";
-        /**
-         * @description Estados de RF-28.
-         * @enum {string}
-         */
-        EstadoReserva: "pendiente" | "confirmada" | "en_curso" | "completada" | "cancelada" | "no_show" | "expirada";
-        Sede: {
-            /** Format: uuid */
-            id: string;
-            nombre: string;
-            /**
-             * @description Identificador IANA. Se guarda por sede y no global porque un tenant
-             *     puede operar en varias zonas (RF-38), y una franja horaria sin zona
-             *     es ambigua dos veces al año.
-             * @example America/Bogota
-             */
-            zona_horaria: string;
-            direccion?: string;
-            estado: components["schemas"]["EstadoCatalogo"];
-        };
-        ListaSedes: {
-            datos: components["schemas"]["Sede"][];
         };
         Servicio: {
             /** Format: uuid */
@@ -208,6 +188,21 @@ export interface components {
         };
         ListaServicios: {
             datos: components["schemas"]["Servicio"][];
+        };
+        /**
+         * @description Intervalo semiabierto `[inicio, fin)`. El límite inferior entra, el superior
+         *     no.
+         *
+         *     No es un detalle de estilo: con ambos límites cerrados, 10:00–11:00 y
+         *     11:00–12:00 comparten un instante, el operador `&&` de PostgreSQL las declara
+         *     solapadas y la restricción EXCLUDE rechazaría dos citas consecutivas
+         *     perfectamente válidas.
+         */
+        Periodo: {
+            /** Format: date-time */
+            inicio: string;
+            /** Format: date-time */
+            fin: string;
         };
         Franja: {
             periodo: components["schemas"]["Periodo"];
@@ -225,21 +220,16 @@ export interface components {
              */
             calculada_en: string;
         };
+        /**
+         * @description Estados de RF-28.
+         * @enum {string}
+         */
+        EstadoReserva: "pendiente" | "confirmada" | "en_curso" | "completada" | "cancelada" | "no_show" | "expirada";
         Contacto: {
             nombre: string;
             /** Format: email */
             email: string;
             telefono?: string;
-        };
-        NuevaReserva: {
-            /** Format: uuid */
-            servicio_id: string;
-            /** Format: uuid */
-            recurso_id: string;
-            periodo: components["schemas"]["Periodo"];
-            contacto: components["schemas"]["Contacto"];
-            /** @description Código de descuento, si aplica (RF-08). */
-            voucher_codigo?: string;
         };
         Reserva: {
             /** Format: uuid */
@@ -261,20 +251,30 @@ export interface components {
             /** Format: date-time */
             creada_en: string;
         };
+        ListaReservas: {
+            datos: components["schemas"]["Reserva"][];
+            /** @description Ausente cuando no hay más páginas. */
+            siguiente_cursor?: string;
+        };
+        NuevaReserva: {
+            /** Format: uuid */
+            servicio_id: string;
+            /** Format: uuid */
+            recurso_id: string;
+            periodo: components["schemas"]["Periodo"];
+            contacto: components["schemas"]["Contacto"];
+            /** @description Código de descuento, si aplica (RF-08). */
+            voucher_codigo?: string;
+        };
         /**
-         * @description Lo que devuelve la ruta crítica: la reserva ya con el cupo garantizado,
-         *     más el secreto que el cliente necesita para confirmar el pago contra
-         *     Stripe directamente, sin que el importe pase por este backend.
+         * @description Lo que devuelve la ruta crítica: la reserva ya con el cupo garantizado, más
+         *     el secreto que el cliente necesita para confirmar el pago contra Stripe
+         *     directamente, sin que el importe pase por este backend.
          */
         ReservaCreada: {
             reserva: components["schemas"]["Reserva"];
             /** @description `client_secret` del PaymentIntent de Stripe. */
             pago_client_secret?: string;
-        };
-        ListaReservas: {
-            datos: components["schemas"]["Reserva"][];
-            /** @description Ausente cuando no hay más páginas. */
-            siguiente_cursor?: string;
         };
     };
     responses: {
@@ -287,10 +287,19 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problema"];
             };
         };
+        /** @description Error no previsto */
+        ErrorInterno: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problema"];
+            };
+        };
         /**
          * @description No existe. Bajo RLS, "no existe" y "existe pero es de otro tenant" son
-         *     indistinguibles, y así debe ser: distinguirlos filtraría la existencia
-         *     de datos ajenos.
+         *     indistinguibles, y así debe ser: distinguirlos filtraría la existencia de
+         *     datos ajenos.
          */
         NoEncontrado: {
             headers: {
@@ -319,22 +328,13 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problema"];
             };
         };
-        /** @description Error no previsto */
-        ErrorInterno: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/problem+json": components["schemas"]["Problema"];
-            };
-        };
     };
     parameters: {
         /**
-         * @description Tenant sobre el que se opera. Provisional: en cuanto exista
-         *     autenticación (RF-12) el tenant se deriva del token y esta cabecera
-         *     desaparece. Aceptarla de un cliente en producción permitiría leer los
-         *     datos de cualquier otro tenant.
+         * @description Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+         *     (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+         *     de un cliente en producción permitiría leer los datos de cualquier otro
+         *     tenant.
          */
         Tenant: string;
     };
@@ -349,10 +349,10 @@ export interface operations {
             query?: never;
             header: {
                 /**
-                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista
-                 *     autenticación (RF-12) el tenant se deriva del token y esta cabecera
-                 *     desaparece. Aceptarla de un cliente en producción permitiría leer los
-                 *     datos de cualquier otro tenant.
+                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+                 *     (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+                 *     de un cliente en producción permitiría leer los datos de cualquier otro
+                 *     tenant.
                  */
                 "X-Tenant-Id": components["parameters"]["Tenant"];
             };
@@ -381,10 +381,10 @@ export interface operations {
             };
             header: {
                 /**
-                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista
-                 *     autenticación (RF-12) el tenant se deriva del token y esta cabecera
-                 *     desaparece. Aceptarla de un cliente en producción permitiría leer los
-                 *     datos de cualquier otro tenant.
+                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+                 *     (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+                 *     de un cliente en producción permitiría leer los datos de cualquier otro
+                 *     tenant.
                  */
                 "X-Tenant-Id": components["parameters"]["Tenant"];
             };
@@ -417,10 +417,10 @@ export interface operations {
             };
             header: {
                 /**
-                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista
-                 *     autenticación (RF-12) el tenant se deriva del token y esta cabecera
-                 *     desaparece. Aceptarla de un cliente en producción permitiría leer los
-                 *     datos de cualquier otro tenant.
+                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+                 *     (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+                 *     de un cliente en producción permitiría leer los datos de cualquier otro
+                 *     tenant.
                  */
                 "X-Tenant-Id": components["parameters"]["Tenant"];
             };
@@ -459,10 +459,10 @@ export interface operations {
             };
             header: {
                 /**
-                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista
-                 *     autenticación (RF-12) el tenant se deriva del token y esta cabecera
-                 *     desaparece. Aceptarla de un cliente en producción permitiría leer los
-                 *     datos de cualquier otro tenant.
+                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+                 *     (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+                 *     de un cliente en producción permitiría leer los datos de cualquier otro
+                 *     tenant.
                  */
                 "X-Tenant-Id": components["parameters"]["Tenant"];
             };
@@ -489,10 +489,10 @@ export interface operations {
             query?: never;
             header: {
                 /**
-                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista
-                 *     autenticación (RF-12) el tenant se deriva del token y esta cabecera
-                 *     desaparece. Aceptarla de un cliente en producción permitiría leer los
-                 *     datos de cualquier otro tenant.
+                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+                 *     (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+                 *     de un cliente en producción permitiría leer los datos de cualquier otro
+                 *     tenant.
                  */
                 "X-Tenant-Id": components["parameters"]["Tenant"];
                 /**
@@ -547,10 +547,10 @@ export interface operations {
             query?: never;
             header: {
                 /**
-                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista
-                 *     autenticación (RF-12) el tenant se deriva del token y esta cabecera
-                 *     desaparece. Aceptarla de un cliente en producción permitiría leer los
-                 *     datos de cualquier otro tenant.
+                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+                 *     (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+                 *     de un cliente en producción permitiría leer los datos de cualquier otro
+                 *     tenant.
                  */
                 "X-Tenant-Id": components["parameters"]["Tenant"];
             };

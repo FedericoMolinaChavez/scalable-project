@@ -76,11 +76,11 @@ type Contacto struct {
 	Telefono *string             `json:"telefono,omitempty"`
 }
 
-// Dinero El monto va como cadena decimal, no como número. En JSON los números son
-// de coma flotante y 80000.10 no se representa exactamente; con dinero eso
-// acaba en un céntimo de diferencia entre lo que se cobra y lo que se
-// muestra. La columna del esquema es `numeric`, que sí es exacta, y una
-// cadena la preserva de extremo a extremo.
+// Dinero El monto va como cadena decimal, no como número. En JSON los números son de
+// coma flotante y 80000.10 no se representa exactamente; con dinero eso acaba
+// en un céntimo de diferencia entre lo que se cobra y lo que se muestra. La
+// columna del esquema es `numeric`, que sí es exacta, y una cadena la preserva
+// de extremo a extremo.
 type Dinero struct {
 	// Moneda Código ISO 4217.
 	//
@@ -108,13 +108,13 @@ type EstadoReserva string
 
 // Franja defines model for Franja.
 type Franja struct {
-	// Periodo Intervalo semiabierto `[inicio, fin)`. El límite inferior entra, el
-	// superior no.
+	// Periodo Intervalo semiabierto `[inicio, fin)`. El límite inferior entra, el superior
+	// no.
 	//
 	// No es un detalle de estilo: con ambos límites cerrados, 10:00–11:00 y
-	// 11:00–12:00 comparten un instante, el operador `&&` de PostgreSQL las
-	// declara solapadas y la restricción EXCLUDE rechazaría dos citas
-	// consecutivas perfectamente válidas.
+	// 11:00–12:00 comparten un instante, el operador `&&` de PostgreSQL las declara
+	// solapadas y la restricción EXCLUDE rechazaría dos citas consecutivas
+	// perfectamente válidas.
 	Periodo   Periodo            `json:"periodo"`
 	RecursoId openapi_types.UUID `json:"recurso_id"`
 }
@@ -141,13 +141,13 @@ type ListaServicios struct {
 type NuevaReserva struct {
 	Contacto Contacto `json:"contacto"`
 
-	// Periodo Intervalo semiabierto `[inicio, fin)`. El límite inferior entra, el
-	// superior no.
+	// Periodo Intervalo semiabierto `[inicio, fin)`. El límite inferior entra, el superior
+	// no.
 	//
 	// No es un detalle de estilo: con ambos límites cerrados, 10:00–11:00 y
-	// 11:00–12:00 comparten un instante, el operador `&&` de PostgreSQL las
-	// declara solapadas y la restricción EXCLUDE rechazaría dos citas
-	// consecutivas perfectamente válidas.
+	// 11:00–12:00 comparten un instante, el operador `&&` de PostgreSQL las declara
+	// solapadas y la restricción EXCLUDE rechazaría dos citas consecutivas
+	// perfectamente válidas.
 	Periodo    Periodo            `json:"periodo"`
 	RecursoId  openapi_types.UUID `json:"recurso_id"`
 	ServicioId openapi_types.UUID `json:"servicio_id"`
@@ -156,22 +156,22 @@ type NuevaReserva struct {
 	VoucherCodigo *string `json:"voucher_codigo,omitempty"`
 }
 
-// Periodo Intervalo semiabierto `[inicio, fin)`. El límite inferior entra, el
-// superior no.
+// Periodo Intervalo semiabierto `[inicio, fin)`. El límite inferior entra, el superior
+// no.
 //
 // No es un detalle de estilo: con ambos límites cerrados, 10:00–11:00 y
-// 11:00–12:00 comparten un instante, el operador `&&` de PostgreSQL las
-// declara solapadas y la restricción EXCLUDE rechazaría dos citas
-// consecutivas perfectamente válidas.
+// 11:00–12:00 comparten un instante, el operador `&&` de PostgreSQL las declara
+// solapadas y la restricción EXCLUDE rechazaría dos citas consecutivas
+// perfectamente válidas.
 type Periodo struct {
 	Fin    time.Time `json:"fin"`
 	Inicio time.Time `json:"inicio"`
 }
 
-// Problema Formato de error único de la API, según RFC 9457 (problem details). Se
-// usa un estándar en vez de un formato propio para que el cliente pueda
-// tratar los errores de forma uniforme y para que una respuesta de error
-// sea indistinguible venga del componente de ARQ-01 que venga.
+// Problema Formato de error único de la API, según RFC 9457 (problem details). Se usa
+// un estándar en vez de un formato propio para que el cliente pueda tratar los
+// errores de forma uniforme y para que una respuesta de error sea
+// indistinguible venga del componente de ARQ-01 que venga.
 type Problema struct {
 	// Detail Explicación concreta de esta ocurrencia.
 	Detail *string `json:"detail,omitempty"`
@@ -210,28 +210,28 @@ type Reserva struct {
 	ExpiraEn *time.Time         `json:"expira_en,omitempty"`
 	Id       openapi_types.UUID `json:"id"`
 
-	// Periodo Intervalo semiabierto `[inicio, fin)`. El límite inferior entra, el
-	// superior no.
+	// Periodo Intervalo semiabierto `[inicio, fin)`. El límite inferior entra, el superior
+	// no.
 	//
 	// No es un detalle de estilo: con ambos límites cerrados, 10:00–11:00 y
-	// 11:00–12:00 comparten un instante, el operador `&&` de PostgreSQL las
-	// declara solapadas y la restricción EXCLUDE rechazaría dos citas
-	// consecutivas perfectamente válidas.
+	// 11:00–12:00 comparten un instante, el operador `&&` de PostgreSQL las declara
+	// solapadas y la restricción EXCLUDE rechazaría dos citas consecutivas
+	// perfectamente válidas.
 	Periodo Periodo `json:"periodo"`
 
-	// PrecioCobrado El monto va como cadena decimal, no como número. En JSON los números son
-	// de coma flotante y 80000.10 no se representa exactamente; con dinero eso
-	// acaba en un céntimo de diferencia entre lo que se cobra y lo que se
-	// muestra. La columna del esquema es `numeric`, que sí es exacta, y una
-	// cadena la preserva de extremo a extremo.
+	// PrecioCobrado El monto va como cadena decimal, no como número. En JSON los números son de
+	// coma flotante y 80000.10 no se representa exactamente; con dinero eso acaba
+	// en un céntimo de diferencia entre lo que se cobra y lo que se muestra. La
+	// columna del esquema es `numeric`, que sí es exacta, y una cadena la preserva
+	// de extremo a extremo.
 	PrecioCobrado Dinero             `json:"precio_cobrado"`
 	RecursoId     openapi_types.UUID `json:"recurso_id"`
 	ServicioId    openapi_types.UUID `json:"servicio_id"`
 }
 
-// ReservaCreada Lo que devuelve la ruta crítica: la reserva ya con el cupo garantizado,
-// más el secreto que el cliente necesita para confirmar el pago contra
-// Stripe directamente, sin que el importe pase por este backend.
+// ReservaCreada Lo que devuelve la ruta crítica: la reserva ya con el cupo garantizado, más
+// el secreto que el cliente necesita para confirmar el pago contra Stripe
+// directamente, sin que el importe pase por este backend.
 type ReservaCreada struct {
 	// PagoClientSecret `client_secret` del PaymentIntent de Stripe.
 	PagoClientSecret *string `json:"pago_client_secret,omitempty"`
@@ -246,8 +246,8 @@ type Sede struct {
 	Nombre    string             `json:"nombre"`
 
 	// ZonaHoraria Identificador IANA. Se guarda por sede y no global porque un tenant
-	// puede operar en varias zonas (RF-38), y una franja horaria sin zona
-	// es ambigua dos veces al año.
+	// puede operar en varias zonas (RF-38), y una franja horaria sin zona es
+	// ambigua dos veces al año.
 	//
 	//
 	// Examples: America/Bogota
@@ -264,11 +264,11 @@ type Servicio struct {
 	Id          openapi_types.UUID `json:"id"`
 	Nombre      string             `json:"nombre"`
 
-	// Precio El monto va como cadena decimal, no como número. En JSON los números son
-	// de coma flotante y 80000.10 no se representa exactamente; con dinero eso
-	// acaba en un céntimo de diferencia entre lo que se cobra y lo que se
-	// muestra. La columna del esquema es `numeric`, que sí es exacta, y una
-	// cadena la preserva de extremo a extremo.
+	// Precio El monto va como cadena decimal, no como número. En JSON los números son de
+	// coma flotante y 80000.10 no se representa exactamente; con dinero eso acaba
+	// en un céntimo de diferencia entre lo que se cobra y lo que se muestra. La
+	// columna del esquema es `numeric`, que sí es exacta, y una cadena la preserva
+	// de extremo a extremo.
 	Precio Dinero             `json:"precio"`
 	SedeId openapi_types.UUID `json:"sede_id"`
 }
@@ -276,34 +276,34 @@ type Servicio struct {
 // Tenant defines model for Tenant.
 type Tenant = openapi_types.UUID
 
-// DemasiadasPeticiones Formato de error único de la API, según RFC 9457 (problem details). Se
-// usa un estándar en vez de un formato propio para que el cliente pueda
-// tratar los errores de forma uniforme y para que una respuesta de error
-// sea indistinguible venga del componente de ARQ-01 que venga.
+// DemasiadasPeticiones Formato de error único de la API, según RFC 9457 (problem details). Se usa
+// un estándar en vez de un formato propio para que el cliente pueda tratar los
+// errores de forma uniforme y para que una respuesta de error sea
+// indistinguible venga del componente de ARQ-01 que venga.
 type DemasiadasPeticiones = Problema
 
-// ErrorInterno Formato de error único de la API, según RFC 9457 (problem details). Se
-// usa un estándar en vez de un formato propio para que el cliente pueda
-// tratar los errores de forma uniforme y para que una respuesta de error
-// sea indistinguible venga del componente de ARQ-01 que venga.
+// ErrorInterno Formato de error único de la API, según RFC 9457 (problem details). Se usa
+// un estándar en vez de un formato propio para que el cliente pueda tratar los
+// errores de forma uniforme y para que una respuesta de error sea
+// indistinguible venga del componente de ARQ-01 que venga.
 type ErrorInterno = Problema
 
-// NoEncontrado Formato de error único de la API, según RFC 9457 (problem details). Se
-// usa un estándar en vez de un formato propio para que el cliente pueda
-// tratar los errores de forma uniforme y para que una respuesta de error
-// sea indistinguible venga del componente de ARQ-01 que venga.
+// NoEncontrado Formato de error único de la API, según RFC 9457 (problem details). Se usa
+// un estándar en vez de un formato propio para que el cliente pueda tratar los
+// errores de forma uniforme y para que una respuesta de error sea
+// indistinguible venga del componente de ARQ-01 que venga.
 type NoEncontrado = Problema
 
-// NoProcesable Formato de error único de la API, según RFC 9457 (problem details). Se
-// usa un estándar en vez de un formato propio para que el cliente pueda
-// tratar los errores de forma uniforme y para que una respuesta de error
-// sea indistinguible venga del componente de ARQ-01 que venga.
+// NoProcesable Formato de error único de la API, según RFC 9457 (problem details). Se usa
+// un estándar en vez de un formato propio para que el cliente pueda tratar los
+// errores de forma uniforme y para que una respuesta de error sea
+// indistinguible venga del componente de ARQ-01 que venga.
 type NoProcesable = Problema
 
-// PeticionInvalida Formato de error único de la API, según RFC 9457 (problem details). Se
-// usa un estándar en vez de un formato propio para que el cliente pueda
-// tratar los errores de forma uniforme y para que una respuesta de error
-// sea indistinguible venga del componente de ARQ-01 que venga.
+// PeticionInvalida Formato de error único de la API, según RFC 9457 (problem details). Se usa
+// un estándar en vez de un formato propio para que el cliente pueda tratar los
+// errores de forma uniforme y para que una respuesta de error sea
+// indistinguible venga del componente de ARQ-01 que venga.
 type PeticionInvalida = Problema
 
 // ConsultarDisponibilidadParams defines parameters for ConsultarDisponibilidad.
@@ -316,10 +316,10 @@ type ConsultarDisponibilidadParams struct {
 	// Hasta Instante final, exclusive.
 	Hasta time.Time `form:"hasta" json:"hasta"`
 
-	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista
-	// autenticación (RF-12) el tenant se deriva del token y esta cabecera
-	// desaparece. Aceptarla de un cliente en producción permitiría leer los
-	// datos de cualquier otro tenant.
+	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+	// (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+	// de un cliente en producción permitiría leer los datos de cualquier otro
+	// tenant.
 	XTenantId Tenant `json:"X-Tenant-Id"`
 }
 
@@ -335,19 +335,19 @@ type ListarReservasParams struct {
 	// desplaza el resto y el cliente ve duplicados o se salta filas.
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 
-	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista
-	// autenticación (RF-12) el tenant se deriva del token y esta cabecera
-	// desaparece. Aceptarla de un cliente en producción permitiría leer los
-	// datos de cualquier otro tenant.
+	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+	// (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+	// de un cliente en producción permitiría leer los datos de cualquier otro
+	// tenant.
 	XTenantId Tenant `json:"X-Tenant-Id"`
 }
 
 // CrearReservaParams defines parameters for CrearReserva.
 type CrearReservaParams struct {
-	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista
-	// autenticación (RF-12) el tenant se deriva del token y esta cabecera
-	// desaparece. Aceptarla de un cliente en producción permitiría leer los
-	// datos de cualquier otro tenant.
+	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+	// (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+	// de un cliente en producción permitiría leer los datos de cualquier otro
+	// tenant.
 	XTenantId Tenant `json:"X-Tenant-Id"`
 
 	// IdempotencyKey Clave única de la operación. Obligatoria, no opcional: un agente que
@@ -359,19 +359,19 @@ type CrearReservaParams struct {
 
 // ObtenerReservaParams defines parameters for ObtenerReserva.
 type ObtenerReservaParams struct {
-	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista
-	// autenticación (RF-12) el tenant se deriva del token y esta cabecera
-	// desaparece. Aceptarla de un cliente en producción permitiría leer los
-	// datos de cualquier otro tenant.
+	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+	// (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+	// de un cliente en producción permitiría leer los datos de cualquier otro
+	// tenant.
 	XTenantId Tenant `json:"X-Tenant-Id"`
 }
 
 // ListarSedesParams defines parameters for ListarSedes.
 type ListarSedesParams struct {
-	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista
-	// autenticación (RF-12) el tenant se deriva del token y esta cabecera
-	// desaparece. Aceptarla de un cliente en producción permitiría leer los
-	// datos de cualquier otro tenant.
+	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+	// (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+	// de un cliente en producción permitiría leer los datos de cualquier otro
+	// tenant.
 	XTenantId Tenant `json:"X-Tenant-Id"`
 }
 
@@ -379,10 +379,10 @@ type ListarSedesParams struct {
 type ListarServiciosParams struct {
 	SedeId *openapi_types.UUID `form:"sede_id,omitempty" json:"sede_id,omitempty"`
 
-	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista
-	// autenticación (RF-12) el tenant se deriva del token y esta cabecera
-	// desaparece. Aceptarla de un cliente en producción permitiría leer los
-	// datos de cualquier otro tenant.
+	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+	// (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+	// de un cliente en producción permitiría leer los datos de cualquier otro
+	// tenant.
 	XTenantId Tenant `json:"X-Tenant-Id"`
 }
 

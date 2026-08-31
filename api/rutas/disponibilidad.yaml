@@ -1,0 +1,41 @@
+# Consulta de horarios libres (RF-26).
+
+disponibilidad:
+  get:
+    operationId: consultarDisponibilidad
+    summary: Franjas libres de un servicio en un rango
+    description: |
+      Sirve el 90% del tráfico (RNF-03) desde caché, con los 2 s de
+      desactualización que RNF-10 autoriza.
+
+      La lectura es optimista a propósito: puede devolver una franja que otro
+      cliente acaba de tomar. Quien decide es el núcleo al insertar, contra la
+      restricción EXCLUDE (flujo alternativo 3 de RF-01). Un cliente que trate
+      esta respuesta como una reserva garantizada está mal escrito.
+    tags: [disponibilidad]
+    parameters:
+      - $ref: '../componentes/parametros.yaml#/Tenant'
+      - name: servicio_id
+        in: query
+        required: true
+        schema: { type: string, format: uuid }
+      - name: desde
+        in: query
+        required: true
+        description: Instante inicial, inclusive.
+        schema: { type: string, format: date-time }
+      - name: hasta
+        in: query
+        required: true
+        description: Instante final, exclusive.
+        schema: { type: string, format: date-time }
+    responses:
+      '200':
+        description: Franjas libres
+        content:
+          application/json:
+            schema:
+              $ref: '../componentes/esquemas/disponibilidad.yaml#/Disponibilidad'
+      '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '404': { $ref: '../componentes/respuestas.yaml#/NoEncontrado' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
