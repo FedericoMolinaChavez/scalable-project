@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "frontend",
+      "runtimeExecutable": "C:\\Users\\fred_\\AppData\\Roaming\\fnm\\aliases\\default\\node.exe",
+      "runtimeArgs": [
+        "node_modules/vite/bin/vite.js"
+      ],
+      "cwd": "frontend",
+      "port": 5173
+    }
+  ]
+}
