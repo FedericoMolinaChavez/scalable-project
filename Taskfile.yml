@@ -1,0 +1,113 @@
+version: "3"
+
+vars:
+  BACKEND: backend
+  FRONTEND: frontend
+
+env:
+  DATABASE_URL: '{{.DATABASE_URL | default "postgres://app_dev:app_dev@localhost:6432/reservas?sslmode=disable"}}'
+
+tasks:
+  default:
+    desc: Lista las tareas disponibles
+    cmd: task --list
+
+  # ---------------------------------------------------------------- backend --
+  back:tidy:
+    desc: Sincroniza go.mod y go.sum
+    dir: "{{.BACKEND}}"
+    cmd: go mod tidy
+
+  back:build:
+    desc: Compila todos los binarios de cmd/ en backend/bin/
+    dir: "{{.BACKEND}}"
+    cmd: go build -o bin/ ./cmd/...
+
+  back:run:
+    desc: "Ejecuta un servicio: task back:run -- nucleo"
+    dir: "{{.BACKEND}}"
+    cmd: go run ./cmd/{{.CLI_ARGS}}
+
+  back:test:
+    desc: Pruebas de Go
+    dir: "{{.BACKEND}}"
+    cmd: go test ./...
+
+  back:test:race:
+    desc: >-
+      Pruebas con detector de carreras. Necesita CGO y un compilador C, que
+      Windows no trae; en local se corre dentro del contenedor, en CI va nativo
+      sobre los ejecutores de Linux. Es la variante que importa para el núcleo:
+      45 pods escribiendo sin coordinarse (ARQ-03) no perdonan una carrera.
+    dir: "{{.BACKEND}}"
+    env:
+      CGO_ENABLED: "1"
+    cmd: go test -race ./...
+
+  back:lint:
+    desc: golangci-lint sobre todo el backend
+    dir: "{{.BACKEND}}"
+    cmd: golangci-lint run
+
+  back:fmt:
+    desc: Formatea e importa
+    dir: "{{.BACKEND}}"
+    cmd: golangci-lint fmt
+
+  # --------------------------------------------------------------- frontend --
+  front:install:
+    desc: Instala dependencias del frontend
+    dir: "{{.FRONTEND}}"
+    cmd: npm ci
+
+  front:dev:
+    desc: Servidor de desarrollo de Vite
+    dir: "{{.FRONTEND}}"
+    cmd: npm run dev
+
+  front:build:
+    desc: Compilación de producción
+    dir: "{{.FRONTEND}}"
+    cmd: npm run build
+
+  # Las dos tareas que invoca `ci` llevan guarda: mientras frontend/package.json
+  # no exista (se genera en la fase 5), Task las da por hechas y las omite en
+  # vez de romper la puerta de calidad. En cuanto exista, entran solas.
+  front:lint:
+    dir: "{{.FRONTEND}}"
+    status:
+      - "! test -f package.json"
+    cmd: npm run lint
+
+  front:test:
+    dir: "{{.FRONTEND}}"
+    status:
+      - "! test -f package.json"
+    cmd: npm run test
+
+  # ------------------------------------------------------------------ datos --
+  infra:up:
+    desc: Levanta PostgreSQL, PgBouncer, Valkey, NATS, MinIO y Mailpit
+    cmd: docker compose -f deploy/docker-compose.yml up -d
+
+  infra:down:
+    desc: Detiene la infraestructura local (conserva los volúmenes)
+    cmd: docker compose -f deploy/docker-compose.yml down
+
+  infra:reset:
+    desc: Detiene la infraestructura local y BORRA los volúmenes
+    prompt: Esto elimina la base de datos local. ¿Continuar?
+    cmd: docker compose -f deploy/docker-compose.yml down -v
+
+  db:test:
+    desc: Invariantes y prueba de concurrencia contra un PostgreSQL desechable
+    cmd: ./db/pruebas/ejecutar.sh
+
+  # --------------------------------------------------------------------- ci --
+  ci:
+    desc: Todo lo que debe pasar antes de un push
+    cmds:
+      - task: back:lint
+      - task: back:test
+      - task: front:lint
+      - task: front:test

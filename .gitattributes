@@ -1,0 +1,15 @@
+# Normalización de fin de línea.
+#
+# core.autocrlf=true en Windows deja CRLF en el árbol de trabajo, y un script
+# con CRLF ejecutado en bash falla con "$'\r': command not found". Como los
+# scripts de db/pruebas y los de los contenedores de deploy/ corren en Linux,
+# el repositorio fija LF explícitamente y no depende de la configuración de
+# cada máquina.
+* text=auto eol=lf
+
+# Excepción: PowerShell se queda en CRLF, es lo nativo en Windows.
+*.ps1 text eol=crlf
+
+*.jar  binary
+*.png  binary
+*.svg  text eol=lf

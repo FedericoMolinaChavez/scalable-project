@@ -1,0 +1,12 @@
+{
+  "files.eol": "\n",
+  "go.lintTool": "golangci-lint",
+  "go.lintFlags": ["--path-mode=abs"],
+  "gopls": {
+    "formatting.local": "github.com/FedericoMolinaChavez/scalable-project/backend"
+  },
+  "[go]": {
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": { "source.organizeImports": "explicit" }
+  }
+}
