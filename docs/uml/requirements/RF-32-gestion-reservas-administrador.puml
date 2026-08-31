@@ -1,0 +1,42 @@
+@startuml RF-32-gestion-reservas-administrador
+
+title RF-32 - Gestión de reservas por el administrador
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Administrador|
+start
+:Accede a la agenda de reservas de su sede/recurso;
+
+|Sistema|
+if (¿La agenda pertenece a su tenant?) then (no)
+  :Rechaza el acceso (ver RF-23);
+  stop
+endif
+:Muestra la agenda del rango seleccionado\ncon las reservas y su estado;
+
+|Administrador|
+if (¿Qué acción realiza?) then (crear reserva manual)
+  :Registra los datos del cliente y el horario\n(reserva presencial o telefónica);
+
+  |Sistema|
+  if (¿El horario está disponible?) then (no)
+    :Rechaza e informa la no disponibilidad;
+    stop
+  endif
+  :Crea la reserva y registra la forma de pago\n(en línea o pago en sitio);
+  :Notifica al cliente si tiene contacto registrado;
+else (gestionar una reserva existente)
+  :Selecciona una reserva y la acción a aplicar\n(check-in, no-show, cancelar o modificar);
+
+  |Sistema|
+  :Aplica la transición de estado solicitada (ver RF-28);
+  :Dispara los procesos asociados\n(reembolso RF-29, notificación RF-10);
+endif
+:Confirma la acción y actualiza la agenda;
+stop
+
+@enduml

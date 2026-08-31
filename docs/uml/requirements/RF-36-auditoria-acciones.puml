@@ -1,0 +1,40 @@
+@startuml RF-36-auditoria-acciones
+
+title RF-36 - Auditoría de acciones
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Sistema|
+start
+:Recibe una acción ejecutada sobre un recurso;
+:Registra el evento de auditoría: actor, acción,\nrecurso, fecha/hora, resultado, IP y dispositivo;
+
+if (¿La ejecutó un agente en nombre de una cuenta?) then (si)
+  :Registra además el agente, la cuenta impersonada\ny el alcance del token utilizado (ver RF-13 y RF-23);
+endif
+
+if (¿Es una acción crítica (pagos, reembolsos,\neliminación de cuentas, cambios de permisos)?) then (si)
+  if (¿El registro de auditoría se guardó con éxito?) then (no)
+    :Rechaza la acción\n(el registro es condición de éxito);
+    stop
+  endif
+else (no)
+  :Registra el evento de forma asíncrona;
+endif
+
+|Super Admin / Administrador|
+:Consulta la auditoría filtrando por actor,\nrecurso, acción o rango de fechas;
+
+|Sistema|
+:Devuelve los eventos dentro de su alcance:\nglobal para el Super Admin,\nsolo su tenant para el Administrador (ver RF-23);
+stop
+
+legend right
+  El registro de auditoría es append-only: los eventos no se modifican ni se
+  eliminan; se conservan según la retención definida para la plataforma.
+end legend
+
+@enduml

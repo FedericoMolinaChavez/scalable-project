@@ -1,0 +1,61 @@
+@startuml RF-15-politicas-cancelacion-modificacion
+
+title RF-15 - Configurar políticas de cancelación y modificación
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Administrador|
+start
+:Selecciona el recurso/servicio;
+:Accede a la configuración de políticas\nde cancelación y modificación;
+
+|Sistema|
+if (¿Administrador tiene permisos sobre el recurso?) then (no)
+  :Rechaza el acceso;
+  stop
+endif
+:Muestra la política vigente (versión actual)\ny el historial de versiones (solo lectura);
+
+|Administrador|
+if (¿Qué intenta hacer?) then (editar una versión anterior)
+  |Sistema|
+  :Bloquea la edición\n(las versiones publicadas son inmutables);
+  :Sugiere crear una nueva versión en su lugar;
+  stop
+else (crear una nueva versión)
+  :Define los nuevos parámetros\n(rango de cancelación, rango de modificación, penalidades);
+  :Define la fecha de vigencia (inmediata o futura);
+  :Guarda los cambios;
+endif
+
+|Sistema|
+if (¿Los datos son válidos?\n(rangos coherentes, fecha de vigencia no en el pasado)) then (no)
+  :Rechaza los cambios y muestra el error de validación;
+  stop
+endif
+
+:Crea una nueva versión de la política\ncon su fecha de vigencia;
+
+if (¿La fecha de vigencia es futura?) then (si)
+  :Programa la nueva versión;
+  :Mantiene la versión actual como vigente\nhasta la fecha de vigencia definida;
+else (no, es inmediata)
+  :Activa la nueva versión de inmediato;
+endif
+
+:Confirma la creación de la nueva versión al administrador;
+stop
+
+legend right
+  Cada reserva queda asociada, en el momento de su creación, a la versión de
+  la política vigente en ese instante (snapshot). Publicar una nueva versión
+  NO modifica reservas existentes: RF-06 (cancelar) y RF-07 (modificar) siempre
+  evalúan el rango contra la versión de política asociada a la reserva, no
+  contra la versión vigente al momento de la consulta. Las versiones publicadas
+  son inmutables: nunca se editan ni se eliminan, solo se reemplazan por una nueva.
+end legend
+
+@enduml

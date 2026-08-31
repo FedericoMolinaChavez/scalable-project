@@ -1,0 +1,31 @@
+@startuml RF-09-filtrar-reservas
+
+title RF-09 - Filtrar reservas
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Usuario|
+start
+:Interactúa con las opciones de filtro\n(fechas, categorías, texto);
+
+|Sistema|
+if (¿Error al consultar la API de reservas?) then (si)
+  :Mantiene la lista completa de reservas;
+  :Muestra un mensaje de error;
+  stop
+endif
+:Aplica los filtros sobre las reservas;
+if (¿Existen reservas que cumplan el filtro?) then (no)
+  |Usuario|
+  :Ve la lista de reservas vacía;
+  stop
+endif
+
+|Usuario|
+:Ve la lista de reservas filtrada;
+stop
+
+@enduml

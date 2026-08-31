@@ -1,0 +1,31 @@
+@startuml RF-34-comprobante-pago
+
+title RF-34 - Comprobante de pago y reembolso
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Sistema|
+start
+:Recibe la confirmación del pago (RF-33)\no del reembolso (RF-29) de una reserva;
+
+if (¿Corresponde a un reembolso?) then (si)
+  :Genera el comprobante de reembolso\n(nota de crédito) asociado al original;
+else (no)
+  :Genera el comprobante de pago con los datos del\nnegocio, la reserva, el monto, el descuento\naplicado por voucher (RF-08) y los impuestos;
+endif
+:Asocia el comprobante a la reserva y lo deja\ndisponible en su detalle (ver RF-03);
+:Envía el comprobante por el canal configurado (ver RF-16);
+
+|Usuario|
+:Consulta o descarga el comprobante\ndesde el detalle de la reserva;
+stop
+
+legend right
+  Los comprobantes se conservan aunque la cuenta sea eliminada, por obligaciones
+  fiscales: en ese caso la cuenta se anonimiza y el comprobante se retiene (ver RF-25).
+end legend
+
+@enduml

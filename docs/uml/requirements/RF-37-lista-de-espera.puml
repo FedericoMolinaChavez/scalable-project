@@ -1,0 +1,38 @@
+@startuml RF-37-lista-de-espera
+
+title RF-37 - Lista de espera
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Usuario|
+start
+:Consulta un horario sin disponibilidad (ver RF-26);
+:Solicita anotarse en la lista de espera;
+
+|Sistema|
+if (¿Ya está en la lista o ya tiene\nuna reserva en ese horario?) then (si)
+  :Rechaza la solicitud e informa el motivo;
+  stop
+endif
+:Registra al usuario en la lista de espera\nen orden de llegada;
+:Confirma la inscripción;
+
+:Espera a que el horario se libere\n(cancelación RF-06 o cambio de disponibilidad RF-14);
+
+repeat
+  :Toma al siguiente usuario de la lista;
+  :Notifica la disponibilidad y le otorga\nun bloqueo temporal exclusivo (ver RF-27);
+  if (¿Completó la reserva dentro de la ventana?) then (si)
+    :Confirma la reserva y cierra\nla lista para ese horario;
+    stop
+  endif
+  :Libera el bloqueo y descarta su turno;
+repeat while (¿Quedan usuarios en la lista de espera?)
+
+:Devuelve el horario a la disponibilidad pública (ver RF-26);
+stop
+
+@enduml

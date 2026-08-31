@@ -1,0 +1,86 @@
+@startuml RF-12-autenticacion-usuario
+
+title RF-12 - Autenticación Usuario
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Usuario|
+start
+:Accede a la pantalla de inicio de sesión;
+
+|Sistema|
+:Muestra los métodos de autenticación disponibles;
+
+|Usuario|
+switch (¿Qué método selecciona?)
+case (usuario y contraseña)
+  :Ingresa su identificador y contraseña;
+  |Sistema|
+  :Valida el formato de los campos;
+  :Verifica el hash de la contraseña\ny el estado de la cuenta;
+case (magic link)
+  :Ingresa su correo electrónico;
+  |Sistema|
+  :Genera un token de un solo uso (vigencia 15 min)\ny lo envía por correo (A1);
+  |Usuario|
+  :Abre el enlace recibido;
+  |Sistema|
+  :Valida el token y lo invalida;
+case (código SMS)
+  |Usuario|
+  :Ingresa su número de teléfono;
+  |Sistema|
+  :Genera un código de 6 dígitos (vigencia 5 min)\ny lo envía por SMS (A2: máx. 3 intentos, 3 reenvíos/hora);
+  |Usuario|
+  :Ingresa el código recibido;
+  |Sistema|
+  :Valida el código y lo invalida;
+endswitch
+
+|Sistema|
+if (¿Credenciales / token / código válidos\ny cuenta en buen estado?) then (no)
+  if (¿5 intentos fallidos consecutivos?) then (si)
+    :Bloquea la cuenta por 15 minutos\ny envía alerta de seguridad (A4);
+  else (no)
+    :Muestra error genérico\ne incrementa el contador de intentos (A3);
+  endif
+  stop
+endif
+
+if (¿Cuenta inactiva, suspendida\no pendiente de verificación?) then (si)
+  :Informa el estado de la cuenta\ny ofrece la acción correspondiente (A8);
+  stop
+endif
+
+if (¿Cuenta con 2FA activo?) then (si)
+  :Solicita el segundo factor (A7);
+  if (¿Segundo factor válido?) then (no)
+    :Muestra error genérico (A3);
+    stop
+  endif
+endif
+
+:Genera la sesión, emite los tokens de acceso/refresco\ny registra el evento de login (IP, dispositivo, timestamp);
+
+if (¿Contraseña expirada o cambio obligatorio?) then (si)
+  :Redirige al flujo de cambio de contraseña (A9);
+  stop
+endif
+
+:Redirige a la vista solicitada\no al panel principal;
+stop
+
+legend right
+  Excepciones transversales:
+  A5  - Token/código expirado: informa el vencimiento y permite solicitar uno nuevo.
+  A6  - Token/código ya utilizado: rechaza y solicita reiniciar el proceso.
+  A10 - Fallo en el envío de correo/SMS: reintenta una vez; si falla, sugiere otro método.
+  A11 - Límite de solicitudes excedido: aplica rate limiting con un mensaje neutro.
+  A12 - Teléfono/correo no registrado: responde igual que el caso exitoso (anti-enumeración).
+  A13 - El usuario cancela el proceso: descarta el intento e invalida tokens/códigos pendientes.
+end legend
+
+@enduml

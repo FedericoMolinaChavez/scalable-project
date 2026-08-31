@@ -1,0 +1,73 @@
+@startuml RF-18-cambio-recuperacion-contrasena
+
+title RF-18 - Cambio y recuperación de contraseña
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Usuario|
+start
+:Solicita el cambio/recuperación de contraseña;
+
+|Sistema|
+:Solicita el correo electrónico o el número de teléfono;
+
+|Usuario|
+if (¿Correo o teléfono?) then (correo)
+  :Ingresa su correo electrónico;
+
+  |Sistema|
+  if (¿El correo corresponde a una cuenta registrada?) then (no)
+    :Responde igual que en el caso exitoso\ny no envía nada (anti-enumeración);
+    stop
+  endif
+  :Genera un link de un solo uso (vigencia 15 min)\ny lo envía por correo;
+
+  |Usuario|
+  :Abre el link recibido;
+else (teléfono)
+  :Ingresa su número de teléfono;
+
+  |Sistema|
+  if (¿El teléfono corresponde a una cuenta registrada?) then (no)
+    :Responde igual que en el caso exitoso\ny no envía nada (anti-enumeración);
+    stop
+  endif
+  :Genera un código de 6 dígitos (vigencia 5 min)\ny lo envía por SMS;
+
+  |Usuario|
+  :Ingresa el código recibido;
+endif
+
+|Sistema|
+if (¿Link/código válido y vigente?) then (no)
+  :Rechaza (expirado o ya utilizado);
+  stop
+endif
+:Invalida el link/código (un solo uso);
+:Solicita la nueva contraseña;
+
+|Usuario|
+:Define la nueva contraseña y la confirma;
+
+|Sistema|
+if (¿Cumple la política de seguridad\n(longitud, complejidad)?) then (no)
+  :Rechaza y solicita otra contraseña;
+  stop
+endif
+:Actualiza la contraseña;
+:Invalida las sesiones activas;
+:Notifica el cambio al usuario;
+:Confirma el cambio y redirige al inicio de sesión;
+stop
+
+legend right
+  El sistema responde igual exista o no una cuenta asociada al correo/teléfono
+  indicado, para evitar enumeración de usuarios (mismo criterio que RF-12 A12).
+  El límite de solicitudes por identificador/IP aplica igual que en RF-12 A11.
+  Este flujo es también el destino de RF-12 A9 (cambio de contraseña obligatorio).
+end legend
+
+@enduml

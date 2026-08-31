@@ -1,0 +1,36 @@
+@startuml RF-08-voucher-reserva
+
+title RF-08 - Agregar un voucher a una reserva
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Usuario|
+start
+:Está realizando una reserva (checkout);
+:Ingresa un código de voucher;
+:Hace clic en "Continuar a pago";
+
+|Sistema|
+if (¿El voucher ya fue utilizado?) then (si)
+  :Rechaza el voucher (ya utilizado);
+  stop
+endif
+if (¿El voucher aplica al tipo de reserva/cliente?) then (no)
+  :Rechaza el voucher (no aplicable);
+  stop
+endif
+:Calcula el descuento y ajusta el precio;
+
+|Usuario|
+:Ve el descuento reflejado en el pago;
+:Realiza el pago con el precio ajustado;
+
+|Sistema|
+:Confirma el pago;
+:Marca el voucher como utilizado;
+stop
+
+@enduml

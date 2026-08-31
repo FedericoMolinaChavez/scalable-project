@@ -1,0 +1,302 @@
+@startuml ER-03-dinero-operacion
+
+title ER-03 - Dinero y operación (por tenant)
+
+hide circle
+skinparam linetype ortho
+skinparam class {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+entity "servicio" as servicio {
+  * tenant_id : uuid <<PK,FK>>
+  * id : uuid <<PK>>
+  ...
+  --
+  Definida en ER-01.
+}
+
+entity "reserva" as reserva {
+  * tenant_id : uuid <<PK,FK>>
+  * id : uuid <<PK>>
+  ...
+  --
+  Definida en ER-01.
+}
+
+entity "tarifa" as tarifa {
+  * tenant_id : uuid <<PK,FK>>
+  * id : uuid <<PK>>
+  --
+  * servicio_id : uuid <<FK>>
+  * tipo : enum(franja_horaria, dia_semana, temporada)
+  * condicion : jsonb
+  * monto : numeric
+  * prioridad : int
+  --
+  Sobrescribe servicio.precio_monto cuando
+  la condición aplica. El precio base vive
+  en servicio (ver ER-01); esta tabla existe
+  aparte porque sí es 1:N.
+}
+
+entity "politica_version" as politica {
+  * tenant_id : uuid <<PK,FK>>
+  * id : uuid <<PK>>
+  --
+  servicio_id : uuid <<FK>>
+  * version : int
+  * rango_cancelacion_horas : int
+  * rango_modificacion_horas : int
+  penalidad_pct : numeric
+  * vigente_desde : timestamptz
+  * creada_en : timestamptz
+  --
+  INMUTABLE: nunca se edita ni se borra (RF-15).
+  La reserva apunta a la versión vigente
+  al crearse; por eso un cambio de política
+  no puede afectar reservas existentes.
+}
+
+entity "voucher" as voucher {
+  * tenant_id : uuid <<PK,FK>>
+  * id : uuid <<PK>>
+  --
+  * codigo : text <<UQ por tenant>>
+  * porcentaje : numeric
+  limite_usos : int
+  * usos_actuales : int
+  caduca_en : timestamptz
+  alcance : jsonb
+  * estado : enum(activo, eliminado)
+  * creado_en : timestamptz
+  --
+  CHECK (porcentaje > 0 AND porcentaje <= 100)
+  CHECK (limite_usos IS NOT NULL
+         OR caduca_en IS NOT NULL)
+  --
+  Solo porcentaje, nunca monto fijo.
+  Sin modificación: solo crear o eliminar (RF-17).
+}
+
+entity "uso_voucher" as uso {
+  * tenant_id : uuid <<PK,FK>>
+  * id : uuid <<PK>>
+  --
+  * voucher_id : uuid <<FK>>
+  * reserva_id : uuid <<FK,UQ>>
+  * aplicado_en : timestamptz
+  --
+  UNIQUE (voucher_id, reserva_id).
+  Materializa el consumo para poder
+  contarlo de forma atómica.
+}
+
+entity "pago" as pago {
+  * tenant_id : uuid <<PK,FK>>
+  * id : uuid <<PK>>
+  --
+  * reserva_id : uuid <<FK>>
+  * proveedor : enum(stripe)
+  * payment_intent_id : text <<UQ>>
+  * monto : numeric
+  * moneda : char(3)
+  * estado : enum(iniciado, confirmado, fallido)
+  * creado_en : timestamptz
+  confirmado_en : timestamptz
+  --
+  Nunca almacena datos de tarjeta:
+  solo identificadores tokenizados (RNF-05).
+}
+
+entity "evento_webhook" as webhook {
+  * id : uuid <<PK>>
+  --
+  * proveedor : enum(stripe)
+  * evento_id : text <<UQ>>
+  * tipo : text
+  payload : jsonb
+  * recibido_en : timestamptz
+  procesado_en : timestamptz
+  --
+  GLOBAL, no por tenant: los eventos de Stripe
+  son de la cuenta, no del negocio.
+  evento_id UNIQUE es la idempotencia de RF-33
+  ante entrega at-least-once.
+}
+
+entity "reembolso" as reembolso {
+  * tenant_id : uuid <<PK,FK>>
+  * id : uuid <<PK>>
+  --
+  * pago_id : uuid <<FK,UQ>>
+  * monto : numeric
+  * motivo : enum(cancelacion_usuario,
+      cancelacion_negocio, sin_cupo)
+  * estado : enum(pendiente, confirmado, fallido)
+  * intentos : int
+  * creado_en : timestamptz
+  --
+  UNIQUE (pago_id) = idempotencia de RF-29.
+}
+
+entity "comprobante" as comprobante {
+  * tenant_id : uuid <<PK,FK>>
+  * id : uuid <<PK>>
+  --
+  * reserva_id : uuid <<FK>>
+  * tipo : enum(pago, nota_credito)
+  * numero : text <<UQ por tenant>>
+  * datos : jsonb
+  * emitido_en : timestamptz
+  --
+  Se conserva aunque la cuenta se anonimice (RF-25/RF-34).
+}
+
+entity "config_notificacion" as config {
+  * tenant_id : uuid <<PK,FK>>
+  * id : uuid <<PK>>
+  --
+  servicio_id : uuid <<FK>>
+  * canal : enum(email, sms, push)
+  * momento : enum(antes, despues)
+  * posicion : smallint
+  * offset_min : int
+  * plantilla : text
+  * activo : bool
+  --
+  CHECK (
+    (momento = 'antes'   AND posicion BETWEEN 1 AND 3)
+    OR (momento = 'despues' AND posicion = 1)
+  )
+  UNIQUE (tenant_id,
+          COALESCE(servicio_id, UUID_NIL),
+          momento, posicion)
+  --
+  El límite de RF-16 (máx. 3 antes + 1 después)
+  queda garantizado por el motor: el CHECK acota
+  las posiciones válidas y el UNIQUE impide
+  repetirlas. No hace falta trigger.
+  COALESCE cubre la config a nivel de tenant,
+  porque en un UNIQUE los NULL no colisionan.
+  NO versionada: aplica de inmediato.
+}
+
+entity "notificacion_programada" as notif {
+  * tenant_id : uuid <<PK,FK>>
+  * id : uuid <<PK>>
+  --
+  * reserva_id : uuid <<FK>>
+  * config_id : uuid <<FK>>
+  * canal : enum(email, sms, push)
+  * programada_para : timestamptz
+  * estado : enum(programada, enviada, omitida, fallida)
+  * intentos : int
+  razon_omision : text
+  * clave_idempotencia : text <<UQ>>
+  --
+  UNIQUE por reserva+canal+tipo evita el
+  envío duplicado de RF-10 A11.
+}
+
+entity "evento_auditoria" as auditoria {
+  * tenant_id : uuid <<PK,FK>>
+  * id : uuid <<PK>>
+  --
+  * ocurrido_en : timestamptz
+  * actor_tipo : enum(usuario, administrador,
+      agente, sistema, super_admin)
+  actor_id : uuid
+  agente_id : uuid
+  cuenta_impersonada_id : uuid
+  alcance_token : jsonb
+  --
+  * accion : text
+  * recurso_tipo : text
+  recurso_id : uuid
+  * resultado : enum(exito, rechazo)
+  ip : inet
+  dispositivo : text
+  --
+  Append-only, PARTITION BY RANGE (ocurrido_en).
+  Se escribe en la MISMA transacción que la
+  operación de negocio: si no se puede auditar,
+  la operación no ocurre (RNF-36 fail-closed).
+  Al vivir en PostgreSQL no necesita outbox
+  ni relay. La retención se aplica con DROP
+  de las particiones vencidas.
+}
+
+entity "outbox_evento" as outbox {
+  * tenant_id : uuid <<PK,FK>>
+  * id : uuid <<PK>>
+  --
+  * tipo : text
+  * payload : jsonb
+  * creado_en : timestamptz
+  publicado_en : timestamptz
+  --
+  Evita la doble escritura hacia NATS: publicar
+  después del COMMIT puede fallar y perder el
+  evento. Un relay drena esta tabla hacia
+  JetStream con reintentos, apoyándose en la
+  deduplicación por Nats-Msg-Id.
+}
+
+entity "metrica_diaria" as metrica {
+  * tenant_id : uuid <<PK,FK>>
+  * fecha : date <<PK>>
+  * sede_id : uuid <<PK>>
+  * servicio_id : uuid <<PK>>
+  --
+  * reservas_creadas : int
+  * reservas_confirmadas : int
+  * reservas_canceladas : int
+  * reservas_completadas : int
+  * reservas_no_show : int
+  * ingresos : numeric
+  * minutos_ocupados : int
+  * actualizada_en : timestamptz
+  --
+  Rollup precalculado que sirve RF-11 sin
+  motor analítico aparte: los indicadores son
+  agregados sobre dimensiones conocidas, no
+  búsqueda ad-hoc. Se consulta desde las
+  réplicas de lectura y alimenta el export CSV.
+  24 meses de historia caben holgadamente.
+}
+
+servicio ||--o{ tarifa
+servicio ||--o{ politica
+politica ||--o{ reserva
+voucher  ||--o{ uso
+reserva  ||--o| uso
+reserva  ||--o{ pago
+pago     ||--o| reembolso
+reserva  ||--o{ comprobante
+config   ||--o{ notif
+reserva  ||--o{ notif
+
+legend right
+  Snapshots: la reserva congela precio_cobrado y moneda (RF-31) y
+  politica_version_id (RF-15). Cambiar un precio o publicar una política nueva
+  jamás altera una reserva existente, sin necesidad de versionar el precio.
+
+  La moneda vive solo en tenant; la copia en reserva y pago no es duplicación
+  sino parte del snapshot financiero: un comprobante ya emitido debe poder
+  reproducirse aunque el negocio cambie de moneda después (RF-34).
+
+  Idempotencia, en tres niveles distintos:
+  evento_webhook.evento_id  -> no procesar dos veces el mismo evento de Stripe
+  reembolso.pago_id         -> no reembolsar dos veces el mismo pago
+  notificacion.clave_idem   -> no enviar dos veces el mismo recordatorio
+
+  Sin motor analítico externo: RF-11 se resuelve con el rollup metrica_diaria
+  sobre réplicas de lectura, y RF-36 con una tabla particionada append-only.
+  Ambos viven en PostgreSQL, así que la auditoría es atómica con la operación
+  que audita y el rollup se reconstruye desde las tablas base.
+end legend
+
+@enduml

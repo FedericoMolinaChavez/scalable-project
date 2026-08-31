@@ -1,0 +1,41 @@
+@startuml RF-21-preferencias-notificacion
+
+title RF-21 - Preferencias de notificación del usuario
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Usuario|
+start
+:Accede a sus preferencias de notificación;
+
+|Sistema|
+:Muestra los canales y tipos de notificación\ncon su estado actual (habilitado/deshabilitado);
+
+|Usuario|
+:Habilita o deshabilita canales/tipos;
+
+if (¿Deja todos los canales deshabilitados?) then (si)
+  |Sistema|
+  :Advierte que no recibirá\nrecordatorios ni notificaciones;
+endif
+
+|Usuario|
+:Guarda los cambios;
+
+|Sistema|
+if (¿Error al guardar?) then (si)
+  :Muestra error y mantiene\nlas preferencias anteriores;
+  stop
+endif
+:Guarda las preferencias;
+:Confirma los cambios al usuario;
+stop
+
+legend right
+  RF-10 (notificaciones post reserva) consulta estas preferencias en cada envío (ver RF-10 A4).
+end legend
+
+@enduml

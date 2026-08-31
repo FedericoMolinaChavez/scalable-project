@@ -1,0 +1,34 @@
+@startuml RF-38-zonas-horarias-moneda
+
+title RF-38 - Zonas horarias y moneda
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Sistema|
+start
+:Recibe una operación con fecha/hora o monto\n(reserva, disponibilidad, notificación, comprobante);
+
+if (¿Es un dato de fecha y hora?) then (si)
+  :Almacena el instante en UTC;
+  :Lo convierte a la zona horaria de la sede\npara mostrarlo, indicándola explícitamente;
+  if (¿El usuario está en otra zona horaria?) then (si)
+    :Muestra además la hora local del usuario;
+  endif
+else (no, es un monto)
+  :Expresa el monto en la moneda definida\npara el tenant (ver RF-35);
+endif
+:Entrega el dato formateado según la sede y el tenant;
+stop
+
+legend right
+  Al almacenar los instantes en UTC, un cambio de horario de verano (DST) no
+  altera el instante absoluto de una reserva ya creada: solo cambia su
+  representación local. Si el cambio de DST modifica la hora local mostrada de
+  una reserva existente, el sistema lo notifica al usuario (ver RF-10).
+  La zona horaria y la moneda se definen al crear el tenant/sede (ver RF-35).
+end legend
+
+@enduml

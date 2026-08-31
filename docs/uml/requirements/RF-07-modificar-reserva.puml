@@ -1,0 +1,41 @@
+@startuml RF-07-modificar-reserva
+
+title RF-07 - Modificar una reserva
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Usuario|
+start
+:Selecciona la reserva que desea modificar;
+:Hace clic en "Actualizar reserva";
+
+|Sistema|
+if (¿La reserva ya fue realizada/completada?) then (si)
+  :Rechaza la modificación (reserva ya realizada);
+  stop
+endif
+if (¿Dentro del rango de modificación permitido?) then (no)
+  :Rechaza la modificación (fecha límite superada);
+  stop
+endif
+:Ofrece las opciones de modificación disponibles;
+
+|Usuario|
+:Realiza los cambios permitidos (fecha, hora, entre otros);
+
+|Sistema|
+if (¿La nueva fecha/hora está disponible?) then (no)
+  :Rechaza el cambio (horario ya ocupado);
+  stop
+endif
+:Aplica los cambios a la reserva;
+:Envía notificación con los cambios realizados;
+
+|Usuario|
+:Recibe la notificación con los cambios;
+stop
+
+@enduml

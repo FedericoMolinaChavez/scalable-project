@@ -1,0 +1,71 @@
+@startuml RF-10-notificaciones-post-reserva
+
+title RF-10 - Notificaciones post reserva
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Sistema|
+start
+:Reserva creada / programada;
+
+if (¿Faltan al menos 2 días para la reserva?) then (no)
+  note right: A1 - Menos de 2 días de anticipación:\nse omite el recordatorio T-2
+else (si)
+  :Programa el recordatorio T-2;
+  :Espera hasta T-2 días;
+  if (¿Notificaciones por email habilitadas?) then (no)
+    :Omite el envío y registra la razón (A4);
+  else (si)
+    :Envía email de recordatorio T-2;
+  endif
+endif
+
+:Espera hasta el día de la reserva;
+if (¿Canal push disponible?) then (no)
+  :Aplica fallback al canal secundario\n(email o SMS) (A7);
+endif
+if (¿Notificaciones habilitadas para el canal elegido?) then (no)
+  :Omite el envío y registra la razón (A4);
+else (si)
+  :Envía notificación del día de la reserva;
+endif
+
+:Espera 1 hora después de la reserva;
+if (¿Recolección de reviews habilitada a nivel de Administrador?) then (no)
+  :No programa ni envía la solicitud (A9);
+  stop
+endif
+if (¿La reserva fue completada\n(no no-show / no cancelada)?) then (no)
+  :Omite la solicitud de calificación (A8);
+  stop
+endif
+if (¿El usuario ya calificó por otro medio?) then (si)
+  :Omite la solicitud de calificación (A10);
+  stop
+endif
+:Envía la solicitud de calificación/review;
+
+|Usuario|
+:Recibe las notificaciones y,\nsi aplica, la solicitud de calificación;
+stop
+
+legend right
+  Excepciones transversales (aplican en cualquier paso del proceso):
+  A2  - Reserva cancelada antes del envío: cancela las notificaciones pendientes
+        y, si la política lo define, envía la confirmación de cancelación.
+  A3  - Reserva reprogramada: invalida las notificaciones pendientes, recalcula
+        las fechas sobre la nueva reserva y las reprograma (reevalúa A1 si aplica).
+  A5  - Fallo temporal en el envío: reintenta con backoff exponencial hasta 3 veces;
+        si todos fallan, marca la notificación como fallida y la registra para revisión.
+  A6  - Correo inválido / rebote permanente: no reintenta, marca el contacto como
+        no entregable, notifica al administrador e intenta el canal alterno si existe.
+  A11 - Ejecución duplicada: valida la clave de idempotencia por reserva/canal/tipo
+        y descarta el envío si ya fue registrado como entregado.
+  A12 - Proceso caído durante la ventana de envío: al recuperarse, envía lo que esté
+        dentro del umbral de retraso y descarta lo obsoleto, registrando la omisión.
+end legend
+
+@enduml

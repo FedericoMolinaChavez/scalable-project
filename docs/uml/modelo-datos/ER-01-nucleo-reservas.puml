@@ -1,0 +1,202 @@
+@startuml ER-01-nucleo-reservas
+
+title ER-01 - Núcleo de reservas (catálogo, disponibilidad y reserva)
+
+hide circle
+skinparam linetype ortho
+skinparam class {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+entity "tenant" as tenant {
+  * id : uuid <<PK>>
+  --
+  * identificador : text <<UQ>>
+  * nombre : text
+  * moneda : char(3)
+  * zona_horaria : text
+  * estado : enum(activo, suspendido, eliminado)
+  --
+  Global (sin tenant_id). Ver ER-02.
+  Sus administradores son las cuentas
+  con cuenta.tenant_id = este tenant.
+  Única fuente de la moneda del negocio.
+}
+
+entity "sede" as sede {
+  * tenant_id : uuid <<PK,FK>>
+  * id : uuid <<PK>>
+  --
+  * nombre : text
+  * zona_horaria : text
+  direccion : text
+  * estado : enum(activa, inactiva)
+}
+
+entity "servicio" as servicio {
+  * tenant_id : uuid <<PK,FK>>
+  * id : uuid <<PK>>
+  --
+  * sede_id : uuid <<FK>>
+  * nombre : text
+  descripcion : text
+  * duracion_min : int
+  * precio_monto : numeric
+  * estado : enum(activo, inactivo)
+  --
+  Define QUÉ se reserva, cuánto dura
+  y cuánto cuesta.
+  El precio va aquí y no en tabla aparte:
+  es 1:1, no se versiona (la reserva guarda
+  el snapshot) y evita un join en la ruta
+  más caliente (RF-26). La moneda sale de
+  tenant. Las tarifas diferenciadas sí
+  tienen tabla propia (ver ER-03).
+}
+
+entity "recurso" as recurso {
+  * tenant_id : uuid <<PK,FK>>
+  * id : uuid <<PK>>
+  --
+  * sede_id : uuid <<FK>>
+  * nombre : text
+  * estado : enum(activo, inactivo)
+  --
+  Define QUÉ se ocupa. Capacidad 1.
+  Es el dueño del calendario.
+}
+
+entity "servicio_recurso" as servicio_recurso {
+  * tenant_id : uuid <<PK,FK>>
+  * servicio_id : uuid <<PK,FK>>
+  * recurso_id : uuid <<PK,FK>>
+  --
+  Recursos elegibles para prestar el servicio.
+}
+
+entity "regla_disponibilidad" as regla {
+  * tenant_id : uuid <<PK,FK>>
+  * id : uuid <<PK>>
+  --
+  * recurso_id : uuid <<FK>>
+  * dia_semana : smallint
+  * hora_inicio : time
+  * hora_fin : time
+  vigente_desde : date
+  vigente_hasta : date
+  --
+  Los horarios NO se materializan:
+  la disponibilidad se calcula desde
+  estas reglas menos reservas y excepciones.
+}
+
+entity "excepcion_calendario" as excepcion {
+  * tenant_id : uuid <<PK,FK>>
+  * id : uuid <<PK>>
+  --
+  recurso_id : uuid <<FK>>
+  sede_id : uuid <<FK>>
+  * periodo : tstzrange
+  * tipo : enum(feriado, mantenimiento, cierre)
+  motivo : text
+}
+
+entity "reserva" as reserva {
+  * tenant_id : uuid <<PK,FK>>
+  * id : uuid <<PK>>
+  --
+  * servicio_id : uuid <<FK>>
+  * recurso_id : uuid <<FK>>
+  cuenta_id : uuid <<FK cuenta>>
+  contacto_nombre : text
+  contacto_email : text
+  contacto_telefono : text
+  --
+  * periodo : tstzrange
+  * estado : enum(pendiente, confirmada, en_curso,
+      completada, cancelada, no_show, expirada)
+  expira_en : timestamptz
+  --
+  * precio_cobrado : numeric
+  * moneda : char(3)
+  * politica_version_id : uuid <<FK>>
+  voucher_id : uuid <<FK>>
+  --
+  * creada_en : timestamptz
+  --
+  EXCLUDE (recurso_id WITH =, periodo WITH &&)
+    WHERE estado IN ('pendiente','confirmada')
+  --
+  El bloqueo de RF-27 ES esta fila en estado
+  'pendiente' con expira_en. No hay entidad aparte.
+  cuenta_id nulo = reserva como invitado (RF-01).
+}
+
+entity "transicion_estado" as transicion {
+  * tenant_id : uuid <<PK,FK>>
+  * id : uuid <<PK>>
+  --
+  * reserva_id : uuid <<FK>>
+  * estado_anterior : enum
+  * estado_nuevo : enum
+  * actor_tipo : enum(usuario, admin, agente, sistema)
+  actor_id : uuid
+  * ocurrida_en : timestamptz
+  --
+  Historial append-only (RF-28).
+}
+
+entity "lista_espera" as espera {
+  * tenant_id : uuid <<PK,FK>>
+  * id : uuid <<PK>>
+  --
+  * servicio_id : uuid <<FK>>
+  recurso_id : uuid <<FK>>
+  * periodo : tstzrange
+  * cuenta_id : uuid <<FK cuenta>>
+  * creada_en : timestamptz
+  * estado : enum(en_espera, notificada, cumplida, descartada)
+  --
+  El turno se resuelve por orden de creada_en.
+}
+
+entity "calificacion" as calificacion {
+  * tenant_id : uuid <<PK,FK>>
+  * id : uuid <<PK>>
+  --
+  * reserva_id : uuid <<FK,UQ>>
+  * puntaje : smallint
+  comentario : text
+  * creada_en : timestamptz
+}
+
+tenant   ||--o{ sede
+sede     ||--o{ servicio
+sede     ||--o{ recurso
+servicio ||--o{ servicio_recurso
+recurso  ||--o{ servicio_recurso
+recurso  ||--o{ regla
+recurso  ||--o{ excepcion
+sede     ||--o{ excepcion
+servicio ||--o{ reserva
+recurso  ||--o{ reserva
+reserva  ||--o{ transicion
+reserva  ||--o| calificacion
+servicio ||--o{ espera
+recurso  ||--o{ espera
+
+legend right
+  Particionado: todas las tablas de tenant van PARTITION BY HASH (tenant_id),
+  con un número fijo de particiones. Por eso la PK incluye tenant_id.
+  Como un recurso pertenece a un solo tenant, todas sus reservas caen en la
+  misma partición y la restricción de exclusión por partición basta para
+  garantizar la invariante global de no solapamiento (RNF-10).
+
+  Aislamiento: Row-Level Security por tenant_id sobre toda tabla de tenant (RNF-06).
+
+  Borrado de tenant: lógico e inmediato, con purga asíncrona por lotes.
+end legend
+
+@enduml

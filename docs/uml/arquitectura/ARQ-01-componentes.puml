@@ -1,0 +1,172 @@
+@startuml ARQ-01-componentes
+
+title ARQ-01 - Arquitectura de componentes
+
+skinparam componentStyle rectangle
+skinparam nodesep 45
+skinparam ranksep 55
+skinparam component {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+}
+skinparam database {
+  BackgroundColor #F0FDF4
+  BorderColor #16A34A
+}
+skinparam queue {
+  BackgroundColor #FEF3C7
+  BorderColor #D97706
+}
+
+actor "Usuario" as usuario
+actor "Administrador" as admin
+actor "Agente" as agente
+
+package "Borde" {
+  [Cilium Gateway\n(ingress + eBPF)] as gw
+  [Servicio de Identidad] as identidad
+}
+
+package "Núcleo síncrono" {
+  [Núcleo de Reservas\n(escritura)] as nucleo
+  [Consulta de Reservas\n(lectura)] as consulta
+  [Servicio de\nDisponibilidad] as disp
+  [Configuración\ny Catálogo] as config
+}
+
+package "Asíncrono" {
+  [Webhook de Pagos] as webhook
+  [Trabajadores] as work
+}
+
+package "Datos" {
+  [PgBouncer] as pgb
+  database "PostgreSQL\nprimario" as pg
+  database "PostgreSQL\nréplicas" as pgr
+  database "Valkey" as redis
+  queue "NATS JetStream" as bus
+  database "MinIO" as minio
+}
+
+package "Observabilidad" {
+  [Prometheus] as prom
+  [Loki] as loki
+  [Tempo] as tempo
+  [Grafana] as grafana
+}
+
+usuario --> gw
+admin   --> gw
+agente  --> gw
+
+gw --> identidad
+gw --> nucleo
+gw --> consulta
+gw --> disp
+gw --> config
+
+identidad --> pgb
+nucleo    --> pgb
+nucleo    --> redis
+config    --> pgb
+consulta  --> pgr
+disp      --> pgr
+disp      --> redis
+pgb       --> pg
+
+webhook --> pgb
+webhook --> bus
+work    --> pgb
+work    --> bus
+work    --> minio
+
+prom  --> grafana
+loki  --> grafana
+tempo --> grafana
+
+interface "Stripe" as stripe
+interface "Email / SMS / Push" as canales
+
+stripe  --> webhook
+work    --> stripe
+work    --> canales
+admin  ..> consulta : métricas (RF-11)
+
+note right of nucleo
+  **Dueño de la invariante de RNF-10.**
+  En UNA transacción: valida la cuota,
+  inserta la reserva pendiente
+  (restricción EXCLUDE), consume el
+  voucher y escribe el outbox.
+  Único componente que escribe en
+  reserva por la ruta síncrona.
+end note
+
+note right of disp
+  90% del tráfico (RNF-03).
+  Sirve desde caché con los 2 s de
+  staleness que RNF-10 autoriza.
+  Lectura optimista: puede mostrar un
+  cupo ya tomado; el núcleo decide
+  (RF-01 alt.3).
+end note
+
+note bottom of work
+  Expirador de bloqueos (RF-27)
+  Conciliador de pagos (RF-33)
+  Motor de notificaciones (RF-10)
+  Procesador de reembolsos (RF-29)
+  Relay del outbox hacia NATS
+  Rollup de métricas (RF-11)
+  Lista de espera (RF-37)
+  Transiciones automáticas (RF-28)
+  --
+  Ya no hay relay de auditoría: al vivir
+  en PostgreSQL, se escribe dentro de la
+  misma transacción (RNF-36).
+end note
+
+note bottom of webhook
+  Fuera del presupuesto de RNF-04:
+  su disponibilidad la acota Stripe.
+  Por eso la reserva se confirma aquí
+  y no en la ruta síncrona.
+end note
+
+note bottom of redis
+  Límites de tasa por cuenta/agente y
+  proyecciones de disponibilidad
+  (RNF-08, RNF-01).
+  Nunca es autoridad sobre el cupo:
+  esa es siempre PostgreSQL.
+end note
+
+note bottom of pgb
+  Sin pooling, cada pod abre su propio
+  conjunto de conexiones y agota las de
+  PostgreSQL mucho antes de llegar a los
+  45 pods de RNF-03. Modo transacción.
+end note
+
+note right of gw
+  Defensa en tres capas para RNF-08:
+  1. Cilium/eBPF: por IP y conexión
+  2. Valkey: cuotas por cuenta y agente
+  3. PostgreSQL: bloqueos concurrentes,
+     exacto y en la misma transacción
+end note
+
+legend right
+  Regla de descomposición: se separa por **frontera transaccional y dominio de
+  fallo**, no por entidad. Todo lo que debe ser atómico con la reserva vive en el
+  Núcleo de Reservas; todo lo que tolera latencia o depende de terceros sale a
+  los trabajadores asíncronos.
+
+  Por eso NO hay un "servicio de pagos" síncrono ni un "servicio de bloqueos"
+  aparte: partirlos obligaría a una transacción distribuida y rompería RNF-10.
+
+  Escalado independiente: escritura (~3.300 req/s) contra el primario;
+  lectura (~30.000 req/s) contra réplicas y caché.
+end legend
+
+@enduml

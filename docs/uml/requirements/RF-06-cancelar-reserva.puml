@@ -1,0 +1,31 @@
+@startuml RF-06-cancelar-reserva
+
+title RF-06 - Cancelar una reserva
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Usuario|
+start
+:Selecciona la reserva que desea cancelar;
+:Hace clic en "Cancelar reserva";
+
+|Sistema|
+if (¿La reserva está vigente (no cancelada ni pasada)?) then (no)
+  :Muestra error: la reserva no puede cancelarse;
+  stop
+endif
+if (¿Dentro del rango de cancelación permitido?) then (no)
+  :Rechaza la cancelación (fecha límite superada);
+  stop
+endif
+:Cancela la reserva;
+:Envía notificación de cancelación al usuario;
+
+|Usuario|
+:Recibe la notificación y ve el popup de éxito;
+stop
+
+@enduml

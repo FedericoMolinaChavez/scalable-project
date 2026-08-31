@@ -1,0 +1,56 @@
+@startuml RF-16-configurar-notificaciones-reviews
+
+title RF-16 - Configurar notificaciones y recolección de reviews
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Administrador|
+start
+:Accede a la configuración de notificaciones\ndel recurso/negocio;
+
+|Sistema|
+if (¿Administrador tiene permisos sobre el recurso?) then (no)
+  :Rechaza el acceso;
+  stop
+endif
+:Muestra las notificaciones configuradas\n(canal, momento, plantilla, estado)\ny el estado de la recolección de reviews;
+
+|Administrador|
+:Agrega o edita una notificación;
+:Selecciona el canal (email, SMS, push);
+:Define el momento de envío\n(antes de la cita, ej. "2 días antes";\no después, ej. "1 hora después");
+:Redacta la plantilla del mensaje\ninsertando variables de la reserva y del cliente\n(nombre, fecha, hora, recurso, negocio, etc.);
+:Guarda la notificación;
+
+|Sistema|
+if (¿Es "antes de la cita" y ya existen\n3 notificaciones configuradas?) then (si)
+  :Rechaza (máximo 3 notificaciones antes de la cita);
+  stop
+endif
+if (¿Es "después de la cita" y ya existe\n1 notificación configurada?) then (si)
+  :Rechaza (máximo 1 notificación posterior);
+  stop
+endif
+if (¿La plantilla usa solo variables válidas\ny el canal es soportado?) then (no)
+  :Rechaza y muestra el error de validación\n(variable o canal inválido);
+  stop
+endif
+
+:Guarda la configuración como vigente;
+:Confirma los cambios al administrador;
+stop
+
+legend right
+  La configuración no está versionada: es un valor vigente único por recurso/negocio.
+  Un cambio aplica de inmediato a todos los envíos pendientes y futuros (ver RF-10),
+  incluyendo reservas ya creadas que aún no hayan recibido esa notificación.
+  Límites: máximo 3 notificaciones antes de la cita + 1 posterior a la cita.
+  La notificación posterior, si está habilitada, es la solicitud de calificación/review.
+  Variables de plantilla disponibles: datos de la reserva (fecha, hora, recurso, estado)
+  y del cliente (nombre, contacto), inyectadas al momento del envío (ver RF-10).
+end legend
+
+@enduml

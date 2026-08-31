@@ -1,0 +1,44 @@
+@startuml RF-26-consultar-catalogo-disponibilidad
+
+title RF-26 - Consultar catálogo y disponibilidad
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Usuario|
+start
+:Consulta el catálogo del negocio\n(sedes, servicios y recursos reservables);
+
+|Sistema|
+:Muestra los servicios y recursos activos;
+
+|Usuario|
+:Selecciona un servicio/recurso y un rango de fechas;
+
+|Sistema|
+if (¿El recurso está activo y habilitado para reserva?) then (no)
+  :Informa que el recurso no está disponible;
+  stop
+endif
+:Calcula los horarios disponibles:\nhorarios configurados (RF-14)\nmenos reservas confirmadas,\nbloqueos temporales vigentes (RF-27)\ny excepciones de calendario;
+if (¿Error al consultar la disponibilidad?) then (si)
+  :Muestra un mensaje de error y ofrece reintentar;
+  stop
+endif
+if (¿Existen horarios disponibles en el rango?) then (no)
+  :Informa que no hay disponibilidad, sugiere las\npróximas fechas libres y ofrece la lista\nde espera (ver RF-37);
+  stop
+endif
+:Muestra el calendario con los horarios disponibles\nen la zona horaria de la sede (ver RF-38);
+
+|Usuario|
+:Selecciona un horario para iniciar la reserva (ver RF-01);
+stop
+
+legend right
+  Consulta disponible para cualquier usuario, esté o no registrado (igual que RF-01).
+end legend
+
+@enduml

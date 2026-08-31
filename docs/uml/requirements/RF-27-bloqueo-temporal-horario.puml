@@ -1,0 +1,42 @@
+@startuml RF-27-bloqueo-temporal-horario
+
+title RF-27 - Bloqueo temporal del horario durante el checkout
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Usuario|
+start
+:Selecciona un horario e inicia el checkout (ver RF-01);
+
+|Sistema|
+if (¿El horario ya tiene un bloqueo vigente\no una reserva confirmada?) then (si)
+  :Rechaza e informa que el horario\nya no está disponible;
+  stop
+endif
+:Crea de forma atómica un bloqueo temporal (hold)\nsobre el horario, con un TTL definido;
+:Excluye el horario de la disponibilidad\nmostrada a otros usuarios (ver RF-26);
+
+|Usuario|
+:Completa el formulario y realiza el pago (ver RF-01);
+
+|Sistema|
+if (¿El pago se confirmó antes de expirar el TTL?) then (no)
+  :Libera el bloqueo y devuelve el horario\na la disponibilidad;
+  :Informa que el bloqueo expiró y solicita\nseleccionar el horario nuevamente;
+  stop
+endif
+:Convierte el bloqueo en una reserva confirmada (ver RF-28);
+:Confirma la reserva al usuario;
+stop
+
+legend right
+  La creación del bloqueo es atómica: ante dos solicitudes simultáneas sobre el
+  mismo horario, solo una obtiene el bloqueo y la otra recibe el rechazo por no
+  disponibilidad (RF-01, flujo alternativo 3). Un bloqueo abandonado se libera
+  automáticamente al vencer su TTL, sin intervención del usuario.
+end legend
+
+@enduml

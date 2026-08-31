@@ -1,0 +1,39 @@
+@startuml RF-13-autenticacion-agente
+
+title RF-13 - Autenticación Agente
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Agente|
+start
+:Envía el token de identificación\ny la lista de acciones a realizar;
+
+|Sistema|
+if (¿Token válido?) then (no)
+  :Retorna 403 (token inválido);
+  stop
+endif
+if (¿Se superó el límite de acciones repetidas\n(más de 3-4 iguales en 1 minuto)?) then (si)
+  :Retorna 403 (límite de acciones excedido);
+  stop
+endif
+if (¿La lista de acciones cumple las reglas\ndefinidas para el agente?) then (no)
+  :Retorna 403 (acciones no autorizadas);
+  stop
+endif
+:Emite el token de validación\npara las herramientas solicitadas;
+
+|Agente|
+:Recibe el token y ejecuta las acciones autorizadas;
+stop
+
+legend right
+  Las "reglas definidas para el agente" son el subconjunto de los roles del
+  usuario impersonado necesario para la acción solicitada (ver RF-23), no un
+  permiso propio del agente.
+end legend
+
+@enduml

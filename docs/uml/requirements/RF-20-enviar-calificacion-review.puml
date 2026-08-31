@@ -1,0 +1,38 @@
+@startuml RF-20-enviar-calificacion-review
+
+title RF-20 - Enviar calificación/review
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Usuario|
+start
+:Accede a calificar la reserva\n(desde la notificación de RF-10 o el detalle de RF-03);
+
+|Sistema|
+if (¿La reserva pertenece al usuario\ny está completada?) then (no)
+  :Bloquea el acceso;
+  stop
+endif
+if (¿La reserva ya fue calificada?) then (si)
+  :Rechaza (la reserva ya tiene una calificación);
+  stop
+endif
+:Muestra el formulario de calificación\n(puntaje y comentario opcional);
+
+|Usuario|
+:Ingresa el puntaje y, opcionalmente, un comentario;
+:Envía la calificación;
+
+|Sistema|
+if (¿Puntaje proporcionado?) then (no)
+  :Rechaza y solicita el puntaje;
+  stop
+endif
+:Guarda la calificación asociada a la reserva;
+:Confirma el registro y agradece al usuario;
+stop
+
+@enduml

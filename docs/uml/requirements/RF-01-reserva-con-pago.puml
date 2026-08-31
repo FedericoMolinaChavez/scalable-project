@@ -1,0 +1,69 @@
+@startuml RF-01-reserva-con-pago
+
+title RF-01 - Reserva con pago
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Usuario|
+start
+
+repeat
+  :Selecciona un horario en el calendario;
+  |Sistema|
+  :Verifica disponibilidad del horario;
+  if (¿Horario disponible?) then (si)
+    break
+  endif
+  :Muestra error: horario no disponible;
+  |Usuario|
+repeat while (¿Selecciona otro horario?)
+
+|Usuario|
+repeat
+  :Completa el formulario con su información personal;
+  |Sistema|
+  :Valida los campos del formulario;
+  if (¿Formulario completo y válido?) then (si)
+    break
+  endif
+  :Muestra error en los campos no completados;
+  |Usuario|
+repeat while (¿Corrige el formulario?)
+
+|Usuario|
+:Acepta los términos y condiciones;
+:Verifica que no es un robot (captcha);
+
+|Sistema|
+if (¿El horario sigue disponible?) then (no)
+  :Muestra error de no disponibilidad\n(otro usuario tomó el horario);
+  :Descarta la reserva en curso;
+  stop
+endif
+
+|Usuario|
+repeat
+  :Realiza el pago;
+  |Sistema|
+  :Procesa el pago;
+  if (¿Pago exitoso?) then (si)
+    :Registra la reserva;
+    :Envía email/SMS con la información de la reserva;
+    break
+  endif
+  :Muestra error de pago;
+  |Usuario|
+repeat while (¿Reintenta el pago?) is (si) not (no)
+
+|Sistema|
+:Limpia la reserva;
+stop
+
+|Usuario|
+:Recibe el email/SMS de confirmación;
+stop
+
+@enduml

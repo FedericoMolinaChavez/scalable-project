@@ -1,0 +1,54 @@
+@startuml RF-02-revisar-mis-reservas
+
+title RF-02 - Revisar mis reservas
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Usuario|
+start
+if (¿Provee un método de identificación?) then (no)
+  |Sistema|
+  :Bloquea el acceso a la vista de carga;
+  stop
+endif
+
+switch (¿Qué método usa?)
+case (inicia sesión en la plataforma)
+  :Se autentica en la plataforma (ver RF-12);
+case (teléfono o email)
+  :Ingresa su número de teléfono o email;
+  |Sistema|
+  :Genera un código OTP y lo envía\nal teléfono/email indicado;
+  |Usuario|
+  :Ingresa el código OTP recibido;
+endswitch
+
+|Sistema|
+if (¿Identificación válida?\n(login exitoso u OTP correcto)) then (no)
+  :Rechaza el acceso a la vista de carga;
+  stop
+endif
+
+:Carga las reservas asociadas al usuario identificado;
+
+if (¿Tiene reservas registradas?) then (no)
+  |Usuario|
+  :Ve la lista de reservas vacía;
+  stop
+endif
+
+:Ordena las reservas por fecha y las pagina;
+
+|Usuario|
+:Observa las reservas pasadas y presentes;
+stop
+
+legend right
+  El envío del código OTP responde igual exista o no una cuenta asociada
+  al teléfono/email indicado, para evitar enumeración de usuarios (ver RF-12 A12).
+end legend
+
+@enduml

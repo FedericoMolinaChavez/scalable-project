@@ -1,0 +1,50 @@
+@startuml RF-14-configurar-disponibilidad-recurso
+
+title RF-14 - Configurar disponibilidad y horarios de recurso
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Administrador|
+start
+:Selecciona el recurso a configurar;
+
+|Sistema|
+if (¿Administrador tiene permisos sobre el recurso?) then (no)
+  :Rechaza el acceso;
+  stop
+endif
+:Muestra la disponibilidad y horarios actuales;
+
+|Administrador|
+:Define/modifica disponibilidad y horarios\n(días, horarios, capacidad, duración de slots, bloqueos);
+:Guarda los cambios;
+
+|Sistema|
+if (¿La configuración es válida?\n(sin solapamientos, horarios coherentes, capacidad válida)) then (no)
+  :Rechaza los cambios y muestra el error de validación;
+  stop
+endif
+
+:Identifica las reservas existentes\nafectadas por el cambio;
+
+if (¿Existen reservas afectadas?) then (si)
+  repeat
+    :Toma la siguiente reserva afectada;
+    if (¿Existe un horario equivalente disponible\npara reubicarla automáticamente?) then (si)
+      :Reubica la reserva en el nuevo horario (ver RF-07);
+      :Notifica al usuario el cambio de horario;
+    else (no)
+      :Cancela la reserva (ver RF-06);
+      :Notifica la cancelación y ofrece\nreprogramar o reembolsar;
+    endif
+  repeat while (¿Quedan más reservas afectadas por procesar?)
+endif
+
+:Aplica y guarda la nueva disponibilidad;
+:Confirma los cambios al administrador;
+stop
+
+@enduml

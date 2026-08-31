@@ -1,0 +1,68 @@
+@startuml RF-11-metricas-sistema
+
+title RF-11 - Revisar métricas del sistema
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Administrador|
+start
+:Selecciona "Métricas" en el menú de administración;
+
+|Sistema|
+if (¿Es administrador del tenant consultado?) then (no)
+  :Rechaza el acceso (ver RF-23);
+  stop
+endif
+:Solicita los indicadores del periodo por defecto\n(últimos 30 días), acotados a su tenant;
+if (¿Error al obtener las métricas?) then (si)
+  :Muestra error, registra el log\ny ofrece reintentar (A3);
+  stop
+endif
+if (¿Hay datos en el periodo?) then (no)
+  :Muestra el panel en estado vacío (A1);
+endif
+:Muestra el panel (KPIs, gráficas, tabla de detalle);
+
+|Administrador|
+:Ajusta los filtros (rango de fechas, recurso, sede);
+
+|Sistema|
+if (¿Rango de fechas válido (inicio <= fin y <= 24 meses)?) then (no)
+  :Muestra mensaje de validación\ny conserva el último filtro válido (A2);
+  stop
+endif
+if (¿El rango excede los 12 meses?) then (si)
+  :Procesa la consulta de forma asíncrona,\nmuestra progreso y notifica al finalizar (A4);
+else (no)
+  :Recalcula los indicadores;
+endif
+if (¿Error al obtener las métricas?) then (si)
+  :Muestra error, registra el log\ny ofrece reintentar (A3);
+  stop
+endif
+if (¿Hay datos con los filtros aplicados?) then (no)
+  :Muestra el panel en estado vacío (A1);
+endif
+:Actualiza el panel y muestra la fecha/hora\nde la última actualización;
+
+|Administrador|
+:Solicita la exportación del resultado;
+
+|Sistema|
+if (¿Error al generar el archivo?) then (si)
+  :Muestra error, registra el log\ny ofrece reintentar (A3);
+  stop
+endif
+:Genera el archivo CSV y lo entrega para descarga;
+stop
+
+legend right
+  El alcance es el tenant completo del administrador: todas sus sedes y recursos.
+  No existe en esta etapa un rol acotado a una sede; si se necesitara, sería un
+  requerimiento aparte y no una variante de este (ver RF-23).
+end legend
+
+@enduml

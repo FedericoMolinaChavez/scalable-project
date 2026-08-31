@@ -1,0 +1,41 @@
+@startuml RF-31-precios-tarifas
+
+title RF-31 - Definición de precios y tarifas
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Administrador|
+start
+:Accede a la configuración de precios\ny tarifas de un servicio/recurso;
+
+|Sistema|
+if (¿El recurso pertenece a su tenant?) then (no)
+  :Rechaza el acceso (ver RF-23);
+  stop
+endif
+:Muestra el precio vigente y las tarifas configuradas;
+
+|Administrador|
+:Define el precio base y, si aplica, tarifas\ndiferenciadas (franja horaria, día, temporada);
+:Guarda los cambios;
+
+|Sistema|
+if (¿El precio es válido (mayor que cero)\ny la moneda es la del tenant?) then (no)
+  :Rechaza y muestra el error de validación;
+  stop
+endif
+:Guarda el precio como vigente\npara las nuevas reservas;
+:Confirma los cambios;
+stop
+
+legend right
+  El precio no se versiona como las políticas (RF-15): cada reserva almacena el
+  precio efectivamente cobrado al momento de crearse, por lo que un cambio de
+  precio nunca altera el monto de una reserva ya realizada. La moneda es la
+  definida para el tenant (ver RF-35 y RF-38).
+end legend
+
+@enduml

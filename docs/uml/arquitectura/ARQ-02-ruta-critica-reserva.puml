@@ -1,0 +1,90 @@
+@startuml ARQ-02-ruta-critica-reserva
+
+title ARQ-02 - Ruta crítica de reserva (RNF-01 y RNF-04)
+
+skinparam sequence {
+  ArrowColor #2563EB
+  LifeLineBorderColor #2563EB
+  ParticipantBackgroundColor #EFF6FF
+  ParticipantBorderColor #2563EB
+}
+
+actor Usuario as u
+participant "API Gateway" as gw
+participant "Núcleo de\nReservas" as nucleo
+database "Redis" as redis
+database "PostgreSQL" as pg
+participant "Webhook\nde Pagos" as wh
+queue "Bus de eventos" as bus
+participant "Trabajadores\nasíncronos" as work
+participant "Stripe" as stripe
+
+== Ruta síncrona: presupuesto de 200 ms (RNF-01) ==
+
+u -> gw : POST /reservas
+activate gw
+gw -> redis : verifica límite de tasa (RNF-08)
+redis --> gw : ok
+gw -> nucleo : crear reserva
+activate nucleo
+
+nucleo -> pg : **BEGIN**
+nucleo -> pg : cuenta bloqueos activos\nde la cuenta (cuota RNF-08)
+nucleo -> pg : INSERT reserva\n(pendiente, expira_en)\n<<EXCLUDE recurso+periodo>>
+note right of pg
+  Aquí se resuelve la concurrencia:
+  el motor rechaza el solapamiento.
+  Dos solicitudes simultáneas sobre
+  el mismo horario -> gana una (RNF-10).
+end note
+nucleo -> pg : INSERT uso_voucher
+nucleo -> pg : INSERT outbox_auditoria\n(RNF-36 fail-closed)
+nucleo -> pg : **COMMIT**
+pg --> nucleo : reserva pendiente
+
+nucleo -> stripe : crea PaymentIntent
+stripe --> nucleo : client_secret
+nucleo --> gw : 201 reserva pendiente
+deactivate nucleo
+gw --> u : reserva pendiente + client_secret
+deactivate gw
+
+note over u, pg
+  **Aquí termina RNF-01.** El cupo ya está garantizado y el
+  presupuesto de 200 ms se cumplió sin esperar la confirmación
+  del pago. Por eso la ruta de reserva puede sostener cinco nueves
+  aunque Stripe no los ofrezca (RNF-04, RNF-05).
+end note
+
+== Ruta asíncrona: confirmación del pago (fuera de RNF-04) ==
+
+u -> stripe : confirma el pago (cliente)
+stripe -> wh : webhook del evento
+activate wh
+wh -> wh : verifica firma HMAC\ny tolerancia de tiempo (RNF-05)
+wh -> pg : ¿evento_id ya procesado?\n(idempotencia RF-33)
+alt evento nuevo y reserva vigente
+  wh -> pg : UPDATE reserva SET confirmada\nWHERE pendiente AND expira_en > now()
+  pg --> wh : 1 fila
+  wh -> bus : reserva_confirmada
+  bus -> work : comprobante (RF-34),\nnotificaciones (RF-10),\nindexado de métricas (RF-11)
+else el bloqueo ya expiró
+  pg --> wh : 0 filas
+  wh -> bus : pago_sin_cupo
+  bus -> work : reembolso automático (RF-29)
+  note right of work
+    La carrera del TTL de RNF-10:
+    se cobró pero el cupo se liberó.
+    Se resuelve devolviendo el dinero,
+    nunca sobrevendiendo.
+  end note
+end
+wh --> stripe : 200 OK
+deactivate wh
+
+== Red de seguridad ==
+
+work -> pg : expira reservas pendientes\nvencidas y libera el cupo (RF-27)
+work -> stripe : concilia pagos sin webhook\nantes de liberar (RF-33)
+
+@enduml

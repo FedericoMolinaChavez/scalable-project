@@ -1,0 +1,34 @@
+@startuml RF-03-revisar-detalle-reserva
+
+title RF-03 - Revisar el detalle de una reserva
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Usuario|
+start
+if (¿Cómo accede a la reserva?) then (desde la lista)
+  :Ingresa a la plataforma;
+  |Sistema|
+  :Lista las reservas del usuario;
+  |Usuario|
+  :Selecciona "Ver detalle" en una reserva;
+else (desde email/SMS)
+  :Abre el link de detalle recibido por email/SMS;
+endif
+
+|Sistema|
+if (¿La reserva pertenece al usuario?) then (no)
+  :Bloquea el acceso;
+  :Muestra error de acceso no autorizado;
+  stop
+endif
+:Carga la información detallada de la reserva;
+
+|Usuario|
+:Visualiza el modal/pantalla con el detalle de la reserva;
+stop
+
+@enduml

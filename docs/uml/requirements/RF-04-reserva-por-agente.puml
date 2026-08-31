@@ -1,0 +1,39 @@
+@startuml RF-04-reserva-por-agente
+
+title RF-04 - Reserva por un agente
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Agente|
+start
+:Solicita intercambiar su token\npor uno con los permisos de reserva;
+
+|Sistema|
+if (¿Token válido y con los permisos requeridos?) then (no)
+  :Rechaza la solicitud (API de autenticación);
+  stop
+endif
+:Emite el token con permisos de reserva;
+
+|Agente|
+:Envía la solicitud de reserva vía API\n(horario, datos del usuario impersonado);
+
+|Sistema|
+if (¿Fecha/horario válido y disponible?) then (no)
+  :Rechaza la reserva;
+  stop
+endif
+:Registra la reserva\n(mismo flujo que RF-01, ejecutado por API);
+
+|Agente|
+:Realiza el pago en nombre del usuario;
+
+|Sistema|
+:Confirma el pago y la reserva;
+:Notifica al usuario (email/SMS);
+stop
+
+@enduml

@@ -1,0 +1,41 @@
+@startuml RF-24-registro-usuario
+
+title RF-24 - Registro de usuario
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Usuario|
+start
+:Ingresa sus datos de registro\n(nombre, correo y/o teléfono, contraseña);
+:Acepta los términos y condiciones;
+:Envía el formulario;
+
+|Sistema|
+if (¿Datos con formato válido\ny términos aceptados?) then (no)
+  :Rechaza y muestra el error de validación;
+  stop
+endif
+if (¿La contraseña cumple la política de seguridad?) then (no)
+  :Rechaza y solicita otra contraseña;
+  stop
+endif
+if (¿El correo/teléfono ya está registrado?) then (si)
+  :Responde igual que en el caso exitoso y notifica\nal titular el intento de registro\n(anti-enumeración, ver RF-12 A12);
+  stop
+endif
+:Crea la cuenta en estado pendiente de verificación\ncon tipo "Usuario" (ver RF-23);
+:Dispara la verificación del correo/teléfono (ver RF-19);
+
+|Usuario|
+:Verifica su correo/teléfono (ver RF-19);
+
+|Sistema|
+:Activa la cuenta;
+:Asocia las reservas previas realizadas como invitado\ncon el mismo correo/teléfono verificado (ver RF-01);
+:Confirma el registro y habilita el inicio de sesión (ver RF-12);
+stop
+
+@enduml

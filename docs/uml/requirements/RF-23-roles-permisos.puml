@@ -1,0 +1,44 @@
+@startuml RF-23-roles-permisos
+
+title RF-23 - Roles y permisos
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Solicitante|
+start
+:Solicita realizar una acción sobre un recurso\n(directamente o a través de un agente en su nombre);
+
+|Sistema|
+if (¿Es una solicitud de un agente\nen nombre de otra cuenta?) then (si)
+  :Calcula el alcance efectivo como el subconjunto:\nacción solicitada ∩ alcance de la cuenta impersonada (ver RF-13);
+else (no)
+  :Usa el alcance de la cuenta autenticada;
+endif
+
+switch (¿Tipo de cuenta?)
+case (Super Admin)
+  :Alcance: acceso global a todos los tenants,\ncuentas y recursos (incluye eliminar cuentas);
+case (Administrador)
+  :Alcance: lectura/escritura sobre los recursos\nde su propio tenant (productos, precios,\nvouchers, políticas, notificaciones, métricas);
+case (Usuario)
+  :Alcance: lectura/escritura únicamente\nsobre sus propios datos (reservas, vouchers, perfil);
+endswitch
+
+if (¿El recurso solicitado está dentro\ndel alcance determinado?) then (no)
+  :Rechaza la acción (fuera de alcance);
+  stop
+endif
+:Autoriza la acción;
+stop
+
+legend right
+  El tipo de cuenta no se asigna manualmente: Super Admin es el operador de la
+  plataforma, Administrador surge de ser dueño de un tenant, Usuario es el
+  tipo por defecto de una cuenta de cliente. Un agente nunca recibe más alcance
+  del que ya tiene la cuenta impersonada (ver RF-13).
+end legend
+
+@enduml

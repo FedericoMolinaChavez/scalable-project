@@ -1,0 +1,41 @@
+@startuml RF-25-sesiones-eliminacion-cuenta
+
+title RF-25 - Gestión de sesiones y eliminación de cuenta
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Usuario|
+start
+:Accede a la gestión de su cuenta y sesiones;
+
+|Sistema|
+:Muestra las sesiones activas\n(dispositivo, IP, último acceso);
+
+|Usuario|
+if (¿Qué acción realiza?) then (cerrar o revocar sesiones)
+  :Selecciona cerrar la sesión actual\no revocar una o todas las sesiones;
+
+  |Sistema|
+  :Invalida los tokens de acceso y refresco\nde las sesiones seleccionadas;
+  :Confirma la acción;
+else (eliminar la cuenta)
+  :Solicita eliminar su cuenta y confirma la acción;
+
+  |Sistema|
+  if (¿Tiene reservas futuras activas?) then (si)
+    :Cancela las reservas futuras y dispara\nel reembolso que corresponda (ver RF-29);
+  endif
+  :Anonimiza los datos personales de la cuenta,\nconservando los registros exigidos por\nobligaciones fiscales (ver RF-34);
+  :Invalida todas las sesiones activas;
+  :Confirma la eliminación;
+endif
+stop
+
+legend right
+  Un Super Admin puede eliminar cualquier cuenta con el mismo efecto (ver RF-23).
+end legend
+
+@enduml

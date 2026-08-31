@@ -1,0 +1,37 @@
+@startuml RF-22-perfil-usuario
+
+title RF-22 - Perfil de usuario
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Usuario|
+start
+:Accede a su perfil;
+
+|Sistema|
+:Muestra los datos actuales;
+
+|Usuario|
+:Edita los campos permitidos\n(nombre, correo, teléfono, etc.);
+:Guarda los cambios;
+
+|Sistema|
+if (¿Datos con formato válido?) then (no)
+  :Rechaza y muestra el error de validación;
+  stop
+endif
+if (¿El nuevo correo/teléfono ya está\nregistrado en otra cuenta?) then (si)
+  :Rechaza (correo/teléfono ya en uso);
+  stop
+endif
+:Guarda los cambios;
+if (¿Cambió el correo o el teléfono?) then (si)
+  :Marca el nuevo dato como no verificado\ny dispara la verificación (ver RF-19);
+endif
+:Confirma los cambios al usuario;
+stop
+
+@enduml

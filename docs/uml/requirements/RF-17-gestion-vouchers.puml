@@ -1,0 +1,63 @@
+@startuml RF-17-gestion-vouchers
+
+title RF-17 - Gestión de vouchers
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Administrador|
+start
+:Accede a la gestión de vouchers;
+
+|Sistema|
+if (¿Administrador tiene permisos?) then (no)
+  :Rechaza el acceso;
+  stop
+endif
+:Muestra el listado de vouchers existentes\n(código, %, límite de uso/caducidad, usos restantes, estado);
+
+|Administrador|
+if (¿Intenta modificar un voucher existente?) then (si)
+  :Acción no disponible\n(los vouchers no se pueden modificar,\nsolo crear o eliminar);
+  stop
+endif
+
+if (¿Qué acción realiza?) then (crear voucher)
+  :Define código, porcentaje de descuento,\nalcance (tipo de reserva/cliente)\ny límite de uso y/o fecha de caducidad;
+  :Guarda el voucher;
+
+  |Sistema|
+  if (¿Porcentaje válido (0% < % <= 100%)?) then (no)
+    :Rechaza (porcentaje inválido);
+    stop
+  endif
+  if (¿Definió límite de uso o fecha de caducidad?) then (no)
+    :Rechaza (debe tener al menos un límite: uso o caducidad);
+    stop
+  endif
+  if (¿El código ya existe?) then (si)
+    :Rechaza (el código debe ser único);
+    stop
+  endif
+  :Crea el voucher, disponible de inmediato\npara su uso (ver RF-08);
+  :Confirma la creación;
+else (eliminar voucher)
+  :Selecciona un voucher existente\ny confirma la eliminación;
+
+  |Sistema|
+  :Elimina el voucher\n(deja de estar disponible para usos futuros);
+  :Confirma la eliminación;
+endif
+
+stop
+
+legend right
+  El descuento siempre se define como porcentaje sobre el valor de la reserva
+  (nunca como monto fijo). Todo voucher requiere al menos un límite: uso máximo
+  de canjes y/o fecha de caducidad. Eliminar un voucher no afecta reservas que
+  ya lo hayan aplicado; solo impide nuevos usos (ver RF-08).
+end legend
+
+@enduml

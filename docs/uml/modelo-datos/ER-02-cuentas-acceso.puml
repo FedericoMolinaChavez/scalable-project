@@ -1,0 +1,169 @@
+@startuml ER-02-cuentas-acceso
+
+title ER-02 - Cuentas y acceso (esquema global, sin tenant_id)
+
+hide circle
+skinparam linetype ortho
+skinparam class {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+entity "cuenta" as cuenta {
+  * id : uuid <<PK>>
+  --
+  nombre : text
+  email : text <<UQ>>
+  telefono : text <<UQ>>
+  * email_verificado : bool
+  * telefono_verificado : bool
+  password_hash : text
+  --
+  * tipo : enum(usuario, administrador, super_admin)
+  tenant_id : uuid <<FK tenant>>
+  * estado : enum(pendiente_verificacion, activa,
+      suspendida, eliminada)
+  * creada_en : timestamptz
+  anonimizada_en : timestamptz
+  --
+  CHECK (
+    (tipo = 'administrador' AND tenant_id IS NOT NULL)
+    OR (tipo IN ('usuario','super_admin')
+        AND tenant_id IS NULL)
+  )
+  --
+  Los tres tipos de RF-23, con su alcance
+  expresado estructuralmente:
+    usuario      -> sin tenant
+    administrador-> acotado a UN tenant
+    super_admin  -> todos los tenants
+  password_hash con Argon2id/bcrypt (RNF-09).
+  anonimizada_en soporta el borrado de RF-25.
+}
+
+entity "tenant" as tenant {
+  * id : uuid <<PK>>
+  --
+  * identificador : text <<UQ>>
+  ...
+  --
+  Definida en ER-01.
+}
+
+entity "sesion" as sesion {
+  * id : uuid <<PK>>
+  --
+  * cuenta_id : uuid <<FK>>
+  * token_refresco_hash : text
+  dispositivo : text
+  ip : inet
+  * ultimo_acceso : timestamptz
+  * expira_en : timestamptz
+  revocada_en : timestamptz
+  --
+  RF-25: listar, revocar una o todas.
+}
+
+entity "token_verificacion" as token_ver {
+  * id : uuid <<PK>>
+  --
+  cuenta_id : uuid <<FK>>
+  * proposito : enum(verificacion_contacto, magic_link,
+      codigo_sms, recuperacion_password, consulta_reservas)
+  * canal : enum(email, sms)
+  * destino : text
+  * valor_hash : text
+  * expira_en : timestamptz
+  usado_en : timestamptz
+  * intentos : int
+  --
+  Un solo uso: usado_en lo invalida.
+  cuenta_id nulo = OTP de invitado (RF-02).
+  Nunca se almacena en claro (RNF-09).
+}
+
+entity "preferencia_notificacion" as pref {
+  * cuenta_id : uuid <<PK,FK>>
+  * canal : enum(email, sms, push) <<PK>>
+  * tipo_notificacion : text <<PK>>
+  --
+  * habilitado : bool
+  --
+  RF-21. Consultada por RF-10 en cada envío.
+}
+
+entity "indice_reserva_global" as indice {
+  * cuenta_id : uuid <<PK,FK>>
+  * tenant_id : uuid <<PK,FK>>
+  * reserva_id : uuid <<PK>>
+  --
+  * creada_en : timestamptz
+  --
+  Evita el abanico ciego sobre particiones:
+  dice a qué tenants ir antes de consultar (RF-02/RNF-02).
+}
+
+entity "agente" as agente {
+  * id : uuid <<PK>>
+  --
+  * nombre : text
+  * credencial_hash : text
+  * estado : enum(activo, suspendido)
+  * creado_en : timestamptz
+  --
+  Sin registro previo no hay operación (RNF-07).
+}
+
+entity "autorizacion_agente" as autoriz {
+  * cuenta_id : uuid <<PK,FK>>
+  * agente_id : uuid <<PK,FK>>
+  --
+  * otorgada_en : timestamptz
+  revocada_en : timestamptz
+  --
+  Ningún agente actúa sobre una cuenta
+  que no lo autorizó explícitamente (RNF-07).
+}
+
+entity "token_agente" as token_ag {
+  * id : uuid <<PK>>
+  --
+  * agente_id : uuid <<FK>>
+  * cuenta_impersonada_id : uuid <<FK>>
+  * alcance : jsonb
+  * expira_en : timestamptz
+  usado_en : timestamptz
+  * creado_en : timestamptz
+  --
+  alcance = acción solicitada INTERSECAR
+  permisos de la cuenta impersonada (RF-13/RF-23).
+  Vigencia corta y un solo propósito.
+}
+
+cuenta ||--o{ sesion
+cuenta ||--o{ token_ver
+cuenta ||--o{ pref
+cuenta ||--o{ indice
+tenant ||--o{ cuenta
+tenant ||--o{ indice
+cuenta ||--o{ autoriz
+agente ||--o{ autoriz
+agente ||--o{ token_ag
+cuenta ||--o{ token_ag
+
+legend right
+  Estas tablas son globales: viven fuera del particionado por tenant.
+  Una persona tiene UNA cuenta aunque reserve en varios negocios, por eso
+  cuenta, sesion y los tokens no llevan tenant_id (RF-12, RF-22, RF-24).
+
+  Ojo con la distinción: cuenta.tenant_id NO significa "reserva en este negocio"
+  (eso lo dice indice_reserva_global), sino "administra este negocio". Un usuario
+  normal siempre lo tiene nulo aunque reserve en veinte tenants distintos.
+
+  Un administrador queda atado a un solo tenant. Si un dueño tuviera varios
+  negocios necesitaría una cuenta por negocio; si eso deja de servir, este campo
+  vuelve a ser una tabla puente cuenta-tenant.
+end legend
+
+@enduml

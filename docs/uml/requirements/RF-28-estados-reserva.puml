@@ -1,0 +1,43 @@
+@startuml RF-28-estados-reserva
+
+title RF-28 - Estados de la reserva y transiciones
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Actor|
+start
+:Solicita registrar una transición de estado\nsobre una reserva (manual o automática);
+
+|Sistema|
+if (¿La transición es válida desde el estado actual?) then (no)
+  :Rechaza la transición e informa el estado actual;
+  stop
+endif
+:Aplica el nuevo estado a la reserva;
+:Registra la transición (estado anterior, nuevo estado,\nfecha/hora y actor que la originó) (ver RF-36);
+:Emite el evento de cambio de estado;
+if (¿El nuevo estado dispara acciones asociadas?) then (si)
+  :Notifica al usuario según la configuración (ver RF-10 y RF-16);
+  :Dispara los procesos asociados\n(reembolso RF-29, solicitud de review RF-20);
+endif
+:Confirma la transición;
+stop
+
+legend right
+  Transiciones permitidas:
+  pendiente   -> confirmada (pago confirmado, RF-33)
+               | cancelada (TTL de pago vencido, RF-27)
+  confirmada  -> en curso (check-in registrado por el administrador, RF-32)
+               | cancelada (RF-06 o RF-14)
+               | reprogramada (RF-07 o RF-14)
+               | no-show (automático al superar el umbral sin check-in)
+  en curso    -> completada
+  completada, cancelada y no-show son estados finales.
+  Las transiciones automáticas (no-show, expiración de pago) las ejecuta el
+  sistema; el check-in lo registra el administrador (ver RF-32).
+end legend
+
+@enduml

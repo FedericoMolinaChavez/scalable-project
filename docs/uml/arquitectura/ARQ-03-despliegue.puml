@@ -1,0 +1,146 @@
+@startuml ARQ-03-despliegue
+
+title ARQ-03 - Despliegue multi-AZ (sustento de RNF-04)
+
+skinparam nodesep 35
+skinparam ranksep 45
+skinparam node {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+}
+skinparam database {
+  BackgroundColor #F0FDF4
+  BorderColor #16A34A
+}
+skinparam rectangle {
+  BackgroundColor #FFFFFF
+  BorderColor #64748B
+}
+
+actor "Clientes" as cli
+interface "Stripe" as stripe
+
+node "DNS + Balanceador global\ncon health checks" as lb
+
+rectangle "Región primaria" {
+
+  node "Zona A" as aza {
+    [Cilium Gateway] as gwa
+    [Servicios sin estado\nx15 pods] as sa
+    [PgBouncer] as pba
+    database "PostgreSQL\n**primario**" as pga
+    [Valkey\n(shard líder)] as ra
+    [NATS JetStream] as ba
+  }
+
+  node "Zona B" as azb {
+    [Cilium Gateway] as gwb
+    [Servicios sin estado\nx15 pods] as sb
+    [PgBouncer] as pbb
+    database "PostgreSQL\nstandby **síncrono**" as pgb
+    [Valkey\n(réplica)] as rb
+    [NATS JetStream] as bb
+  }
+
+  node "Zona C" as azc {
+    [Cilium Gateway] as gwc
+    [Servicios sin estado\nx15 pods] as sc
+    [PgBouncer] as pbc
+    database "PostgreSQL\nstandby **síncrono**" as pgc
+    [Valkey\n(réplica)] as rc
+    [NATS JetStream] as bc
+  }
+
+  node "Soporte" as soporte {
+    database "MinIO\n(respaldos, comprobantes)" as minio
+    [Grafana + Prometheus\nLoki + Tempo] as obs
+  }
+}
+
+rectangle "Región secundaria (DR)" {
+  database "PostgreSQL\nstandby asíncrono" as pgdr
+}
+
+cli --> lb
+stripe --> lb
+lb --> gwa
+lb --> gwb
+lb --> gwc
+
+pga <--> pgb : replicación síncrona\n(quórum)
+pga <--> pgc : replicación síncrona\n(quórum)
+pga --> pgdr : replicación asíncrona
+pga ..> minio : respaldo continuo (PITR)
+
+note right of pga
+  **Commit con quórum entre zonas.**
+  Una transacción confirmada sobrevive
+  a la pérdida completa de una zona:
+  es lo que hace que la invariante de
+  RNF-10 no se pierda en un failover.
+end note
+
+note right of aza
+  **Capacidad: 45 pods, 15 por zona.**
+  RNF-03 necesita ~30 para sostener
+  33.000 req/s. Con 45 repartidos en 3
+  zonas, perder una deja exactamente
+  los 30 necesarios, sin degradar
+  RNF-01 ni RNF-02.
+end note
+
+note bottom of ra
+  Valkey NO es autoridad sobre el cupo.
+  Perder el shard degrada latencia y
+  límites de tasa, nunca corrompe una
+  reserva: la verdad está en PostgreSQL.
+end note
+
+note bottom of pba
+  PgBouncer en modo transacción.
+  45 pods con pool propio agotarían las
+  conexiones de PostgreSQL mucho antes
+  de alcanzar la carga de RNF-03.
+end note
+
+note bottom of soporte
+  Objetivo de disponibilidad menor que el
+  núcleo: su caída no afecta la ruta de
+  reserva. Sin OpenSearch: las métricas de
+  RF-11 son rollups en PostgreSQL y la
+  auditoría de RF-36 es una tabla
+  particionada append-only.
+end note
+
+note bottom of pga
+  El clúster lo gobierna un operador
+  (CloudNativePG): failover automático,
+  replicación por quórum y respaldo con
+  PITR, sin implementar consenso a mano.
+end note
+
+note bottom of pgdr
+  Solo recuperación ante desastre regional.
+  NO es multi-región activo-activo: el
+  consenso entre regiones agregaría decenas
+  de ms al commit y rompería RNF-01.
+  Una caída regional se rige por RTO/RPO,
+  no por el presupuesto de RNF-04.
+end note
+
+legend right
+  **El failover del primario es lo que fija los objetivos de RNF-04.**
+
+  Un failover automatizado de PostgreSQL tarda típicamente entre 10 y 60 s, y
+  durante ese intervalo el sistema degrada pero no cae: las lecturas siguen
+  sirviéndose desde réplicas y caché (consultar sí, reservar no), según RNF-10.
+
+  Por eso RNF-04 diferencia por ruta y mide anualmente:
+    Lectura   (RF-02, RF-03, RF-26)  99,999% anual  -> 5 min 16 s/año
+    Escritura (RF-01, RF-27)         99,99%  anual  -> 52 min 36 s/año
+
+  El failover no consume presupuesto de lectura, y con 52 min anuales de
+  escritura caben holgadamente los eventos de mantenimiento y fallo esperables.
+end legend
+
+@enduml

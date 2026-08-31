@@ -1,0 +1,39 @@
+@startuml RF-35-onboarding-negocio-tenant
+
+title RF-35 - Onboarding de negocio (tenant) y aislamiento
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Super Admin|
+start
+:Registra un nuevo negocio (tenant)\ne indica la cuenta dueña;
+
+|Sistema|
+if (¿Es Super Admin?) then (no)
+  :Rechaza el acceso (ver RF-23);
+  stop
+endif
+if (¿El identificador del negocio ya existe?) then (si)
+  :Rechaza (el identificador debe ser único);
+  stop
+endif
+:Crea el tenant y aísla sus datos\ndel resto de los negocios;
+:Asigna a la cuenta dueña el tipo Administrador\nsobre ese tenant (ver RF-23);
+:Crea la configuración por defecto: políticas (RF-15),\nnotificaciones (RF-16), moneda y zona horaria (RF-38);
+:Notifica al Administrador el alta del negocio;
+
+|Administrador|
+:Accede y configura sus sedes, recursos,\nprecios y disponibilidad\n(ver RF-30, RF-31 y RF-14);
+stop
+
+legend right
+  Ser Administrador se deriva de ser la cuenta dueña de un tenant; no es un rol
+  que se asigne manualmente (ver RF-23). Si el Super Admin suspende un tenant,
+  sus recursos dejan de ser reservables y sus reservas futuras se gestionan
+  según el flujo de reservas afectadas (ver RF-14).
+end legend
+
+@enduml

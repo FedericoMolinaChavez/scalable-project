@@ -1,0 +1,49 @@
+@startuml RF-29-reembolso-reserva
+
+title RF-29 - Reembolso de una reserva cancelada
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Sistema|
+start
+:Recibe la cancelación de una reserva pagada\n(por el usuario RF-06, o por el negocio RF-14);
+
+if (¿La cancelación fue originada por el negocio?) then (si)
+  :Determina reembolso total,\nindependientemente de la política;
+else (no)
+  :Determina el monto según la versión de la política\nasociada a la reserva (snapshot, ver RF-15):\ntotal, parcial o sin reembolso;
+endif
+
+if (¿El monto a reembolsar es mayor que cero?) then (no)
+  :Registra la cancelación sin reembolso;
+  :Notifica al usuario que no aplica reembolso;
+  stop
+endif
+
+if (¿Ya existe un reembolso registrado\npara esta reserva?) then (si)
+  :Descarta la solicitud (idempotencia);
+  stop
+endif
+
+:Solicita el reembolso al proveedor de pago;
+if (¿El proveedor confirmó el reembolso?) then (no)
+  :Reintenta con backoff exponencial hasta 3 veces;
+  if (¿Algún reintento tuvo éxito?) then (no)
+    :Marca el reembolso como fallido\ny lo registra para revisión manual;
+    :Notifica al administrador;
+    stop
+  endif
+endif
+:Registra el reembolso y genera el comprobante\ncorrespondiente (ver RF-34);
+:Notifica al usuario el reembolso realizado;
+stop
+
+legend right
+  El monto se calcula siempre contra la versión de política asociada a la reserva
+  al momento de crearse (RF-15), nunca contra la política vigente al cancelar.
+end legend
+
+@enduml

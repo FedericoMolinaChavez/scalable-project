@@ -1,0 +1,45 @@
+@startuml RF-33-confirmacion-asincrona-pago
+
+title RF-33 - Confirmación asíncrona del pago (webhook)
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Proveedor de pago|
+start
+:Notifica el resultado de la transacción\nmediante webhook;
+
+|Sistema|
+if (¿La firma del evento es válida?) then (no)
+  :Descarta el evento y registra el intento (ver RF-36);
+  stop
+endif
+if (¿El evento ya fue procesado (idempotencia)?) then (si)
+  :Ignora el evento y responde con éxito;
+  stop
+endif
+if (¿Existe la reserva asociada al evento?) then (no)
+  :Registra la inconsistencia y, si hubo cobro,\ndispara el reembolso (ver RF-29);
+  stop
+endif
+if (¿El pago fue exitoso?) then (no)
+  :Marca el pago como fallido y libera\nel bloqueo del horario (ver RF-27);
+  :Notifica al usuario el fallo del pago;
+  stop
+endif
+:Confirma el pago y consolida el bloqueo\nen una reserva confirmada (ver RF-27 y RF-28);
+:Genera el comprobante (ver RF-34);
+:Notifica la confirmación al usuario (ver RF-10);
+:Responde con éxito al proveedor;
+stop
+
+legend right
+  Si el webhook no llega dentro del TTL del bloqueo, el sistema consulta
+  activamente el estado de la transacción al proveedor (reconciliación) antes de
+  liberar el horario, para no perder un pago efectivamente cobrado.
+  Cada evento se procesa una sola vez, identificado por su clave de idempotencia.
+end legend
+
+@enduml

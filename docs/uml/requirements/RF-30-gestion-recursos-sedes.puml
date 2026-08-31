@@ -1,0 +1,47 @@
+@startuml RF-30-gestion-recursos-sedes
+
+title RF-30 - Gestión de sedes, servicios y recursos
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Administrador|
+start
+:Accede a la gestión de sedes,\nservicios y recursos reservables;
+
+|Sistema|
+if (¿El recurso pertenece a su tenant?) then (no)
+  :Rechaza el acceso (ver RF-23);
+  stop
+endif
+:Muestra las sedes, servicios y recursos existentes;
+
+|Administrador|
+if (¿Qué acción realiza?) then (crear o editar)
+  :Define los datos del recurso\n(nombre, descripción, sede, duración, capacidad);
+  :Guarda los cambios;
+
+  |Sistema|
+  if (¿Datos válidos y nombre no duplicado en la sede?) then (no)
+    :Rechaza y muestra el error de validación;
+    stop
+  endif
+  :Guarda el recurso;
+  :Confirma los cambios;
+else (desactivar o eliminar)
+  :Selecciona el recurso y confirma la acción;
+
+  |Sistema|
+  if (¿El recurso tiene reservas futuras?) then (si)
+    :No lo elimina: lo desactiva para nuevas reservas\ny aplica el flujo de reservas afectadas (ver RF-14);
+    :Confirma la desactivación;
+    stop
+  endif
+  :Elimina el recurso;
+  :Confirma la eliminación;
+endif
+stop
+
+@enduml

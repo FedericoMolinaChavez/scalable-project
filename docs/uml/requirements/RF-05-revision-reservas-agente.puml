@@ -1,0 +1,40 @@
+@startuml RF-05-revision-reservas-agente
+
+title RF-05 - Revisión de reservas por un agente
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Agente|
+start
+:Intercambia el token de autenticación;
+
+|Sistema|
+if (¿Token válido?) then (no)
+  :Rechaza el intercambio;
+  stop
+endif
+:Emite el token de acceso;
+
+|Agente|
+:Llama a la API de reservas con el id del usuario;
+
+|Sistema|
+if (¿La acción solicitada coincide con el alcance del token?) then (no)
+  :Rechaza la acción (token exclusivo para otra acción);
+  stop
+endif
+if (¿Parámetros de la solicitud válidos?) then (no)
+  :Responde con error 400;
+  stop
+endif
+:Consulta las reservas del usuario;
+:Retorna el JSON con las reservas;
+
+|Agente|
+:Estructura el JSON para la lectura del usuario;
+stop
+
+@enduml

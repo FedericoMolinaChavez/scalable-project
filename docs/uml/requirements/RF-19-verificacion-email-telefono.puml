@@ -1,0 +1,40 @@
+@startuml RF-19-verificacion-email-telefono
+
+title RF-19 - Verificación de email/teléfono
+skinparam activity {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+  ArrowColor #2563EB
+}
+
+|Usuario|
+start
+if (¿Verifica correo o teléfono?) then (correo)
+  :Solicita verificar su correo electrónico;
+  |Sistema|
+  :Genera un link de un solo uso (vigencia 15 min)\ny lo envía por correo;
+  |Usuario|
+  :Abre el link recibido;
+else (teléfono)
+  :Solicita verificar su número de teléfono;
+  |Sistema|
+  :Genera un código de 6 dígitos (vigencia 5 min)\ny lo envía por SMS;
+  |Usuario|
+  :Ingresa el código recibido;
+endif
+
+|Sistema|
+if (¿Link/código válido y vigente?) then (no)
+  :Rechaza (expirado o ya utilizado);
+  stop
+endif
+:Invalida el link/código (un solo uso);
+:Marca el correo/teléfono como verificado;
+:Confirma la verificación al usuario;
+stop
+
+legend right
+  El límite de reenvíos por identificador aplica igual que en RF-12 A2/A11.
+end legend
+
+@enduml

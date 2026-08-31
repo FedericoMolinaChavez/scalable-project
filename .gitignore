@@ -1,0 +1,6 @@
+# PlantUML render tooling (downloaded, not source)
+/tools/plantuml.jar
+
+# Rendered UML output (regenerate with scripts/render-uml.*)
+/docs/uml/rendered/*
+!/docs/uml/rendered/.gitkeep
