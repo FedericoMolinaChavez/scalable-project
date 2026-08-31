@@ -140,7 +140,17 @@ tasks:
       código dicen cosas distintas sin que nada lo note.
     cmds:
       - task: api:generar
-      - cmd: git diff --exit-code -- api/openapi.bundled.yaml backend/internal/api frontend/src/api
+      # Se apunta a los archivos GENERADOS y no a sus directorios. En CI da
+      # igual —todo está confirmado, así que el único diff posible viene de
+      # regenerar—, pero en local `frontend/src/api` contiene también el cliente
+      # y las consultas, escritos a mano: cualquier cambio sin confirmar ahí
+      # hacía fallar esta comprobación como si el contrato estuviera
+      # desincronizado, que es justo lo que no estaba pasando.
+      - cmd: >-
+          git diff --exit-code --
+          api/openapi.bundled.yaml
+          backend/internal/api/api.gen.go
+          frontend/src/api/esquema.ts
 
   # ------------------------------------------------------------------ datos --
   infra:up:

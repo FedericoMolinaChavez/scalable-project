@@ -41,9 +41,16 @@ opcional.
 ```bash
 cp .env.example .env
 task infra:up
-task back:run -- nucleo
+task back:run -- consulta   # :8081 — lecturas
+task back:run -- nucleo     # :8080 — escrituras
 task front:dev
 ```
+
+Los dos servicios van en terminales distintas, y son dos y no uno por la razón
+de ARQ-01: la escritura y la lectura tienen fronteras transaccionales
+distintas. `/v1/reservas` lo sirven ambos —el `POST` el núcleo, el `GET` el de
+consulta—, y el proxy de Vite enruta por método. Está explicado en
+[backend/README.md](backend/README.md) y en `frontend/vite.config.ts`.
 
 `task` sin argumentos lista todo lo disponible. Los detalles de la
 infraestructura local están en [deploy/README.md](deploy/README.md).

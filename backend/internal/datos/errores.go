@@ -52,6 +52,21 @@ func CodigoPG(err error) string {
 	return ""
 }
 
+// RestriccionPG expone el nombre de la restricción que rechazó la fila, o
+// cadena vacía si el error no viene de PostgreSQL.
+//
+// Compañero de CodigoPG y por el mismo motivo: el código dice QUÉ clase de
+// violación fue, y el nombre dice CUÁL. Distinguirlas importa en cuanto una
+// tabla tiene dos restricciones del mismo código —dos índices únicos, por
+// ejemplo—, porque tratarlas igual convierte un caso en el otro sin avisar.
+func RestriccionPG(err error) string {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.ConstraintName
+	}
+	return ""
+}
+
 // traducir convierte un error de pgx en uno de este paquete, conservando el
 // original con %w para que errors.As siga alcanzando al *pgconn.PgError.
 func traducir(err error) error {

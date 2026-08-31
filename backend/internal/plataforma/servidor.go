@@ -67,6 +67,14 @@ func (s *Servidor) RegistrarFunc(patron string, manejador http.HandlerFunc) {
 	s.rutas.HandleFunc(patron, manejador)
 }
 
+// Metricas expone los instrumentos comunes para que la capa de transporte
+// pueda instrumentar sus rutas. El registro de Prometheus sigue siendo del
+// servidor: esto da acceso a los contadores, no permite crear series nuevas
+// fuera de NuevasMetricas.
+func (s *Servidor) Metricas() *Metricas {
+	return s.metricas
+}
+
 // AnadirComprobacion suma una dependencia a la sonda de disponibilidad.
 func (s *Servidor) AnadirComprobacion(c Comprobacion) {
 	s.comprobaciones = append(s.comprobaciones, c)

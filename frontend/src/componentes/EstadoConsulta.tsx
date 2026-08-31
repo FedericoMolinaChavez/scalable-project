@@ -14,13 +14,26 @@ import { ErrorApi } from '../api/cliente'
  * La presentación es deliberadamente mínima: la identidad visual se define
  * aparte. Lo que aquí importa es que los tres caminos existan.
  */
-export function EstadoConsulta<T>({
+export function EstadoConsulta<D, T = D extends (infer E)[] ? E : never>({
   consulta,
   vacio,
+  seleccionar,
   children,
 }: {
-  consulta: UseQueryResult<T[]>
+  consulta: UseQueryResult<D>
   vacio: ReactNode
+
+  /**
+   * De dónde sacar la lista cuando la respuesta no es una lista.
+   *
+   * `/v1/disponibilidad` no devuelve un array, devuelve un objeto con
+   * `franjas` dentro y la marca de cuándo se calculó. Sin esto, esa pantalla
+   * tendría que resolver los tres estados a mano, y el estado que siempre falta
+   * escrito a mano es el de error.
+   *
+   * Omitirlo solo vale cuando la respuesta YA es la lista.
+   */
+  seleccionar?: (datos: D) => T[]
   children: (datos: T[]) => ReactNode
 }) {
   if (consulta.isPending) {
@@ -31,11 +44,18 @@ export function EstadoConsulta<T>({
     return <MensajeError error={consulta.error} onReintentar={() => void consulta.refetch()} />
   }
 
-  if (consulta.data.length === 0) {
+  // Sin `seleccionar`, la respuesta es la lista. El tipo por defecto de T lo
+  // deriva del elemento de D, así que quien pase una consulta que no devuelve
+  // un array y omita `seleccionar` obtiene T = never y no le compila el
+  // `children`. La conversión de aquí es el precio de que TypeScript no sepa
+  // expresar "esta rama solo se alcanza cuando D es T[]".
+  const lista = seleccionar ? seleccionar(consulta.data) : (consulta.data as unknown as T[])
+
+  if (lista.length === 0) {
     return <>{vacio}</>
   }
 
-  return <>{children(consulta.data)}</>
+  return <>{children(lista)}</>
 }
 
 export function MensajeError({

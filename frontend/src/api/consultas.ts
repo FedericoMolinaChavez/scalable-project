@@ -8,7 +8,8 @@ import { cliente, ErrorApi } from './cliente'
  */
 const TENANT = '11111111-1111-1111-1111-111111111111'
 
-const cabeceras = { 'X-Tenant-Id': TENANT }
+/** Se exporta porque la escritura de `mutaciones.ts` manda la misma cabecera. */
+export const cabeceras = { 'X-Tenant-Id': TENANT }
 
 /**
  * Claves de caché, centralizadas.

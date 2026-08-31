@@ -13,7 +13,9 @@ import (
 	"log/slog"
 
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/datos"
+	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/nucleo"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/plataforma"
+	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/rutas"
 )
 
 func main() {
@@ -41,6 +43,15 @@ func montar(ctx context.Context, cfg plataforma.Config, registro *slog.Logger, s
 		Verificar: bd.Comprobar,
 	})
 
-	registro.Info("núcleo montado")
+	// Solo la escritura. Las lecturas son del binario `consulta`, y esa
+	// separación es la de ARQ-01: lo que debe ser atómico con la reserva vive
+	// aquí, y lo que solo lee va contra las réplicas. Montar aquí un GET
+	// mandaría tráfico de lectura al primario, que es justo lo que la
+	// descomposición evita.
+	rutas.Montar(servidor, rutas.Componentes{
+		Nucleo: nucleo.Nuevo(bd, cfg.TTLReserva),
+	}, registro, cfg.TiempoPeticion)
+
+	registro.Info("núcleo montado", slog.Duration("ttl_reserva", cfg.TTLReserva))
 	return nil
 }

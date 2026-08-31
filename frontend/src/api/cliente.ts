@@ -48,6 +48,7 @@ export type Servicio = Esquemas['Servicio']
 export type Reserva = Esquemas['Reserva']
 export type NuevaReserva = Esquemas['NuevaReserva']
 export type Disponibilidad = Esquemas['Disponibilidad']
+export type Franja = Esquemas['Franja']
 export type EstadoReserva = Esquemas['EstadoReserva']
 export type Problema = Esquemas['Problema']
 

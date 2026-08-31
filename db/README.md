@@ -22,6 +22,28 @@ esquema casi nunca es el inverso de la subida, y escribirlo da una confianza
 que no existe. La estrategia es hacia adelante: cada cambio debe ser compatible
 con la versión anterior del código el tiempo que dure el despliegue.
 
+## Los tres tenants de la semilla
+
+`semillas/dev.sql` siembra tres, y cada uno tiene un trabajo distinto:
+
+| Identificador | Para qué |
+|---|---|
+| `estudio-demo` | El negocio de demostración: es lo que enseñan las pantallas |
+| `otro-negocio` | El de al lado, para demostrar que RLS lo esconde |
+| `pruebas` | Donde escriben las pruebas automatizadas de Go |
+
+El tercero existe por una razón que no es de gusto. `transicion_estado` es
+append-only por trigger (RF-28), así que una reserva creada por el núcleo **no
+se puede borrar** después sin desactivar la garantía que la propia prueba quiere
+que siga en pie: lo más que puede hacer la limpieza es cancelarla. Cada pasada
+de `task ci` deja por tanto filas para siempre, y acumuladas en el tenant de
+demostración acababan siendo lo que enseñaban las pantallas. En el suyo no le
+estorban a nadie.
+
+Es idéntico en forma al de demostración —misma zona, misma moneda, mismo
+horario, mismo servicio de una hora a 80.000— para que las pruebas puedan seguir
+afirmando "ocho franjas" sin depender de datos que alguien pueda tocar.
+
 ## Verificación
 
 ```bash
@@ -29,7 +51,7 @@ con la versión anterior del código el tiempo que dure el despliegue.
 ```
 
 Levanta un PostgreSQL 17 desechable en Docker, aplica las siete migraciones,
-siembra un tenant y corre dos cosas:
+siembra los tenants y corre dos cosas:
 
 - **`pruebas/invariantes.sql`** — 22 casos que comprueban que el *motor* impide
   algo, no que la aplicación se acuerde de impedirlo: solapamiento, citas
