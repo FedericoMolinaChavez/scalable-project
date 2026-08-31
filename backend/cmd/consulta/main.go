@@ -6,11 +6,33 @@
 package main
 
 import (
+	"context"
 	"log/slog"
-	"os"
+
+	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/datos"
+	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/plataforma"
 )
 
 func main() {
-	registro := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	registro.Info("arranque pendiente", "servicio", "consulta", "fase", 3)
+	plataforma.Ejecutar("consulta", montar)
+}
+
+func montar(ctx context.Context, cfg plataforma.Config, registro *slog.Logger, servidor *plataforma.Servidor) error {
+	bd, err := datos.Abrir(ctx, cfg.BaseDatosURL)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		<-ctx.Done()
+		bd.Cerrar()
+	}()
+
+	servidor.AnadirComprobacion(plataforma.Comprobacion{
+		Nombre:    "postgresql",
+		Verificar: bd.Comprobar,
+	})
+
+	registro.Info("consulta montada")
+	return nil
 }
