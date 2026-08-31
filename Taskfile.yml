@@ -89,6 +89,39 @@ tasks:
       - "! test -f package.json"
     cmd: npm run test
 
+  # ------------------------------------------------------------------- api --
+  # El contrato de api/openapi.yaml es la fuente de verdad de los dos lados.
+  # Generar en vez de escribir a mano es lo que hace que romper el contrato
+  # rompa la compilación de Go y de TypeScript, en vez de aparecer como un
+  # fallo en tiempo de ejecución con el frontend ya desplegado.
+  api:go:
+    desc: Regenera los tipos y la interfaz de servidor de Go
+    dir: "{{.BACKEND}}"
+    sources: ["../api/openapi.yaml", "../api/oapi-codegen.yaml"]
+    generates: ["internal/api/api.gen.go"]
+    cmd: go tool oapi-codegen -config ../api/oapi-codegen.yaml ../api/openapi.yaml
+
+  api:ts:
+    desc: Regenera los tipos de TypeScript
+    sources: ["api/openapi.yaml"]
+    generates: ["frontend/src/api/esquema.ts"]
+    cmd: npx --yes openapi-typescript@7 api/openapi.yaml -o frontend/src/api/esquema.ts
+
+  api:generar:
+    desc: Regenera ambos lados desde el contrato
+    cmds:
+      - task: api:go
+      - task: api:ts
+
+  api:verificar:
+    desc: >-
+      Falla si el código generado no coincide con el contrato. Va en CI: sin
+      esto, alguien edita openapi.yaml, olvida regenerar, y el contrato y el
+      código dicen cosas distintas sin que nada lo note.
+    cmds:
+      - task: api:generar
+      - cmd: git diff --exit-code -- backend/internal/api frontend/src/api
+
   # ------------------------------------------------------------------ datos --
   infra:up:
     desc: Levanta PostgreSQL, PgBouncer, Valkey, NATS, MinIO y Mailpit
@@ -125,6 +158,7 @@ tasks:
   ci:
     desc: Todo lo que debe pasar antes de un push
     cmds:
+      - task: api:verificar
       - task: back:lint
       - task: back:test
       - task: front:lint
