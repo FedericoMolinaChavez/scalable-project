@@ -4,8 +4,12 @@ vars:
   BACKEND: backend
   FRONTEND: frontend
 
+dotenv: [".env"]
+
 env:
-  DATABASE_URL: '{{.DATABASE_URL | default "postgres://app_dev:app_dev@localhost:6432/reservas?sslmode=disable"}}'
+  # Puerto 6432: PgBouncer, no PostgreSQL. La composición no publica el 5432
+  # al host a propósito. Credenciales de db/semillas/dev.sql.
+  DATABASE_URL: '{{.DATABASE_URL | default "postgres://app_dev:dev@localhost:6432/reservas?sslmode=disable"}}'
 
 tasks:
   default:
@@ -98,6 +102,20 @@ tasks:
     desc: Detiene la infraestructura local y BORRA los volúmenes
     prompt: Esto elimina la base de datos local. ¿Continuar?
     cmd: docker compose -f deploy/docker-compose.yml down -v
+
+  infra:estado:
+    desc: Estado y salud de cada servicio
+    cmd: docker compose -f deploy/docker-compose.yml ps
+
+  infra:logs:
+    desc: "Registros; acota con: task infra:logs -- postgres"
+    cmd: docker compose -f deploy/docker-compose.yml logs -f --tail=100 {{.CLI_ARGS}}
+
+  infra:psql:
+    desc: Consola psql a través de PgBouncer (nunca directa a PostgreSQL)
+    cmd: >-
+      docker compose -f deploy/docker-compose.yml exec -e PGPASSWORD=dev
+      postgres psql -h pgbouncer -p 6432 -U app_dev -d reservas
 
   db:test:
     desc: Invariantes y prueba de concurrencia contra un PostgreSQL desechable

@@ -39,12 +39,18 @@ opcional.
 ## Arranque
 
 ```bash
+cp .env.example .env
 task infra:up
 task back:run -- nucleo
 task front:dev
 ```
 
-`task` sin argumentos lista todo lo disponible.
+`task` sin argumentos lista todo lo disponible. Los detalles de la
+infraestructura local están en [deploy/README.md](deploy/README.md).
+
+La base de datos solo es alcanzable por el 6432 de PgBouncer: la composición no
+publica el 5432 a propósito, para que el desarrollo no pueda esquivar el pooler
+y las restricciones del modo transacción se noten aquí y no en producción.
 
 ## Antes de un push
 

@@ -1,0 +1,107 @@
+# Infraestructura de desarrollo local.
+#
+# Esto NO modela ARQ-03. Su único trabajo es dar a las fases 3 a 6 una base de
+# datos con el esquema aplicado, para poder escribir Go y React con `go run` y
+# `vite dev` en el host. El failover, la replicación por quórum y el reparto en
+# zonas de RNF-04 se demuestran aparte, sobre Kubernetes.
+#
+# Lo único que sí reproduce a propósito es PgBouncer en modo transacción, que
+# es la restricción que condiciona el código de la capa de datos.
+
+name: reservas
+
+services:
+
+  postgres:
+    image: postgres:17-alpine
+    # NO se publica el 5432 al host, y es deliberado. Si se pudiera llegar
+    # directo a PostgreSQL, el desarrollo esquivaría PgBouncer sin querer y el
+    # problema de los prepared statements en modo transacción solo aparecería
+    # en producción. La única puerta desde el host es el 6432 del pooler.
+    environment:
+      POSTGRES_DB: reservas
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ../db:/db:ro
+      - ./postgres/aplicar-esquema.sh:/docker-entrypoint-initdb.d/00-aplicar-esquema.sh:ro
+      - datos_postgres:/var/lib/postgresql/data
+    healthcheck:
+      # Sin `-h localhost` pg_isready da por buena la conexión por socket
+      # mientras el servidor todavía está ejecutando los scripts de init.
+      test: ["CMD-SHELL", "pg_isready -h localhost -U postgres -d reservas"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+      start_period: 10s
+    restart: unless-stopped
+
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.25.2-p0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "6432:6432"
+    volumes:
+      - ./pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 6432 -U app_dev -d reservas"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    # Sin persistencia a propósito: Valkey nunca es autoridad sobre el cupo
+    # (ARQ-01). Perderlo degrada latencia y límites de tasa, no corrompe nada,
+    # así que en local no vale la pena un volumen.
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  nats:
+    image: nats:2-alpine
+    # -js activa JetStream, que es lo que ARQ-01 usa para el relay del outbox.
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    ports:
+      - "4222:4222"   # clientes
+      - "8222:8222"   # monitorización
+    volumes:
+      - datos_nats:/data
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio-desarrollo
+    ports:
+      - "9000:9000"   # API S3
+      - "9001:9001"   # consola web
+    volumes:
+      - datos_minio:/data
+    restart: unless-stopped
+
+  mailpit:
+    # Sustituye al canal de correo de RF-10 en desarrollo: captura todo lo que
+    # se envíe y lo muestra en http://localhost:8025 sin entregar nada fuera.
+    image: axllent/mailpit:v1.31.0
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # interfaz web
+    restart: unless-stopped
+
+volumes:
+  datos_postgres:
+  datos_nats:
+  datos_minio:
