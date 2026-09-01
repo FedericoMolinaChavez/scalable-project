@@ -54,7 +54,28 @@ docker run -d --name "$CONTENEDOR" \
   -p 55432:5432 "$IMAGEN" \
   -c max_connections=$((CLIENTES + 50)) >/dev/null
 
-until docker exec "$CONTENEDOR" pg_isready -U postgres -d "$BD" >/dev/null 2>&1; do
+# -h localhost, y no es opcional.
+#
+# El punto de entrada de la imagen arranca un servidor TEMPORAL que escucha solo
+# por el socket de Unix mientras inicializa el cluster, y despues lo para y
+# levanta el definitivo. pg_isready por el socket da por buena esa fase: el
+# guion sigue, empieza a aplicar migraciones, y a mitad el servidor temporal se
+# apaga. El sintoma es "server closed the connection unexpectedly" en una
+# migracion cualquiera, que no tiene nada que ver con la migracion.
+#
+# Forzando TCP solo responde el servidor definitivo. Es la misma leccion que ya
+# estaba aprendida en deploy/docker-compose.yml y que aqui faltaba aplicar.
+#
+# Es una carrera, asi que pasa a veces: en local casi nunca y en CI si, porque
+# el reparto de CPU es otro.
+espera=0
+until docker exec "$CONTENEDOR" pg_isready -h localhost -U postgres -d "$BD" >/dev/null 2>&1; do
+  espera=$((espera + 1))
+  if [[ $espera -gt 60 ]]; then
+    echo "PostgreSQL no acepto conexiones TCP en 60 s" >&2
+    docker logs "$CONTENEDOR" 2>&1 | tail -30 >&2
+    exit 1
+  fi
   sleep 1
 done
 
