@@ -3,8 +3,18 @@
 coleccion:
   get:
     operationId: listarReservas
-    summary: Reservas de la cuenta (RF-02, filtros de RF-09)
+    summary: Reservas de quien pide (RF-02, filtros de RF-09)
+    description: |
+      El alcance NO es fijo: sale de quién presenta el token (RF-23). Hoy solo
+      existe el token de invitado, así que devuelve las reservas hechas con el
+      correo que ese token acredita.
+
+      Cuando exista RF-12, la misma ruta devolverá las de la cuenta a un
+      `usuario` y las del tenant a un `administrador` (RF-32). Es una operación
+      con el alcance acotado por la cuenta, no tres rutas distintas por rol.
     tags: [reservas]
+    security:
+      - TokenCliente: []
     parameters:
       - $ref: '../componentes/parametros.yaml#/Tenant'
       - name: estado
@@ -44,10 +54,15 @@ coleccion:
             schema:
               $ref: '../componentes/esquemas/reservas.yaml#/ListaReservas'
       '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
       '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
 
   post:
     operationId: crearReserva
+    # Publica a proposito: RF-01 admite reservar como INVITADO, sin cuenta. Es
+    # justo lo que crea la necesidad de RF-02, porque despues hay que poder
+    # demostrar que uno es quien reservo.
+    security: []
     summary: Crear una reserva (RF-01)
     description: |
       Ruta crítica de RNF-01: presupuesto de 200 ms. Devuelve una reserva
@@ -102,7 +117,13 @@ porId:
   get:
     operationId: obtenerReserva
     summary: Detalle de una reserva (RF-03)
+    description: |
+      Una reserva que existe pero es de otra persona responde `404`, no `403`.
+      Un 403 confirmaría que esa reserva existe, y con identificadores ajenos
+      eso permite comprobar cuáles son reales.
     tags: [reservas]
+    security:
+      - TokenCliente: []
     parameters:
       - $ref: '../componentes/parametros.yaml#/Tenant'
       - name: id
@@ -116,5 +137,51 @@ porId:
           application/json:
             schema:
               $ref: '../componentes/esquemas/reservas.yaml#/Reserva'
+      '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
       '404': { $ref: '../componentes/respuestas.yaml#/NoEncontrado' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+cancelacion:
+  post:
+    operationId: cancelarReserva
+    summary: Cancelar una reserva (RF-06)
+    description: |
+      Aplica la política que la reserva congeló al crearse, no la vigente hoy
+      (RF-15). Es lo que impide que un negocio endurezca su política el martes y
+      se la aplique a quien reservó el lunes bajo otras condiciones.
+
+      Fuera del plazo de cancelación responde `422` con lo que faltaba, no un
+      `403`: no es una cuestión de permisos, es que la regla del negocio no lo
+      permite en ese momento.
+
+      El reembolso NO ocurre aquí. Se dispara aparte (RF-29) y por eso la
+      respuesta no dice nada del dinero: prometerlo en esta respuesta sería
+      afirmar algo que este componente no puede garantizar.
+    tags: [reservas]
+    security:
+      - TokenCliente: []
+    parameters:
+      - $ref: '../componentes/parametros.yaml#/Tenant'
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    responses:
+      '200':
+        description: La reserva, ya cancelada
+        content:
+          application/json:
+            schema:
+              $ref: '../componentes/esquemas/reservas.yaml#/Reserva'
+      '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
+      '404': { $ref: '../componentes/respuestas.yaml#/NoEncontrado' }
+      '409':
+        description: |
+          La reserva ya no está en un estado que se pueda cancelar: ya estaba
+          cancelada, ya se completó, o el bloqueo expiró solo.
+        content:
+          application/problem+json:
+            schema:
+              $ref: '../componentes/esquemas/comunes.yaml#/Problema'
+      '422': { $ref: '../componentes/respuestas.yaml#/NoProcesable' }
       '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }

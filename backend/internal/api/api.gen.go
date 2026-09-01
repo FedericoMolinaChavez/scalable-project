@@ -69,6 +69,17 @@ func (e EstadoReserva) Valid() bool {
 	}
 }
 
+// CanjeCodigo defines model for CanjeCodigo.
+type CanjeCodigo struct {
+	// Codigo Los seis dígitos recibidos. Un solo uso y tres intentos (RF-12 A2):
+	// agotados, el código se quema y hay que pedir otro.
+	//
+	//
+	// Examples: 042317
+	Codigo  string              `json:"codigo"`
+	Destino openapi_types.Email `json:"destino"`
+}
+
 // Contacto defines model for Contacto.
 type Contacto struct {
 	Email    openapi_types.Email `json:"email"`
@@ -273,6 +284,32 @@ type Servicio struct {
 	SedeId openapi_types.UUID `json:"sede_id"`
 }
 
+// SolicitudCodigo Pide un código al correo con el que se reservó.
+//
+// La respuesta es SIEMPRE la misma exista o no ese correo (RF-12 A12). Una
+// respuesta que los distinguiera convertiría esta ruta en un buscador de
+// clientes del negocio: se prueban direcciones y las que contesten distinto
+// son las que reservaron.
+type SolicitudCodigo struct {
+	// Destino El correo con el que se hizo la reserva.
+	//
+	// Examples: ana@ejemplo.test
+	Destino openapi_types.Email `json:"destino"`
+}
+
+// TokenAcceso Lo que se entrega al acertar el código.
+//
+// Es de vigencia corta y no se puede revocar: un invitado no tiene sesión que
+// gestionar, así que la única defensa de este token es que caduque pronto. Por
+// eso viaja `expira_en`: la interfaz puede pedir que se identifique otra vez
+// ANTES de que falle una petición, en vez de después.
+type TokenAcceso struct {
+	ExpiraEn time.Time `json:"expira_en"`
+
+	// Token Se manda en la cabecera `Authorization: Bearer <token>`.
+	Token string `json:"token"`
+}
+
 // Tenant defines model for Tenant.
 type Tenant = openapi_types.UUID
 
@@ -287,6 +324,12 @@ type DemasiadasPeticiones = Problema
 // errores de forma uniforme y para que una respuesta de error sea
 // indistinguible venga del componente de ARQ-01 que venga.
 type ErrorInterno = Problema
+
+// NoAutorizado Formato de error único de la API, según RFC 9457 (problem details). Se usa
+// un estándar en vez de un formato propio para que el cliente pueda tratar los
+// errores de forma uniforme y para que una respuesta de error sea
+// indistinguible venga del componente de ARQ-01 que venga.
+type NoAutorizado = Problema
 
 // NoEncontrado Formato de error único de la API, según RFC 9457 (problem details). Se usa
 // un estándar en vez de un formato propio para que el cliente pueda tratar los
@@ -366,6 +409,15 @@ type ObtenerReservaParams struct {
 	XTenantId Tenant `json:"X-Tenant-Id"`
 }
 
+// CancelarReservaParams defines parameters for CancelarReserva.
+type CancelarReservaParams struct {
+	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+	// (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+	// de un cliente en producción permitiría leer los datos de cualquier otro
+	// tenant.
+	XTenantId Tenant `json:"X-Tenant-Id"`
+}
+
 // ListarSedesParams defines parameters for ListarSedes.
 type ListarSedesParams struct {
 	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
@@ -386,15 +438,39 @@ type ListarServiciosParams struct {
 	XTenantId Tenant `json:"X-Tenant-Id"`
 }
 
+// SolicitarCodigoParams defines parameters for SolicitarCodigo.
+type SolicitarCodigoParams struct {
+	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+	// (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+	// de un cliente en producción permitiría leer los datos de cualquier otro
+	// tenant.
+	XTenantId Tenant `json:"X-Tenant-Id"`
+}
+
+// CanjearCodigoParams defines parameters for CanjearCodigo.
+type CanjearCodigoParams struct {
+	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+	// (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+	// de un cliente en producción permitiría leer los datos de cualquier otro
+	// tenant.
+	XTenantId Tenant `json:"X-Tenant-Id"`
+}
+
 // CrearReservaJSONRequestBody defines body for CrearReserva for application/json ContentType.
 type CrearReservaJSONRequestBody = NuevaReserva
+
+// SolicitarCodigoJSONRequestBody defines body for SolicitarCodigo for application/json ContentType.
+type SolicitarCodigoJSONRequestBody = SolicitudCodigo
+
+// CanjearCodigoJSONRequestBody defines body for CanjearCodigo for application/json ContentType.
+type CanjearCodigoJSONRequestBody = CanjeCodigo
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// ConsultarDisponibilidad Franjas libres de un servicio en un rango
 	// (GET /v1/disponibilidad)
 	ConsultarDisponibilidad(w http.ResponseWriter, r *http.Request, params ConsultarDisponibilidadParams)
-	// ListarReservas Reservas de la cuenta (RF-02, filtros de RF-09)
+	// ListarReservas Reservas de quien pide (RF-02, filtros de RF-09)
 	// (GET /v1/reservas)
 	ListarReservas(w http.ResponseWriter, r *http.Request, params ListarReservasParams)
 	// CrearReserva Crear una reserva (RF-01)
@@ -403,12 +479,21 @@ type ServerInterface interface {
 	// ObtenerReserva Detalle de una reserva (RF-03)
 	// (GET /v1/reservas/{id})
 	ObtenerReserva(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, params ObtenerReservaParams)
+	// CancelarReserva Cancelar una reserva (RF-06)
+	// (POST /v1/reservas/{id}/cancelacion)
+	CancelarReserva(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, params CancelarReservaParams)
 	// ListarSedes Sedes del tenant
 	// (GET /v1/sedes)
 	ListarSedes(w http.ResponseWriter, r *http.Request, params ListarSedesParams)
 	// ListarServicios Servicios ofrecidos, opcionalmente filtrados por sede
 	// (GET /v1/servicios)
 	ListarServicios(w http.ResponseWriter, r *http.Request, params ListarServiciosParams)
+	// SolicitarCodigo Pedir un código para ver las reservas propias
+	// (POST /v1/sesiones/codigo)
+	SolicitarCodigo(w http.ResponseWriter, r *http.Request, params SolicitarCodigoParams)
+	// CanjearCodigo Canjear el código por un token de acceso
+	// (POST /v1/sesiones/token)
+	CanjearCodigo(w http.ResponseWriter, r *http.Request, params CanjearCodigoParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -736,6 +821,60 @@ func (siw *ServerInterfaceWrapper) ObtenerReserva(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// CancelarReserva operation middleware
+func (siw *ServerInterfaceWrapper) CancelarReserva(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CancelarReservaParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Tenant-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Tenant-Id")]; found {
+		var XTenantId Tenant
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Tenant-Id", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Tenant-Id", valueList[0], &XTenantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Tenant-Id", Err: err})
+			return
+		}
+
+		params.XTenantId = XTenantId
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Tenant-Id is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Tenant-Id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelarReserva(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListarSedes operation middleware
 func (siw *ServerInterfaceWrapper) ListarSedes(w http.ResponseWriter, r *http.Request) {
 
@@ -830,6 +969,96 @@ func (siw *ServerInterfaceWrapper) ListarServicios(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListarServicios(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SolicitarCodigo operation middleware
+func (siw *ServerInterfaceWrapper) SolicitarCodigo(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SolicitarCodigoParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Tenant-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Tenant-Id")]; found {
+		var XTenantId Tenant
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Tenant-Id", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Tenant-Id", valueList[0], &XTenantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Tenant-Id", Err: err})
+			return
+		}
+
+		params.XTenantId = XTenantId
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Tenant-Id is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Tenant-Id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SolicitarCodigo(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CanjearCodigo operation middleware
+func (siw *ServerInterfaceWrapper) CanjearCodigo(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CanjearCodigoParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Tenant-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Tenant-Id")]; found {
+		var XTenantId Tenant
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Tenant-Id", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Tenant-Id", valueList[0], &XTenantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Tenant-Id", Err: err})
+			return
+		}
+
+		params.XTenantId = XTenantId
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Tenant-Id is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Tenant-Id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CanjearCodigo(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -962,9 +1191,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/sedes", wrapper.ListarSedes)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/servicios", wrapper.ListarServicios)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/disponibilidad", wrapper.ConsultarDisponibilidad)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/sesiones/codigo", wrapper.SolicitarCodigo)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/sesiones/token", wrapper.CanjearCodigo)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/reservas", wrapper.ListarReservas)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/reservas", wrapper.CrearReserva)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/reservas/{id}", wrapper.ObtenerReserva)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/reservas/{id}/cancelacion", wrapper.CancelarReserva)
 
 	return m
 }
@@ -979,6 +1211,8 @@ type DemasiadasPeticionesApplicationProblemPlusJSONResponse struct {
 }
 
 type ErrorInternoApplicationProblemPlusJSONResponse Problema
+
+type NoAutorizadoApplicationProblemPlusJSONResponse Problema
 
 type NoEncontradoApplicationProblemPlusJSONResponse Problema
 
@@ -1090,6 +1324,22 @@ func (response ListarReservas400ApplicationProblemPlusJSONResponse) VisitListarR
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarReservas401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response ListarReservas401ApplicationProblemPlusJSONResponse) VisitListarReservasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1253,6 +1503,22 @@ func (response ObtenerReserva200JSONResponse) VisitObtenerReservaResponse(w http
 	return err
 }
 
+type ObtenerReserva401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response ObtenerReserva401ApplicationProblemPlusJSONResponse) VisitObtenerReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ObtenerReserva404ApplicationProblemPlusJSONResponse struct {
 	NoEncontradoApplicationProblemPlusJSONResponse
 }
@@ -1274,6 +1540,107 @@ type ObtenerReserva500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ObtenerReserva500ApplicationProblemPlusJSONResponse) VisitObtenerReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelarReservaRequestObject struct {
+	Id     openapi_types.UUID `json:"id"`
+	Params CancelarReservaParams
+}
+
+type CancelarReservaResponseObject interface {
+	VisitCancelarReservaResponse(w http.ResponseWriter) error
+}
+
+type CancelarReserva200JSONResponse Reserva
+
+func (response CancelarReserva200JSONResponse) VisitCancelarReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelarReserva401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response CancelarReserva401ApplicationProblemPlusJSONResponse) VisitCancelarReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelarReserva404ApplicationProblemPlusJSONResponse struct {
+	NoEncontradoApplicationProblemPlusJSONResponse
+}
+
+func (response CancelarReserva404ApplicationProblemPlusJSONResponse) VisitCancelarReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelarReserva409ApplicationProblemPlusJSONResponse Problema
+
+func (response CancelarReserva409ApplicationProblemPlusJSONResponse) VisitCancelarReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelarReserva422ApplicationProblemPlusJSONResponse struct {
+	NoProcesableApplicationProblemPlusJSONResponse
+}
+
+func (response CancelarReserva422ApplicationProblemPlusJSONResponse) VisitCancelarReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelarReserva500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response CancelarReserva500ApplicationProblemPlusJSONResponse) VisitCancelarReservaResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -1393,12 +1760,168 @@ func (response ListarServicios500ApplicationProblemPlusJSONResponse) VisitListar
 	return err
 }
 
+type SolicitarCodigoRequestObject struct {
+	Params SolicitarCodigoParams
+	Body   *SolicitarCodigoJSONRequestBody
+}
+
+type SolicitarCodigoResponseObject interface {
+	VisitSolicitarCodigoResponse(w http.ResponseWriter) error
+}
+
+type SolicitarCodigo202Response struct {
+}
+
+func (response SolicitarCodigo202Response) VisitSolicitarCodigoResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type SolicitarCodigo400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response SolicitarCodigo400ApplicationProblemPlusJSONResponse) VisitSolicitarCodigoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SolicitarCodigo429ApplicationProblemPlusJSONResponse struct {
+	DemasiadasPeticionesApplicationProblemPlusJSONResponse
+}
+
+func (response SolicitarCodigo429ApplicationProblemPlusJSONResponse) VisitSolicitarCodigoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SolicitarCodigo500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response SolicitarCodigo500ApplicationProblemPlusJSONResponse) VisitSolicitarCodigoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CanjearCodigoRequestObject struct {
+	Params CanjearCodigoParams
+	Body   *CanjearCodigoJSONRequestBody
+}
+
+type CanjearCodigoResponseObject interface {
+	VisitCanjearCodigoResponse(w http.ResponseWriter) error
+}
+
+type CanjearCodigo200JSONResponse TokenAcceso
+
+func (response CanjearCodigo200JSONResponse) VisitCanjearCodigoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CanjearCodigo400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response CanjearCodigo400ApplicationProblemPlusJSONResponse) VisitCanjearCodigoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CanjearCodigo401ApplicationProblemPlusJSONResponse Problema
+
+func (response CanjearCodigo401ApplicationProblemPlusJSONResponse) VisitCanjearCodigoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CanjearCodigo429ApplicationProblemPlusJSONResponse struct {
+	DemasiadasPeticionesApplicationProblemPlusJSONResponse
+}
+
+func (response CanjearCodigo429ApplicationProblemPlusJSONResponse) VisitCanjearCodigoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CanjearCodigo500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response CanjearCodigo500ApplicationProblemPlusJSONResponse) VisitCanjearCodigoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// ConsultarDisponibilidad Franjas libres de un servicio en un rango
 	// (GET /v1/disponibilidad)
 	ConsultarDisponibilidad(ctx context.Context, request ConsultarDisponibilidadRequestObject) (ConsultarDisponibilidadResponseObject, error)
-	// ListarReservas Reservas de la cuenta (RF-02, filtros de RF-09)
+	// ListarReservas Reservas de quien pide (RF-02, filtros de RF-09)
 	// (GET /v1/reservas)
 	ListarReservas(ctx context.Context, request ListarReservasRequestObject) (ListarReservasResponseObject, error)
 	// CrearReserva Crear una reserva (RF-01)
@@ -1407,12 +1930,21 @@ type StrictServerInterface interface {
 	// ObtenerReserva Detalle de una reserva (RF-03)
 	// (GET /v1/reservas/{id})
 	ObtenerReserva(ctx context.Context, request ObtenerReservaRequestObject) (ObtenerReservaResponseObject, error)
+	// CancelarReserva Cancelar una reserva (RF-06)
+	// (POST /v1/reservas/{id}/cancelacion)
+	CancelarReserva(ctx context.Context, request CancelarReservaRequestObject) (CancelarReservaResponseObject, error)
 	// ListarSedes Sedes del tenant
 	// (GET /v1/sedes)
 	ListarSedes(ctx context.Context, request ListarSedesRequestObject) (ListarSedesResponseObject, error)
 	// ListarServicios Servicios ofrecidos, opcionalmente filtrados por sede
 	// (GET /v1/servicios)
 	ListarServicios(ctx context.Context, request ListarServiciosRequestObject) (ListarServiciosResponseObject, error)
+	// SolicitarCodigo Pedir un código para ver las reservas propias
+	// (POST /v1/sesiones/codigo)
+	SolicitarCodigo(ctx context.Context, request SolicitarCodigoRequestObject) (SolicitarCodigoResponseObject, error)
+	// CanjearCodigo Canjear el código por un token de acceso
+	// (POST /v1/sesiones/token)
+	CanjearCodigo(ctx context.Context, request CanjearCodigoRequestObject) (CanjearCodigoResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -1566,6 +2098,33 @@ func (sh *strictHandler) ObtenerReserva(w http.ResponseWriter, r *http.Request, 
 	}
 }
 
+// CancelarReserva operation middleware
+func (sh *strictHandler) CancelarReserva(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, params CancelarReservaParams) {
+	var request CancelarReservaRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CancelarReserva(ctx, request.(CancelarReservaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CancelarReserva")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CancelarReservaResponseObject); ok {
+		if err := validResponse.VisitCancelarReservaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListarSedes operation middleware
 func (sh *strictHandler) ListarSedes(w http.ResponseWriter, r *http.Request, params ListarSedesParams) {
 	var request ListarSedesRequestObject
@@ -1611,6 +2170,72 @@ func (sh *strictHandler) ListarServicios(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListarServiciosResponseObject); ok {
 		if err := validResponse.VisitListarServiciosResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SolicitarCodigo operation middleware
+func (sh *strictHandler) SolicitarCodigo(w http.ResponseWriter, r *http.Request, params SolicitarCodigoParams) {
+	var request SolicitarCodigoRequestObject
+
+	request.Params = params
+
+	var body SolicitarCodigoJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SolicitarCodigo(ctx, request.(SolicitarCodigoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SolicitarCodigo")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SolicitarCodigoResponseObject); ok {
+		if err := validResponse.VisitSolicitarCodigoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CanjearCodigo operation middleware
+func (sh *strictHandler) CanjearCodigo(w http.ResponseWriter, r *http.Request, params CanjearCodigoParams) {
+	var request CanjearCodigoRequestObject
+
+	request.Params = params
+
+	var body CanjearCodigoJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CanjearCodigo(ctx, request.(CanjearCodigoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CanjearCodigo")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CanjearCodigoResponseObject); ok {
+		if err := validResponse.VisitCanjearCodigoResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

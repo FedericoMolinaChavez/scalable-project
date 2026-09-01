@@ -10,14 +10,17 @@ task front:lint
 task front:build
 ```
 
-Para que las llamadas a la API funcionen hacen falta los **dos** servicios del
+Para que las llamadas a la API funcionen hacen falta los **tres** servicios del
 backend levantados:
 
 ```bash
 task infra:up
-task back:run -- consulta   # :8081 — lecturas
-task back:run -- nucleo     # :8080 — escrituras
+task back:run -- consulta    # :8081 — lecturas
+task back:run -- nucleo      # :8080 — escrituras
+task back:run -- identidad   # :8082 — códigos y tokens
 ```
+
+El código de «Mis reservas» llega a Mailpit: <http://localhost:8025>.
 
 ## Estado
 
@@ -111,12 +114,14 @@ nivel de red y no obliga a esta indirección.
 
 - **Sin autenticación**: el tenant va fijo en `consultas.ts`, igual que la
   cabecera provisional del contrato. Sale del token cuando exista RF-12.
-- **«Mis reservas» no es todavía «mis» reservas.** `GET /v1/reservas` acota por
-  tipo de cuenta (RF-23) y sin token devuelve las del tenant entero: el alcance
-  del *administrador* (RF-32), no el del usuario (RF-02). La pantalla lo dice en
-  vez de disimularlo. Son dos superficies distintas y acabarán separadas: la del
-  usuario es una lista de lo suyo, la del administrador es una agenda por sede y
-  recurso con acciones sobre cada reserva.
+- **Sin agenda del administrador.** `GET /v1/reservas` acota por quien presenta
+  el token (RF-23), y hoy solo existe el de invitado. La agenda del negocio
+  (RF-32) es otra superficie —por sede y recurso, con acciones sobre cada
+  reserva— y llega con RF-12.
+- **La sesión del cliente muere con la pestaña**: el token vive en
+  `sessionStorage`. Caduca en minutos y no se puede revocar, así que
+  sobrevivir al cierre solo alargaría la ventana en la que sirve de algo a quien
+  lo robe.
 - **Sin pago**: el `201` deja la reserva pendiente y el temporizador corriendo,
   pero no hay paso de pago detrás. Llega con Stripe (RF-33).
 - **Sin cancelar ni modificar** (RF-06, RF-07), sin detalle de reserva (RF-03) y

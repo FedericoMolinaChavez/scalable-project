@@ -406,6 +406,12 @@ func insertar(
 	contacto := pet.Nueva.Contacto
 	reserva.Contacto = &contacto
 
+	// El evento, en esta misma transacción. Si la reserva se confirma el evento
+	// también; si algo falla después, tampoco queda. Ver outbox.go.
+	if err := emitir(ctx, tx, pet.Tenant, EventoReservaCreada, reserva); err != nil {
+		return api.Reserva{}, err
+	}
+
 	return reserva, nil
 }
 

@@ -16,7 +16,13 @@ import (
 
 // El martes es de este paquete. Ver pruebas.Martes: los paquetes corren en
 // paralelo sobre el único recurso de la semilla.
-const reservasSembradas = 5
+const (
+	reservasSembradas = 5
+
+	// El correo con el que se siembran: es tambien el alcance con el que se
+	// consultan, porque sin identificarse no se ve nada.
+	correoSembrado = "paginacion@ejemplo.test"
+)
 
 // sembrar deja exactamente reservasSembradas pendientes en horas consecutivas
 // del martes, y devuelve la ventana que las contiene a todas.
@@ -42,13 +48,13 @@ func sembrar(t *testing.T, bd *datos.BD) (desde, hasta time.Time) {
 					periodo, estado, expira_en,
 					precio_cobrado, moneda, politica_version_id
 				) VALUES (
-					$1, $2, $3, 'Paginación', 'paginacion@ejemplo.test',
+					$1, $2, $3, 'Paginación', $7,
 					tstzrange($4::timestamptz, $5::timestamptz, '[)'),
 					'pendiente', now() + interval '1 hour',
 					80000.00, 'COP', $6
 				)`,
 				pruebas.Tenant, pruebas.Servicio, pruebas.Recurso,
-				inicio, inicio.Add(time.Hour), pruebas.Politica)
+				inicio, inicio.Add(time.Hour), pruebas.Politica, correoSembrado)
 			return err
 		}); err != nil {
 			t.Fatalf("no se pudo sembrar la reserva %d: %v", i, err)
@@ -57,6 +63,12 @@ func sembrar(t *testing.T, bd *datos.BD) (desde, hasta time.Time) {
 
 	return desde, hasta
 }
+
+// El alcance de estas pruebas es el correo con el que siembran. Pasarlo en
+// cada llamada no es ceremonia: Listar se niega a devolver nada sin él, y esa
+// negativa es la que impide que un fallo de cableado sirva las reservas de
+// todo el mundo.
+var alcance = consulta.Alcance{Destino: correoSembrado}
 
 func filtroBase(desde, hasta time.Time) consulta.Filtro {
 	return consulta.Filtro{
@@ -86,7 +98,7 @@ func TestPaginacionRecorreTodoSinRepetir(t *testing.T) {
 	paginas := 0
 
 	for {
-		pagina, err := svc.Listar(t.Context(), tenant, filtro)
+		pagina, err := svc.Listar(t.Context(), tenant, alcance, filtro)
 		if err != nil {
 			t.Fatalf("Listar devolvió error: %v", err)
 		}
@@ -132,7 +144,7 @@ func TestUltimaPaginaNoEmiteCursor(t *testing.T) {
 	filtro := filtroBase(desde, hasta)
 	filtro.Limite = reservasSembradas
 
-	pagina, err := svc.Listar(t.Context(), tenant, filtro)
+	pagina, err := svc.Listar(t.Context(), tenant, alcance, filtro)
 	if err != nil {
 		t.Fatalf("Listar devolvió error: %v", err)
 	}
@@ -155,7 +167,7 @@ func TestOrdenDeMasRecienteAMasAntigua(t *testing.T) {
 
 	desde, hasta := sembrar(t, bd)
 
-	pagina, err := svc.Listar(t.Context(), tenant, filtroBase(desde, hasta))
+	pagina, err := svc.Listar(t.Context(), tenant, alcance, filtroBase(desde, hasta))
 	if err != nil {
 		t.Fatalf("Listar devolvió error: %v", err)
 	}
@@ -182,7 +194,7 @@ func TestCursorIlegibleSeRechaza(t *testing.T) {
 		{"marca de tiempo ilegible", "YXllcnwxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTE"},
 	} {
 		t.Run(caso.nombre, func(t *testing.T) {
-			_, err := svc.Listar(t.Context(), tenant, consulta.Filtro{Cursor: caso.cursor})
+			_, err := svc.Listar(t.Context(), tenant, alcance, consulta.Filtro{Cursor: caso.cursor})
 			if !errors.Is(err, consulta.ErrCursorInvalido) {
 				t.Fatalf("se esperaba ErrCursorInvalido, se obtuvo %v", err)
 			}
@@ -203,7 +215,7 @@ func TestLimiteSeAcota(t *testing.T) {
 	filtro := filtroBase(desde, hasta)
 	filtro.Limite = 10_000
 
-	pagina, err := svc.Listar(t.Context(), tenant, filtro)
+	pagina, err := svc.Listar(t.Context(), tenant, alcance, filtro)
 	if err != nil {
 		t.Fatalf("Listar devolvió error: %v", err)
 	}
@@ -218,10 +230,67 @@ func TestObtenerInexistenteDaNoEncontrado(t *testing.T) {
 	svc := consulta.Nuevo(bd)
 
 	_, err := svc.Obtener(t.Context(),
-		uuid.MustParse(pruebas.Tenant),
+		uuid.MustParse(pruebas.Tenant), alcance,
 		uuid.MustParse("00000000-0000-0000-0000-0000000000cc"))
 
 	if !errors.Is(err, datos.ErrNoEncontrado) {
 		t.Fatalf("se esperaba ErrNoEncontrado, se obtuvo %v", err)
+	}
+}
+
+// La reserva de otra persona responde igual que una que no existe.
+//
+// Es la propiedad que sostiene RF-02 entero: sin ella, el identificador de una
+// reserva ajena sirve para comprobar que es real, y con eso se puede sondear la
+// base de a un UUID por vez. Que ambos casos den ErrNoEncontrado no es
+// imprecisión, es la respuesta correcta.
+func TestUnaReservaAjenaNoSeDistingueDeUnaInexistente(t *testing.T) {
+	bd := pruebas.AbrirBD(t)
+	svc := consulta.Nuevo(bd)
+	tenant := uuid.MustParse(pruebas.Tenant)
+
+	desde, hasta := sembrar(t, bd)
+
+	// Una reserva que SÍ existe, leída con su propio alcance.
+	pagina, err := svc.Listar(t.Context(), tenant, alcance, filtroBase(desde, hasta))
+	if err != nil {
+		t.Fatalf("Listar devolvió error: %v", err)
+	}
+	if len(pagina.Datos) == 0 {
+		t.Fatal("la siembra no dejó ninguna reserva que consultar")
+	}
+	ajena := pagina.Datos[0].Id
+
+	// La misma, pedida por alguien que demostró otro correo.
+	otro := consulta.Alcance{Destino: "otra-persona@ejemplo.test"}
+
+	if _, err := svc.Obtener(t.Context(), tenant, otro, ajena); !errors.Is(err, datos.ErrNoEncontrado) {
+		t.Fatalf("una reserva ajena se distinguió de una inexistente: %v", err)
+	}
+
+	// Y tampoco aparece en su listado.
+	suyas, err := svc.Listar(t.Context(), tenant, otro, filtroBase(desde, hasta))
+	if err != nil {
+		t.Fatalf("Listar devolvió error: %v", err)
+	}
+	if len(suyas.Datos) != 0 {
+		t.Fatalf("el listado de otra persona trajo %d reservas ajenas", len(suyas.Datos))
+	}
+}
+
+// Sin alcance no se lista nada. Falla cerrado: el error posible es no devolver
+// nada; el inaceptable sería devolver las reservas de todo el mundo porque
+// alguien se olvidó de pasar de quién son.
+func TestSinAlcanceNoSeListaNada(t *testing.T) {
+	bd := pruebas.AbrirBD(t)
+	svc := consulta.Nuevo(bd)
+	tenant := uuid.MustParse(pruebas.Tenant)
+
+	if _, err := svc.Listar(t.Context(), tenant, consulta.Alcance{}, consulta.Filtro{}); !errors.Is(err, consulta.ErrSinAlcance) {
+		t.Fatalf("se esperaba ErrSinAlcance, se obtuvo %v", err)
+	}
+
+	if _, err := svc.Obtener(t.Context(), tenant, consulta.Alcance{}, uuid.New()); !errors.Is(err, consulta.ErrSinAlcance) {
+		t.Fatalf("se esperaba ErrSinAlcance, se obtuvo %v", err)
 	}
 }

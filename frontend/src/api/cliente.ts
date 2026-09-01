@@ -40,6 +40,19 @@ export const cliente = createClient<paths>({
   fetch: (peticion) => globalThis.fetch(peticion),
 })
 
+/**
+ * Tenant de desarrollo. Provisional, igual que la cabecera que lo transporta:
+ * cuando exista autenticación (RF-12) saldrá del token y esto desaparece.
+ *
+ * Vive aquí y no en `consultas.ts` porque lo mandan también las escrituras y la
+ * identificación. Dejarlo en el módulo de lecturas obligaba a que `sesion.ts` lo
+ * importara de allí, y `consultas.ts` a su vez importara de `sesion.ts` para la
+ * autorización: un ciclo entre dos módulos que no se necesitan entre sí.
+ */
+const TENANT = '11111111-1111-1111-1111-111111111111'
+
+export const cabeceras = { 'X-Tenant-Id': TENANT }
+
 /** Atajos a los esquemas del contrato, para no repetir `components['schemas']`. */
 export type Esquemas = components['schemas']
 

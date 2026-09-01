@@ -128,6 +128,7 @@ func LimpiarFranja(t *testing.T, bd *datos.BD, tenant, recurso string, desde, ha
 //	nucleo         → Lunes
 //	consulta       → Martes
 //	disponibilidad → Miercoles (y Domingo, para el día cerrado)
+//	trabajadores   → Jueves
 //
 // La semilla abre de lunes a viernes, de 09:00 a 17:00 locales.
 //
@@ -147,6 +148,7 @@ func Lunes(hora int) time.Time {
 
 func Martes(hora int) time.Time    { return Lunes(hora).Add(24 * time.Hour) }
 func Miercoles(hora int) time.Time { return Lunes(hora).Add(48 * time.Hour) }
+func Jueves(hora int) time.Time    { return Lunes(hora).Add(72 * time.Hour) }
 
 // Domingo es el día anterior: la semilla no abre, así que sirve para comprobar
 // que "cerrado" es una lista vacía y no un error.

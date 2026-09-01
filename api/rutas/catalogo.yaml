@@ -3,6 +3,10 @@
 sedes:
   get:
     operationId: listarSedes
+    # Publica a proposito: el catalogo de un negocio se puede mirar sin
+    # identificarse. security vacio lo dice explicitamente, para que se lea
+    # como una decision y no como un olvido.
+    security: []
     summary: Sedes del tenant
     tags: [catalogo]
     parameters:
@@ -20,6 +24,7 @@ sedes:
 servicios:
   get:
     operationId: listarServicios
+    security: []  # publica, igual que las sedes
     summary: Servicios ofrecidos, opcionalmente filtrados por sede
     tags: [catalogo]
     parameters:

@@ -13,6 +13,7 @@ import (
 	"log/slog"
 
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/datos"
+	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/identidad"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/nucleo"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/plataforma"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/rutas"
@@ -49,7 +50,8 @@ func montar(ctx context.Context, cfg plataforma.Config, registro *slog.Logger, s
 	// mandaría tráfico de lectura al primario, que es justo lo que la
 	// descomposición evita.
 	rutas.Montar(servidor, rutas.Componentes{
-		Nucleo: nucleo.Nuevo(bd, cfg.TTLReserva),
+		Nucleo:      nucleo.Nuevo(bd, cfg.TTLReserva),
+		Verificador: identidad.NuevoFirmante(cfg.Identidad.TokenSecreto, cfg.Identidad.TTLAcceso),
 	}, registro, cfg.TiempoPeticion)
 
 	registro.Info("núcleo montado", slog.Duration("ttl_reserva", cfg.TTLReserva))

@@ -1,5 +1,5 @@
-import { cliente, ErrorApi, type NuevaReserva, type Reserva } from './cliente'
-import { cabeceras } from './consultas'
+import { cabeceras, cliente, ErrorApi, type NuevaReserva, type Reserva } from './cliente'
+import { autorizacion } from './sesion'
 
 /**
  * Crear una reserva: la única escritura de esta rebanada.
@@ -30,6 +30,22 @@ export async function crearReserva(
 
   if (error) throw new ErrorApi(response.status, error)
   return data.reserva
+}
+
+/**
+ * Cancelar una reserva (RF-06).
+ *
+ * Necesita el token: cancelar la reserva de otra persona es exactamente lo que
+ * la identificación existe para impedir. Una reserva ajena responde 404, igual
+ * que una inexistente, así que la interfaz no puede —ni debe— distinguirlas.
+ */
+export async function cancelarReserva(id: string): Promise<Reserva> {
+  const { data, error, response } = await cliente.POST('/v1/reservas/{id}/cancelacion', {
+    params: { header: { ...cabeceras, ...autorizacion() }, path: { id } },
+  })
+
+  if (error) throw new ErrorApi(response.status, error)
+  return data
 }
 
 /**

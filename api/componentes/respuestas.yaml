@@ -16,6 +16,20 @@ NoEncontrado:
     application/problem+json:
       schema: { $ref: './esquemas/comunes.yaml#/Problema' }
 
+NoAutorizado:
+  description: |
+    Falta el token de acceso, o ya no vale. No distingue entre "no lo mandaste"
+    y "el que mandaste está mal": para quien prueba tokens, saber cuál de las
+    dos cosas falló es la mitad del trabajo hecho.
+
+    El vencimiento SÍ se distingue en el `type` del problema, y no es una
+    contradicción: caducar no es un fallo de quien lo presenta, es el
+    funcionamiento normal, y la interfaz tiene que poder decir "vuelve a
+    identificarte" en vez de "no eres tú".
+  content:
+    application/problem+json:
+      schema: { $ref: './esquemas/comunes.yaml#/Problema' }
+
 NoProcesable:
   description: Sintácticamente válida pero viola una regla de negocio
   content:

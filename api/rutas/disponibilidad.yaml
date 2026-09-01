@@ -3,6 +3,7 @@
 disponibilidad:
   get:
     operationId: consultarDisponibilidad
+    security: []  # publica: mirar horarios libres no exige identificarse
     summary: Franjas libres de un servicio en un rango
     description: |
       Sirve el 90% del tráfico (RNF-03) desde caché, con los 2 s de

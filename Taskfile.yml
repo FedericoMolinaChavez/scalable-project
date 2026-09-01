@@ -155,7 +155,12 @@ tasks:
   # ------------------------------------------------------------------ datos --
   infra:up:
     desc: Levanta PostgreSQL, PgBouncer, Valkey, NATS, MinIO y Mailpit
-    cmd: docker compose -f deploy/docker-compose.yml up -d
+    # --wait no devuelve hasta que los healthcheck pasan. Sin esto, el comando
+    # termina en cuanto los contenedores arrancan y lo siguiente que se ejecute
+    # —una prueba, un servicio— se encuentra PostgreSQL todavía aplicando el
+    # esquema. En local se nota como un fallo intermitente al arrancar; en CI,
+    # como uno que solo aparece a veces.
+    cmd: docker compose -f deploy/docker-compose.yml up -d --wait
 
   infra:down:
     desc: Detiene la infraestructura local (conserva los volúmenes)
@@ -182,7 +187,11 @@ tasks:
 
   db:test:
     desc: Invariantes y prueba de concurrencia contra un PostgreSQL desechable
-    cmd: ./db/pruebas/ejecutar.sh
+    # Invocado a través de bash y no directamente. En Windows, Task intenta
+    # ejecutar el .sh como un binario y falla con "%1 is not a valid Win32
+    # application"; el guion en sí funciona igual en Git Bash que en Linux, y ya
+    # se ocupa de traducir las rutas.
+    cmd: bash ./db/pruebas/ejecutar.sh
 
   # --------------------------------------------------------------------- ci --
   ci:

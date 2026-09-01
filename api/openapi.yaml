@@ -29,7 +29,27 @@ tags:
   - name: disponibilidad
     description: Consulta de horarios libres (RF-26)
   - name: reservas
-    description: Creación y consulta de reservas (RF-01, RF-02, RF-03)
+    description: Creación y consulta de reservas (RF-01, RF-02, RF-03, RF-06)
+  - name: sesiones
+    description: Identificación del cliente por código de un solo uso (RF-02)
+
+components:
+  securitySchemes:
+    TokenCliente:
+      type: http
+      scheme: bearer
+      description: |
+        El token que devuelve `POST /v1/sesiones/token` tras acertar el código.
+
+        Acredita UNA cosa: que quien lo presenta controla ese correo. No hay
+        cuenta detrás, así que tampoco hay roles: el alcance es exactamente las
+        reservas hechas con esa dirección. Cuando exista RF-12, el mismo
+        encabezado transportará tokens de cuenta y el alcance saldrá del tipo
+        de cuenta (RF-23).
+
+        Es de vigencia corta y no se puede revocar. Un invitado no tiene sesión
+        que gestionar (RF-25 es de cuentas), así que caducar pronto es la única
+        defensa que tiene.
 
 paths:
   /v1/sedes:
@@ -41,8 +61,17 @@ paths:
   /v1/disponibilidad:
     $ref: './rutas/disponibilidad.yaml#/disponibilidad'
 
+  /v1/sesiones/codigo:
+    $ref: './rutas/sesiones.yaml#/codigo'
+
+  /v1/sesiones/token:
+    $ref: './rutas/sesiones.yaml#/token'
+
   /v1/reservas:
     $ref: './rutas/reservas.yaml#/coleccion'
 
   /v1/reservas/{id}:
     $ref: './rutas/reservas.yaml#/porId'
+
+  /v1/reservas/{id}/cancelacion:
+    $ref: './rutas/reservas.yaml#/cancelacion'

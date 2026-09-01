@@ -56,6 +56,27 @@ type Filtro struct {
 	Cursor  string
 }
 
+// Alcance es de quién son las reservas que se piden.
+//
+// Hoy solo existe una forma de acotarlo —el correo que un token de invitado
+// acredita (RF-02)— pero es un tipo y no una cadena suelta porque RF-23 dice
+// que el alcance sale del tipo de cuenta: con RF-12 esto gana un CuentaID y un
+// caso de administrador que ve el tenant entero (RF-32). Que sea un tipo hace
+// que añadirlos sea un campo más, no una firma nueva en cada capa.
+type Alcance struct {
+	// Destino es el correo verificado. Vacío significa sin acotar, y eso NO es
+	// un valor válido que este paquete acepte: lo rechaza, porque una consulta
+	// de reservas sin alcance devuelve las de todo el mundo.
+	Destino string
+}
+
+// ErrSinAlcance se devuelve cuando se pide una lista sin decir de quién.
+//
+// Falla cerrado a propósito. El error posible es no devolver nada; el
+// inaceptable sería devolver las reservas de otra persona porque alguien se
+// olvidó de pasar el alcance.
+var ErrSinAlcance = errors.New("no se puede listar reservas sin saber de quién son")
+
 // Listar devuelve una página de reservas, de la más reciente a la más antigua.
 //
 // El ALCANCE de esta ruta no es fijo: sale del tipo de cuenta que la llama
@@ -74,7 +95,13 @@ type Filtro struct {
 // `cuenta_id = $n` cuando quien llama es un usuario. La lista del usuario
 // además debe pasar por plataforma.indice_reserva_global en vez de filtrar
 // aquí, para no abanicar las 64 particiones (RNF-02).
-func (s *Servicio) Listar(ctx context.Context, tenant uuid.UUID, f Filtro) (api.ListaReservas, error) {
+func (s *Servicio) Listar(
+	ctx context.Context, tenant uuid.UUID, alcance Alcance, f Filtro,
+) (api.ListaReservas, error) {
+	if alcance.Destino == "" {
+		return api.ListaReservas{}, ErrSinAlcance
+	}
+
 	limite := f.Limite
 	if limite <= 0 {
 		limite = LimitePorDefecto
@@ -108,17 +135,28 @@ func (s *Servicio) Listar(ctx context.Context, tenant uuid.UUID, f Filtro) (api.
 		// alternativa —emitir cursor siempre que la página venga llena—
 		// produce una última página vacía cada vez que el total es múltiplo
 		// del límite, y el cliente no puede distinguirla de un fallo.
+		// El alcance va en el WHERE, no en un filtro posterior sobre las filas
+		// ya traídas. Filtrar después significaría que la base devolvió
+		// reservas ajenas y que solo un `if` impidió enseñarlas; aquí nunca
+		// salen de PostgreSQL.
+		//
+		// lower(contacto_email) usa el índice reserva_por_contacto, que está
+		// definido sobre esa misma expresión. Escribirlo de otra forma
+		// —comparando sin lower, o con ILIKE— haría que el índice no se use y
+		// la consulta abanicara las 64 particiones.
 		filas, err := tx.Query(ctx, `
 			SELECT `+reservas.Columnas+`
 			FROM negocio.reserva
-			WHERE ($1::text[] IS NULL OR estado::text = ANY ($1::text[]))
+			WHERE cuenta_id IS NULL
+			  AND lower(contacto_email) = $7
+			  AND ($1::text[] IS NULL OR estado::text = ANY ($1::text[]))
 			  AND ($2::timestamptz IS NULL OR lower(periodo) >= $2::timestamptz)
 			  AND ($3::timestamptz IS NULL OR lower(periodo) <  $3::timestamptz)
 			  AND ($4::timestamptz IS NULL
 			       OR (creada_en, id) < ($4::timestamptz, $5::uuid))
 			ORDER BY creada_en DESC, id DESC
 			LIMIT $6`,
-			estados, f.Desde, f.Hasta, desdeCursor, idCursor, limite+1)
+			estados, f.Desde, f.Hasta, desdeCursor, idCursor, limite+1, alcance.Destino)
 		if err != nil {
 			return err
 		}
@@ -150,7 +188,18 @@ func (s *Servicio) Listar(ctx context.Context, tenant uuid.UUID, f Filtro) (api.
 }
 
 // Obtener devuelve una reserva concreta (RF-03).
-func (s *Servicio) Obtener(ctx context.Context, tenant, id uuid.UUID) (api.Reserva, error) {
+//
+// Una reserva que existe pero es de otra persona sale como datos.ErrNoEncontrado,
+// igual que una que no existe. No es imprecisión: distinguirlas confirmaría qué
+// identificadores son reales, y con eso se puede sondear la base ajena de a un
+// UUID por vez.
+func (s *Servicio) Obtener(
+	ctx context.Context, tenant uuid.UUID, alcance Alcance, id uuid.UUID,
+) (api.Reserva, error) {
+	if alcance.Destino == "" {
+		return api.Reserva{}, ErrSinAlcance
+	}
+
 	var reserva api.Reserva
 
 	err := s.bd.EnTenant(ctx, tenant.String(), func(tx pgx.Tx) error {
@@ -158,7 +207,9 @@ func (s *Servicio) Obtener(ctx context.Context, tenant, id uuid.UUID) (api.Reser
 		reserva, err = reservas.Escanear(tx.QueryRow(ctx,
 			`SELECT `+reservas.Columnas+`
 			 FROM negocio.reserva
-			 WHERE id = $1`, id))
+			 WHERE id = $1
+			   AND cuenta_id IS NULL
+			   AND lower(contacto_email) = $2`, id, alcance.Destino))
 		return err
 	})
 	if err != nil {

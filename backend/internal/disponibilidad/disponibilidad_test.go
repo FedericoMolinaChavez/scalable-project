@@ -2,6 +2,8 @@ package disponibilidad_test
 
 import (
 	"errors"
+	"io"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -22,11 +24,21 @@ import (
 // cuentan franjas, así que otro paquete reservando el mismo día cambiaría el
 // recuento por debajo.
 
+// registroMudo evita que las pruebas escupan avisos por pantalla: varias
+// ejercitan a propósito el camino sin caché, que registra un aviso cada vez.
+func registroMudo() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
+
+// Las pruebas de este archivo corren SIN caché (`nil`), que es el camino de
+// abajo: el que de verdad calcula. El caché tiene las suyas en cache_test.go,
+// donde lo que se comprueba es que acierta, que caduca a los 2 s y que un
+// Valkey caído no impide responder.
 func servicio(t *testing.T) (*disponibilidad.Servicio, uuid.UUID, uuid.UUID) {
 	t.Helper()
 
 	bd := pruebas.AbrirBD(t)
-	return disponibilidad.Nuevo(bd),
+	return disponibilidad.Nuevo(bd, nil, registroMudo()),
 		uuid.MustParse(pruebas.Tenant),
 		uuid.MustParse(pruebas.Servicio)
 }
@@ -111,7 +123,7 @@ func TestServicioInexistenteNoEsListaVacia(t *testing.T) {
 // franjas que el motor rechaza, o se esconden franjas que están libres.
 func TestPendienteVencidaNoOcupaCupo(t *testing.T) {
 	bd := pruebas.AbrirBD(t)
-	svc := disponibilidad.Nuevo(bd)
+	svc := disponibilidad.Nuevo(bd, nil, registroMudo())
 	tenant := uuid.MustParse(pruebas.Tenant)
 	srv := uuid.MustParse(pruebas.Servicio)
 

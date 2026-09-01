@@ -28,9 +28,7 @@ function Estructura() {
         <nav className="flex gap-4 p-4">
           <Link to="/">Catálogo</Link>
           <Link to="/reservar">Reservar</Link>
-          {/* No es «Mis reservas»: sin RF-12 la ruta devuelve las del tenant
-              entero, que es el alcance del administrador (RF-32). */}
-          <Link to="/reservas">Reservas del negocio</Link>
+          <Link to="/reservas">Mis reservas</Link>
         </nav>
       </header>
 

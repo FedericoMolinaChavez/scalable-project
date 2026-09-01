@@ -9,6 +9,7 @@ import (
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/api"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/consulta"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/datos"
+	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/identidad"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/nucleo"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/transporte"
 )
@@ -187,6 +188,155 @@ func (a *adaptador) CrearReserva(
 	return api.CrearReserva201JSONResponse{Reserva: reserva}, nil
 }
 
+func (a *adaptador) CancelarReserva(
+	ctx context.Context, pet api.CancelarReservaRequestObject,
+) (api.CancelarReservaResponseObject, error) {
+	if a.c.Nucleo == nil {
+		return nil, errSinComponente
+	}
+
+	acceso, hay := identidad.DeAcceso(ctx)
+	if !hay || acceso.Destino == "" {
+		a.registro.ErrorContext(ctx, "ruta acotada sin acceso en el contexto",
+			slog.String("peticion", transporte.IdPeticion(ctx)))
+		return api.CancelarReserva401ApplicationProblemPlusJSONResponse{
+			NoAutorizadoApplicationProblemPlusJSONResponse: api.NoAutorizadoApplicationProblemPlusJSONResponse(
+				transporte.NoAutorizado.Cuerpo(ctx, ""),
+			),
+		}, nil
+	}
+
+	reserva, err := a.c.Nucleo.Cancelar(ctx, pet.Params.XTenantId, pet.Id, acceso.Destino)
+	if err != nil {
+		clase, cuerpo := problema(ctx, err)
+		switch clase.Estado {
+		case http.StatusNotFound:
+			// Incluye la reserva que existe pero es de otra persona. Un 403
+			// confirmaría que ese identificador es real.
+			return api.CancelarReserva404ApplicationProblemPlusJSONResponse{
+				NoEncontradoApplicationProblemPlusJSONResponse: api.NoEncontradoApplicationProblemPlusJSONResponse(cuerpo),
+			}, nil
+		case http.StatusConflict:
+			return api.CancelarReserva409ApplicationProblemPlusJSONResponse(cuerpo), nil
+		case http.StatusUnprocessableEntity:
+			return api.CancelarReserva422ApplicationProblemPlusJSONResponse{
+				NoProcesableApplicationProblemPlusJSONResponse: api.NoProcesableApplicationProblemPlusJSONResponse(cuerpo),
+			}, nil
+		default:
+			return api.CancelarReserva500ApplicationProblemPlusJSONResponse{
+				ErrorInternoApplicationProblemPlusJSONResponse: api.ErrorInternoApplicationProblemPlusJSONResponse(
+					a.interno(ctx, "cancelarReserva", err),
+				),
+			}, nil
+		}
+	}
+
+	return api.CancelarReserva200JSONResponse(reserva), nil
+}
+
+// alcance saca del contexto de quién es la petición.
+//
+// Devuelve falso cuando no hay ninguno, y eso solo puede pasar si la ruta se
+// montó sin exigirAcceso. Falla cerrado —responde 401— en vez de continuar sin
+// acotar: el error posible es negar el acceso a quien lo tenía; el inaceptable
+// sería servirle a alguien las reservas de todo el mundo por un fallo de
+// cableado.
+func (a *adaptador) alcance(ctx context.Context) (consulta.Alcance, bool) {
+	acceso, hay := identidad.DeAcceso(ctx)
+	if !hay || acceso.Destino == "" {
+		a.registro.ErrorContext(ctx, "ruta acotada sin acceso en el contexto",
+			slog.String("peticion", transporte.IdPeticion(ctx)))
+		return consulta.Alcance{}, false
+	}
+	return consulta.Alcance{Destino: acceso.Destino}, true
+}
+
+// ------------------------------------------------------------- identidad --
+
+func (a *adaptador) SolicitarCodigo(
+	ctx context.Context, pet api.SolicitarCodigoRequestObject,
+) (api.SolicitarCodigoResponseObject, error) {
+	if a.c.Identidad == nil {
+		return nil, errSinComponente
+	}
+	if pet.Body == nil {
+		return api.SolicitarCodigo400ApplicationProblemPlusJSONResponse{
+			PeticionInvalidaApplicationProblemPlusJSONResponse: api.PeticionInvalidaApplicationProblemPlusJSONResponse(
+				invalida(ctx, "falta el cuerpo de la petición"),
+			),
+		}, nil
+	}
+
+	err := a.c.Identidad.Solicitar(ctx, string(pet.Body.Destino))
+
+	switch {
+	case err == nil:
+		return api.SolicitarCodigo202Response{}, nil
+
+	case errors.Is(err, identidad.ErrDestinoInvalido):
+		// Esto NO filtra nada: dice que lo escrito no tiene forma de correo, no
+		// si ese correo existe.
+		return api.SolicitarCodigo400ApplicationProblemPlusJSONResponse{
+			PeticionInvalidaApplicationProblemPlusJSONResponse: api.PeticionInvalidaApplicationProblemPlusJSONResponse(
+				invalida(ctx, err.Error()),
+			),
+		}, nil
+
+	case errors.Is(err, identidad.ErrDemasiadosEnvios):
+		return api.SolicitarCodigo429ApplicationProblemPlusJSONResponse{
+			Body: transporte.DemasiadasPeticiones.Cuerpo(ctx,
+				"ya se pidieron varios códigos para ese destino; espera un rato antes de pedir otro"),
+		}, nil
+
+	default:
+		// Un fallo del sistema SÍ se dice, y no contradice la
+		// anti-enumeración: un 500 no depende de si el destino existe, así que
+		// no distingue nada sobre él.
+		return api.SolicitarCodigo500ApplicationProblemPlusJSONResponse{
+			ErrorInternoApplicationProblemPlusJSONResponse: api.ErrorInternoApplicationProblemPlusJSONResponse(
+				a.interno(ctx, "solicitarCodigo", err),
+			),
+		}, nil
+	}
+}
+
+func (a *adaptador) CanjearCodigo(
+	ctx context.Context, pet api.CanjearCodigoRequestObject,
+) (api.CanjearCodigoResponseObject, error) {
+	if a.c.Identidad == nil {
+		return nil, errSinComponente
+	}
+	if pet.Body == nil {
+		return api.CanjearCodigo400ApplicationProblemPlusJSONResponse{
+			PeticionInvalidaApplicationProblemPlusJSONResponse: api.PeticionInvalidaApplicationProblemPlusJSONResponse(
+				invalida(ctx, "falta el cuerpo de la petición"),
+			),
+		}, nil
+	}
+
+	token, expira, err := a.c.Identidad.Canjear(ctx, string(pet.Body.Destino), pet.Body.Codigo)
+
+	switch {
+	case err == nil:
+		return api.CanjearCodigo200JSONResponse{Token: token, ExpiraEn: expira}, nil
+
+	case errors.Is(err, identidad.ErrCodigoInvalido):
+		// Un solo error para el código equivocado, el caducado, el ya usado y
+		// el que nunca existió. Cada distinción le diría a quien está probando
+		// códigos si va por buen camino.
+		return api.CanjearCodigo401ApplicationProblemPlusJSONResponse(
+			transporte.NoAutorizado.Cuerpo(ctx, "el código no es válido o ya caducó"),
+		), nil
+
+	default:
+		return api.CanjearCodigo500ApplicationProblemPlusJSONResponse{
+			ErrorInternoApplicationProblemPlusJSONResponse: api.ErrorInternoApplicationProblemPlusJSONResponse(
+				a.interno(ctx, "canjearCodigo", err),
+			),
+		}, nil
+	}
+}
+
 // ------------------------------------------------------ consulta (lectura) --
 
 func (a *adaptador) ListarReservas(
@@ -194,6 +344,15 @@ func (a *adaptador) ListarReservas(
 ) (api.ListarReservasResponseObject, error) {
 	if a.c.Consulta == nil {
 		return nil, errSinComponente
+	}
+
+	alcance, listo := a.alcance(ctx)
+	if !listo {
+		return api.ListarReservas401ApplicationProblemPlusJSONResponse{
+			NoAutorizadoApplicationProblemPlusJSONResponse: api.NoAutorizadoApplicationProblemPlusJSONResponse(
+				transporte.NoAutorizado.Cuerpo(ctx, ""),
+			),
+		}, nil
 	}
 
 	filtro := consulta.Filtro{Desde: pet.Params.Desde, Hasta: pet.Params.Hasta}
@@ -221,7 +380,7 @@ func (a *adaptador) ListarReservas(
 		}
 	}
 
-	lista, err := a.c.Consulta.Listar(ctx, pet.Params.XTenantId, filtro)
+	lista, err := a.c.Consulta.Listar(ctx, pet.Params.XTenantId, alcance, filtro)
 	if err != nil {
 		clase, cuerpo := problema(ctx, err)
 		if clase.Estado == http.StatusBadRequest {
@@ -246,7 +405,16 @@ func (a *adaptador) ObtenerReserva(
 		return nil, errSinComponente
 	}
 
-	reserva, err := a.c.Consulta.Obtener(ctx, pet.Params.XTenantId, pet.Id)
+	alcance, listo := a.alcance(ctx)
+	if !listo {
+		return api.ObtenerReserva401ApplicationProblemPlusJSONResponse{
+			NoAutorizadoApplicationProblemPlusJSONResponse: api.NoAutorizadoApplicationProblemPlusJSONResponse(
+				transporte.NoAutorizado.Cuerpo(ctx, ""),
+			),
+		}, nil
+	}
+
+	reserva, err := a.c.Consulta.Obtener(ctx, pet.Params.XTenantId, alcance, pet.Id)
 	if err != nil {
 		clase, cuerpo := problema(ctx, err)
 		if clase.Estado == http.StatusNotFound {

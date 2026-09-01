@@ -3,18 +3,26 @@
 Un módulo Go, un binario por componente síncrono de ARQ-01.
 
 ```bash
-task back:run -- consulta   # :8081
-task back:run -- nucleo     # :8080
-task back:test              # necesita `task infra:up`
+task back:run -- consulta       # :8081
+task back:run -- nucleo         # :8080
+task back:run -- identidad      # :8082
+task back:run -- trabajadores   # :8083
+task back:test                  # necesita `task infra:up`
 task back:lint
 ```
+
+Hace falta `TOKEN_SECRETO` en el `.env` (ver `.env.example`): los tres binarios
+se niegan a arrancar sin él, porque un servicio que no comprueba la firma de un
+token no rechaza nada, sirve los datos igual.
 
 ## Qué sirve cada binario
 
 | Binario | Puerto | Rutas | Por qué ahí |
 |---|---|---|---|
-| `nucleo` | 8080 | `POST /v1/reservas` | Único que escribe en `negocio.reserva` por la ruta síncrona |
+| `nucleo` | 8080 | `POST /v1/reservas`, `POST /v1/reservas/{id}/cancelacion` | Único que escribe en `negocio.reserva` por la ruta síncrona |
 | `consulta` | 8081 | `GET /v1/sedes`, `/v1/servicios`, `/v1/disponibilidad`, `/v1/reservas`, `/v1/reservas/{id}` | Solo lee; en despliegue va contra las réplicas |
+| `identidad` | 8082 | `POST /v1/sesiones/codigo`, `/v1/sesiones/token` | Manda correo: es un dominio de fallo propio, y un relé caído no puede arrastrar la ruta de reserva |
+| `trabajadores` | 8083 | ninguna de negocio (solo sondas y `/metrics`) | El paquete "Asíncrono" de ARQ-01: expirador (RF-27), transiciones automáticas (RF-28), relay del outbox y notificador (RF-10) |
 
 **`/v1/reservas` lo sirven los dos**, y no es un descuido: el `POST` tiene que
 ser atómico con la invariante y el `GET` no, que es exactamente la frontera por
@@ -68,6 +76,58 @@ restricción EXCLUDE no puede excluirlas: PostgreSQL exige que el predicado de u
 antes de insertar. No sustituye al expirador de RF-27 —que barre la tabla entera
 y todavía no existe—, cubre el caso concreto que está a punto de estorbar.
 
+**El código de un solo uso no se guarda, se guarda su huella** (RNF-09). SHA-256
+a secas, sin sal ni derivación lenta, y eso es correcto porque no es una
+contraseña: seis dígitos que viven cinco minutos y aguantan tres intentos se
+defienden por el tiempo y por el contador, no por la lentitud del hash. Lo que
+compra el hash es que quien lea la tabla no pueda usar lo que ve.
+
+**El contador de intentos se confirma aunque el intento falle.** Es la trampa de
+esta parte: devolver el error desde dentro de la transacción revierte, junto con
+el error, el incremento que se acababa de escribir, y entonces el límite de
+RF-12 A2 no existe. La transacción confirma siempre y el veredicto viaja aparte.
+Hay una prueba que falla si alguien lo deshace.
+
+**Un token de invitado no tiene sesión.** `sesion.cuenta_id` es NOT NULL y RF-25
+gestiona las sesiones *de una cuenta*; quien reservó como invitado no tiene ni
+una cosa ni la otra. Su token es corto, firmado y no revocable, y por eso caduca
+pronto: es su única defensa. El formato es propio y no JWT porque el algoritmo
+no se negocia —la familia de vulnerabilidades de `alg` no existe si no hay nada
+que elegir— y porque los siete componentes viven en un solo módulo Go. Eso deja
+de valer en cuanto el Gateway tenga que validar tokens: ahí toca firma
+asimétrica estándar.
+
+**Valkey hace exactamente los dos trabajos que le da ARQ-01, y ninguno más.**
+Cachea las proyecciones de disponibilidad con los 2 s que RNF-10 autoriza —el
+90% del tráfico de RNF-03, que es lo que hace sostenible ese número contra las
+réplicas— y sostiene las cuotas de RNF-08. **Nunca es autoridad sobre el cupo**:
+el núcleo no lo lee jamás, decide siempre contra PostgreSQL.
+
+De ahí sale una asimetría deliberada en cómo fallan. El caché falla ABIERTO y no
+entra en `/listo`: sin él la disponibilidad responde igual, solo que bajando a
+las réplicas. El límite de envío de códigos falla CERRADO, porque detrás de él no
+hay ninguna otra capa —no existe invariante en el motor que impida mandar
+correo— y el coste de negar es que alguien espere, mientras que el de permitir es
+correo ilimitado hacia la dirección que alguien escriba.
+
+**El outbox evita la doble escritura.** El núcleo escribe el evento en la MISMA
+transacción que la reserva y no publica nada; un relay lo lleva después a
+JetStream. Publicar tras el `COMMIT` puede fallar y perder el evento; publicar
+antes deja eventos de reservas que se revirtieron. La consecuencia es que la
+entrega es **al-menos-una-vez** —la deduplicación la hace NATS con `Nats-Msg-Id`,
+que es el `id` del evento— y todo consumidor tiene que ser idempotente.
+
+**`FOR UPDATE SKIP LOCKED` en todos los barridos.** Sin él, dos réplicas del
+mismo trabajador seleccionan las mismas filas, la segunda espera a la primera, y
+añadir réplicas no acelera nada: solo consume conexiones. Con él se reparten la
+cola sin coordinarse, que es la misma filosofía que el resto del sistema.
+
+**El sistema no marca la llegada de nadie.** RF-28 asigna `confirmada → en_curso`
+al administrador (el check-in de RF-32), así que las transiciones automáticas son
+solo dos: `en_curso → completada` al pasar la hora, y `confirmada → no_show` al
+superar el umbral. Una cita que nadie registró acaba en `no_show`, que es lo que
+de verdad pasó, no en `completada`.
+
 **Los códigos de estado se deciden en un solo sitio.** `internal/rutas/errores.go`
 es el único que conoce a la vez los errores del dominio y los códigos HTTP. Con
 la traducción repartida por los manejadores, el mismo error acaba siendo un 422
@@ -103,22 +163,38 @@ recuentos cambiantes que no tienen nada que ver con lo que cada uno comprueba.
 
 ## Pendiente
 
-- **Sin autenticación (RF-12).** El tenant llega en la cabecera `X-Tenant-Id` y
-  toda reserva es de invitado (`cuenta_id` nulo). Al crear, cuando exista el
-  token, hay que poblar `cuenta_id` y escribir `plataforma.indice_reserva_global`.
-- **`GET /v1/reservas` está sin acotar por rol.** Su alcance no es fijo: sale
-  del tipo de cuenta (RF-23). Un `usuario` ve las suyas (RF-02), un
-  `administrador` las de su tenant (RF-32). Sin token no hay de dónde derivarlo
-  y devuelve las del tenant entero, que es el alcance del administrador. La ruta
-  es la correcta —RF-23 modela el alcance como intersección, no como rutas
-  distintas por rol—, pero **hoy cualquiera ve lo que solo el administrador
-  debería ver**, y eso no puede llegar a producción sin RF-12.
+- **Sin cuentas (RF-12).** El tenant llega en la cabecera `X-Tenant-Id` y toda
+  reserva es de invitado (`cuenta_id` nulo). Lo que sí existe es la mitad de
+  RF-02 que no necesita cuenta: el código de un solo uso al correo con el que se
+  reservó. Cuando existan las cuentas hay que poblar `cuenta_id` al crear,
+  escribir `plataforma.indice_reserva_global`, y hacer que `GET /v1/reservas`
+  acote por cuenta y no por correo de contacto.
+- **El alcance de `GET /v1/reservas` sale de quién pide** (RF-23). Hoy solo
+  existe el token de invitado, así que devuelve las reservas hechas con el
+  correo que ese token acredita. El caso del `administrador` que ve su tenant
+  entero (RF-32) llega con RF-12: es un campo más en `consulta.Alcance`, no una
+  ruta nueva.
 - **RF-32 pide además filtros que el contrato no tiene.** La agenda del
   administrador se recorre por sede y por recurso, y `GET /v1/reservas` solo
   filtra por estado y rango (RF-09). Faltan `sede_id` y `recurso_id`.
-- **RF-02 tiene un segundo camino de identificación** que nada implementa: un
-  OTP por teléfono o email, para que quien reservó como invitado pueda ver sus
-  reservas sin tener cuenta.
+- **Solo correo, no SMS.** El canal es un enum en el modelo y RF-02 admite los
+  dos; no hay proveedor de SMS, y Mailpit sí está provisionado. Añadir SMS es
+  una rama más en el envío.
+- **El reembolso de una cancelación no ocurre** (RF-29). Cancelar libera el cupo
+  y escribe su transición; el dinero lo mueve un trabajador que no existe.
+- **Cuatro de los ocho trabajadores de ARQ-01 siguen sin existir**: conciliador
+  de pagos (RF-33), procesador de reembolsos (RF-29), rollup de métricas (RF-11)
+  y lista de espera (RF-37). Los cuatro dependen de tablas de ER-03 que aún no
+  se han creado o de Stripe.
+- **RF-10 está en su versión mínima**: el notificador manda el correo, pero sin
+  plantillas, sin `preferencia_notificacion` (RF-21), sin `config_notificacion`
+  (RF-16) y sin registro de lo enviado. Hoy no se puede responder «¿se le
+  avisó?» mirando la base, solo mirando el buzón.
+- **Sin trazas.** `internal/plataforma` prometía OpenTelemetry hacia Tempo y no
+  había ninguna dependencia; la frase está corregida. Faltan las dos mitades: el
+  SDK y un colector en el compose, donde hoy no hay nada que reciba OTLP.
+- **MinIO sigue levantado y sin usar.** Su trabajo en ARQ-01 son los
+  comprobantes de RF-34, que dependen del pago de RF-33.
 - **Sin Stripe (RF-33).** El `201` no trae `pago_client_secret`, y la reserva se
   queda pendiente hasta que venza. La confirmación llega por webhook, que no
   entra en esta rebanada.

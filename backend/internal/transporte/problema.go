@@ -49,6 +49,35 @@ var (
 		Estado: http.StatusConflict,
 	}
 
+	// NoAutorizado no distingue entre "no mandaste token" y "el que mandaste
+	// está mal". Para quien prueba tokens, saber cuál de las dos cosas falló es
+	// la mitad del trabajo hecho.
+	NoAutorizado = Clase{
+		Tipo:   "https://api.reservas/errores/no-autorizado",
+		Titulo: "Hace falta identificarse",
+		Estado: http.StatusUnauthorized,
+	}
+
+	// TokenVencido sí es un tipo aparte, y no contradice lo anterior: caducar
+	// no es un fallo de quien presenta el token, es el funcionamiento normal.
+	// La interfaz necesita poder pedir que se identifique otra vez en vez de
+	// tratarlo como un rechazo.
+	TokenVencido = Clase{
+		Tipo:   "https://api.reservas/errores/token-vencido",
+		Titulo: "La identificación caducó",
+		Estado: http.StatusUnauthorized,
+	}
+
+	// EstadoIncompatible: la operación es válida y quien la pide tiene derecho,
+	// pero el recurso ya no está en un estado que la admita. Cancelar algo ya
+	// cancelado no es un error de la petición ni una regla de negocio violada:
+	// es una carrera con otra cosa que ya pasó.
+	EstadoIncompatible = Clase{
+		Tipo:   "https://api.reservas/errores/estado-incompatible",
+		Titulo: "La reserva ya no está en ese estado",
+		Estado: http.StatusConflict,
+	}
+
 	ReglaNegocio = Clase{
 		Tipo:   "https://api.reservas/errores/regla-de-negocio",
 		Titulo: "La petición es válida pero viola una regla del negocio",
@@ -63,6 +92,16 @@ var (
 		Tipo:   "https://api.reservas/errores/no-implementado",
 		Titulo: "Esa parte del contrato todavía no está implementada",
 		Estado: http.StatusUnprocessableEntity,
+	}
+
+	// DemasiadasPeticiones es el límite de RNF-08 y de RF-12 A11. Se distingue
+	// de todo lo demás porque no es un fallo de quien lo recibe: es el sistema
+	// pidiéndole que espere, y necesita saberlo para dejar de pulsar un botón
+	// que ya no hace nada.
+	DemasiadasPeticiones = Clase{
+		Tipo:   "https://api.reservas/errores/demasiadas-peticiones",
+		Titulo: "Demasiadas peticiones seguidas",
+		Estado: http.StatusTooManyRequests,
 	}
 
 	Interno = Clase{

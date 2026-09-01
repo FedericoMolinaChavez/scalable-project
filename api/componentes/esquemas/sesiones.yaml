@@ -1,0 +1,55 @@
+# Identificación del cliente (RF-02).
+#
+# NO es RF-12. Esto solo resuelve que quien reservó como invitado pueda volver a
+# ver lo suyo: no hay cuenta, ni contraseña, ni refresco, ni sesión que listar o
+# revocar (eso es RF-25, y es de cuentas).
+
+SolicitudCodigo:
+  type: object
+  description: |
+    Pide un código al correo con el que se reservó.
+
+    La respuesta es SIEMPRE la misma exista o no ese correo (RF-12 A12). Una
+    respuesta que los distinguiera convertiría esta ruta en un buscador de
+    clientes del negocio: se prueban direcciones y las que contesten distinto
+    son las que reservaron.
+  required: [destino]
+  properties:
+    destino:
+      type: string
+      format: email
+      description: El correo con el que se hizo la reserva.
+      examples: ['ana@ejemplo.test']
+
+CanjeCodigo:
+  type: object
+  required: [destino, codigo]
+  properties:
+    destino:
+      type: string
+      format: email
+    codigo:
+      type: string
+      pattern: '^[0-9]{6}$'
+      description: |
+        Los seis dígitos recibidos. Un solo uso y tres intentos (RF-12 A2):
+        agotados, el código se quema y hay que pedir otro.
+      examples: ['042317']
+
+TokenAcceso:
+  type: object
+  description: |
+    Lo que se entrega al acertar el código.
+
+    Es de vigencia corta y no se puede revocar: un invitado no tiene sesión que
+    gestionar, así que la única defensa de este token es que caduque pronto. Por
+    eso viaja `expira_en`: la interfaz puede pedir que se identifique otra vez
+    ANTES de que falle una petición, en vez de después.
+  required: [token, expira_en]
+  properties:
+    token:
+      type: string
+      description: 'Se manda en la cabecera `Authorization: Bearer <token>`.'
+    expira_en:
+      type: string
+      format: date-time

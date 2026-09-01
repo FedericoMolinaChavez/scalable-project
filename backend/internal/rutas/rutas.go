@@ -21,6 +21,7 @@ import (
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/catalogo"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/consulta"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/disponibilidad"
+	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/identidad"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/nucleo"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/plataforma"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/transporte"
@@ -33,6 +34,13 @@ type Componentes struct {
 	Disponibilidad *disponibilidad.Servicio
 	Nucleo         *nucleo.Servicio
 	Consulta       *consulta.Servicio
+	Identidad      *identidad.Servicio
+
+	// Verificador comprueba los tokens de acceso. Es obligatorio en cuanto el
+	// proceso monte alguna ruta acotada, y Montar se niega a arrancar sin él:
+	// una ruta que exige identificación sin nadie que la compruebe no falla,
+	// es peor, sirve los datos igual.
+	Verificador Verificador
 }
 
 // Montar registra en el servidor las rutas de los componentes presentes.
@@ -84,6 +92,18 @@ func Montar(s *plataforma.Servidor, c Componentes, registro *slog.Logger, plazo 
 		s.Registrar(patron, transporte.Encadenar(manejador, medios...))
 	}
 
+	// Las rutas acotadas llevan un medio más, el que exige el token. Va el
+	// último de la cadena, ya con el identificador de petición asignado y
+	// dentro de la recuperación de pánico: un rechazo también tiene que poder
+	// buscarse en los registros.
+	acotada := func(patron string, manejador http.HandlerFunc) {
+		if c.Verificador == nil {
+			panic("rutas: " + patron + " exige identificación y no se pasó un Verificador")
+		}
+		s.Registrar(patron, transporte.Encadenar(manejador,
+			append(append([]transporte.Medio{}, medios...), exigirAcceso(c.Verificador))...))
+	}
+
 	if c.Catalogo != nil {
 		registrar("GET /v1/sedes", envoltura.ListarSedes)
 		registrar("GET /v1/servicios", envoltura.ListarServicios)
@@ -91,11 +111,20 @@ func Montar(s *plataforma.Servidor, c Componentes, registro *slog.Logger, plazo 
 	if c.Disponibilidad != nil {
 		registrar("GET /v1/disponibilidad", envoltura.ConsultarDisponibilidad)
 	}
+	if c.Identidad != nil {
+		// Públicas a propósito: son la puerta de entrada, y exigir un token
+		// para pedir un token sería circular.
+		registrar("POST /v1/sesiones/codigo", envoltura.SolicitarCodigo)
+		registrar("POST /v1/sesiones/token", envoltura.CanjearCodigo)
+	}
 	if c.Consulta != nil {
-		registrar("GET /v1/reservas", envoltura.ListarReservas)
-		registrar("GET /v1/reservas/{id}", envoltura.ObtenerReserva)
+		acotada("GET /v1/reservas", envoltura.ListarReservas)
+		acotada("GET /v1/reservas/{id}", envoltura.ObtenerReserva)
 	}
 	if c.Nucleo != nil {
+		// Crear es pública: RF-01 admite reservar como invitado, y es
+		// justamente eso lo que hace falta que exista RF-02 después.
 		registrar("POST /v1/reservas", envoltura.CrearReserva)
+		acotada("POST /v1/reservas/{id}/cancelacion", envoltura.CancelarReserva)
 	}
 }

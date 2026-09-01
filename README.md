@@ -41,16 +41,25 @@ opcional.
 ```bash
 cp .env.example .env
 task infra:up
-task back:run -- consulta   # :8081 — lecturas
-task back:run -- nucleo     # :8080 — escrituras
+task back:run -- consulta       # :8081 — lecturas
+task back:run -- nucleo         # :8080 — escrituras
+task back:run -- identidad      # :8082 — códigos y tokens
+task back:run -- trabajadores   # :8083 — expirador, transiciones, relay
 task front:dev
 ```
 
-Los dos servicios van en terminales distintas, y son dos y no uno por la razón
-de ARQ-01: la escritura y la lectura tienen fronteras transaccionales
-distintas. `/v1/reservas` lo sirven ambos —el `POST` el núcleo, el `GET` el de
-consulta—, y el proxy de Vite enruta por método. Está explicado en
-[backend/README.md](backend/README.md) y en `frontend/vite.config.ts`.
+Cada servicio va en su terminal, y son tres y no uno por la razón de ARQ-01: se
+separa por **frontera transaccional y dominio de fallo**. La escritura de una
+reserva debe ser atómica; la lectura no; y la identidad manda correo, así que un
+relé caído no puede arrastrar consigo la ruta de reserva.
+
+La consecuencia es que `/v1/reservas` lo sirven dos procesos —el `POST` el
+núcleo, el `GET` el de consulta— y el proxy de Vite enruta por método y por
+prefijo. Está explicado en [backend/README.md](backend/README.md) y en
+`frontend/vite.config.ts`.
+
+El correo de desarrollo lo captura Mailpit en <http://localhost:8025>: ahí se lee
+el código de RF-02 sin que salga nada fuera.
 
 `task` sin argumentos lista todo lo disponible. Los detalles de la
 infraestructura local están en [deploy/README.md](deploy/README.md).
@@ -64,6 +73,10 @@ y las restricciones del modo transacción se noten aquí y no en producción.
 ```bash
 task ci
 ```
+
+En GitHub corre además `task back:test:race` y `task db:test`, que en local son
+opcionales: el detector de carreras exige CGO y un compilador C que Windows no
+trae. Ver `.github/workflows/ci.yml`.
 
 ## Por qué un solo módulo Go
 

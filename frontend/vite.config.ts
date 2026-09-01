@@ -6,12 +6,13 @@ import { defineConfig, type Plugin } from 'vitest/config'
 
 // Los dos procesos del backend en desarrollo. En producción no existen: el
 // Gateway sirve todo desde el mismo origen (ARQ-01) y enruta por su cuenta.
-const NUCLEO = 'http://localhost:8080' // escritura
+const NUCLEO = 'http://localhost:8080' // escritura de reservas
 const CONSULTA = 'http://localhost:8081' // lectura, catálogo y disponibilidad
+const IDENTIDAD = 'http://localhost:8082' // códigos y tokens (RF-02)
 
-// Prefijo interno para las escrituras. No sale al backend: el proxy lo quita
-// antes de reenviar.
+// Prefijos internos. No salen al backend: el proxy los quita antes de reenviar.
 const ESCRITURA = '/__escritura'
+const SESION = '/__sesion'
 
 /**
  * Manda las escrituras al núcleo y todo lo demás al de consulta.
@@ -37,9 +38,15 @@ function enrutarEscrituras(): Plugin {
     name: 'reservas:enrutar-escrituras',
     configureServer(servidor) {
       servidor.middlewares.use((peticion, _respuesta, siguiente) => {
-        if (peticion.method === 'POST' && peticion.url?.startsWith('/v1/')) {
-          peticion.url = ESCRITURA + peticion.url
+        if (peticion.method !== 'POST' || !peticion.url?.startsWith('/v1/')) {
+          siguiente()
+          return
         }
+
+        // Las escrituras no van todas al mismo sitio: pedir un código es del
+        // servicio de identidad, que en ARQ-01 vive en el borde y tiene su
+        // propio dominio de fallo —manda correo—, no del núcleo de reservas.
+        peticion.url = (peticion.url.startsWith('/v1/sesiones/') ? SESION : ESCRITURA) + peticion.url
         siguiente()
       })
     },
@@ -58,7 +65,12 @@ export default defineConfig({
     // mismo origen (ARQ-01), y el cliente HTTP no tiene que comportarse
     // distinto en un sitio y en otro.
     proxy: {
-      // Primero el más específico: las escrituras ya reescritas.
+      // Primero los más específicos: las escrituras ya reescritas.
+      [`${SESION}/v1`]: {
+        target: IDENTIDAD,
+        changeOrigin: true,
+        rewrite: (ruta) => ruta.replace(SESION, ''),
+      },
       [`${ESCRITURA}/v1`]: {
         target: NUCLEO,
         changeOrigin: true,

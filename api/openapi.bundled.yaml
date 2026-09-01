@@ -19,11 +19,14 @@ tags:
   - name: disponibilidad
     description: Consulta de horarios libres (RF-26)
   - name: reservas
-    description: Creación y consulta de reservas (RF-01, RF-02, RF-03)
+    description: Creación y consulta de reservas (RF-01, RF-02, RF-03, RF-06)
+  - name: sesiones
+    description: Identificación del cliente por código de un solo uso (RF-02)
 paths:
   /v1/sedes:
     get:
       operationId: listarSedes
+      security: []
       summary: Sedes del tenant
       tags:
         - catalogo
@@ -43,6 +46,7 @@ paths:
   /v1/servicios:
     get:
       operationId: listarServicios
+      security: []
       summary: Servicios ofrecidos, opcionalmente filtrados por sede
       tags:
         - catalogo
@@ -68,6 +72,7 @@ paths:
   /v1/disponibilidad:
     get:
       operationId: consultarDisponibilidad
+      security: []
       summary: Franjas libres de un servicio en un rango
       description: |
         Sirve el 90% del tráfico (RNF-03) desde caché, con los 2 s de
@@ -114,12 +119,96 @@ paths:
           $ref: '#/components/responses/NoEncontrado'
         '500':
           $ref: '#/components/responses/ErrorInterno'
+  /v1/sesiones/codigo:
+    post:
+      operationId: solicitarCodigo
+      security: []
+      summary: Pedir un código para ver las reservas propias
+      description: |
+        Manda un código de seis dígitos al correo indicado (RF-02, con los
+        parámetros de RF-19: seis dígitos, vigencia corta, un solo uso).
+
+        **Responde igual exista o no ese correo** (RF-12 A12). Distinguirlos
+        permitiría enumerar quién ha reservado en el negocio probando direcciones.
+
+        Pedir un código nuevo invalida el anterior del mismo destino: tres códigos
+        vivos a la vez triplicarían lo que puede adivinar quien los esté probando.
+      tags:
+        - sesiones
+      parameters:
+        - $ref: '#/components/parameters/Tenant'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolicitudCodigo'
+      responses:
+        '202':
+          description: |
+            Aceptado. NO significa que el correo exista ni que se haya entregado
+            nada: significa que si existe, el código va en camino. Es un 202 y no
+            un 200 justamente porque no se puede afirmar el resultado sin
+            filtrarlo.
+        '400':
+          $ref: '#/components/responses/PeticionInvalida'
+        '429':
+          $ref: '#/components/responses/DemasiadasPeticiones'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /v1/sesiones/token:
+    post:
+      operationId: canjearCodigo
+      security: []
+      summary: Canjear el código por un token de acceso
+      tags:
+        - sesiones
+      parameters:
+        - $ref: '#/components/parameters/Tenant'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CanjeCodigo'
+      responses:
+        '200':
+          description: Código correcto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenAcceso'
+        '400':
+          $ref: '#/components/responses/PeticionInvalida'
+        '401':
+          description: |
+            El código no vale: equivocado, caducado, ya usado o inexistente. Los
+            cuatro casos responden igual, porque cada distinción le diría a quien
+            esté probando códigos si va por buen camino.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problema'
+        '429':
+          $ref: '#/components/responses/DemasiadasPeticiones'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
   /v1/reservas:
     get:
       operationId: listarReservas
-      summary: Reservas de la cuenta (RF-02, filtros de RF-09)
+      summary: Reservas de quien pide (RF-02, filtros de RF-09)
+      description: |
+        El alcance NO es fijo: sale de quién presenta el token (RF-23). Hoy solo
+        existe el token de invitado, así que devuelve las reservas hechas con el
+        correo que ese token acredita.
+
+        Cuando exista RF-12, la misma ruta devolverá las de la cuenta a un
+        `usuario` y las del tenant a un `administrador` (RF-32). Es una operación
+        con el alcance acotado por la cuenta, no tres rutas distintas por rol.
       tags:
         - reservas
+      security:
+        - TokenCliente: []
       parameters:
         - $ref: '#/components/parameters/Tenant'
         - name: estado
@@ -169,10 +258,13 @@ paths:
                 $ref: '#/components/schemas/ListaReservas'
         '400':
           $ref: '#/components/responses/PeticionInvalida'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
         '500':
           $ref: '#/components/responses/ErrorInterno'
     post:
       operationId: crearReserva
+      security: []
       summary: Crear una reserva (RF-01)
       description: |
         Ruta crítica de RNF-01: presupuesto de 200 ms. Devuelve una reserva
@@ -235,8 +327,14 @@ paths:
     get:
       operationId: obtenerReserva
       summary: Detalle de una reserva (RF-03)
+      description: |
+        Una reserva que existe pero es de otra persona responde `404`, no `403`.
+        Un 403 confirmaría que esa reserva existe, y con identificadores ajenos
+        eso permite comprobar cuáles son reales.
       tags:
         - reservas
+      security:
+        - TokenCliente: []
       parameters:
         - $ref: '#/components/parameters/Tenant'
         - name: id
@@ -252,11 +350,80 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Reserva'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
         '404':
           $ref: '#/components/responses/NoEncontrado'
         '500':
           $ref: '#/components/responses/ErrorInterno'
+  /v1/reservas/{id}/cancelacion:
+    post:
+      operationId: cancelarReserva
+      summary: Cancelar una reserva (RF-06)
+      description: |
+        Aplica la política que la reserva congeló al crearse, no la vigente hoy
+        (RF-15). Es lo que impide que un negocio endurezca su política el martes y
+        se la aplique a quien reservó el lunes bajo otras condiciones.
+
+        Fuera del plazo de cancelación responde `422` con lo que faltaba, no un
+        `403`: no es una cuestión de permisos, es que la regla del negocio no lo
+        permite en ese momento.
+
+        El reembolso NO ocurre aquí. Se dispara aparte (RF-29) y por eso la
+        respuesta no dice nada del dinero: prometerlo en esta respuesta sería
+        afirmar algo que este componente no puede garantizar.
+      tags:
+        - reservas
+      security:
+        - TokenCliente: []
+      parameters:
+        - $ref: '#/components/parameters/Tenant'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: La reserva, ya cancelada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reserva'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |
+            La reserva ya no está en un estado que se pueda cancelar: ya estaba
+            cancelada, ya se completó, o el bloqueo expiró solo.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problema'
+        '422':
+          $ref: '#/components/responses/NoProcesable'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
 components:
+  securitySchemes:
+    TokenCliente:
+      type: http
+      scheme: bearer
+      description: |
+        El token que devuelve `POST /v1/sesiones/token` tras acertar el código.
+
+        Acredita UNA cosa: que quien lo presenta controla ese correo. No hay
+        cuenta detrás, así que tampoco hay roles: el alcance es exactamente las
+        reservas hechas con esa dirección. Cuando exista RF-12, el mismo
+        encabezado transportará tokens de cuenta y el alcance saldrá del tipo
+        de cuenta (RF-23).
+
+        Es de vigencia corta y no se puede revocar. Un invitado no tiene sesión
+        que gestionar (RF-25 es de cuentas), así que caducar pronto es la única
+        defensa que tiene.
   parameters:
     Tenant:
       name: X-Tenant-Id
@@ -465,6 +632,60 @@ components:
           description: |
             Cuándo se calculó esta vista. El cliente puede saber así cuánta
             desactualización está viendo, dentro de los 2 s que RNF-10 permite.
+    SolicitudCodigo:
+      type: object
+      description: |
+        Pide un código al correo con el que se reservó.
+
+        La respuesta es SIEMPRE la misma exista o no ese correo (RF-12 A12). Una
+        respuesta que los distinguiera convertiría esta ruta en un buscador de
+        clientes del negocio: se prueban direcciones y las que contesten distinto
+        son las que reservaron.
+      required:
+        - destino
+      properties:
+        destino:
+          type: string
+          format: email
+          description: El correo con el que se hizo la reserva.
+          examples:
+            - ana@ejemplo.test
+    CanjeCodigo:
+      type: object
+      required:
+        - destino
+        - codigo
+      properties:
+        destino:
+          type: string
+          format: email
+        codigo:
+          type: string
+          pattern: ^[0-9]{6}$
+          description: |
+            Los seis dígitos recibidos. Un solo uso y tres intentos (RF-12 A2):
+            agotados, el código se quema y hay que pedir otro.
+          examples:
+            - '042317'
+    TokenAcceso:
+      type: object
+      description: |
+        Lo que se entrega al acertar el código.
+
+        Es de vigencia corta y no se puede revocar: un invitado no tiene sesión que
+        gestionar, así que la única defensa de este token es que caduque pronto. Por
+        eso viaja `expira_en`: la interfaz puede pedir que se identifique otra vez
+        ANTES de que falle una petición, en vez de después.
+      required:
+        - token
+        - expira_en
+      properties:
+        token:
+          type: string
+          description: 'Se manda en la cabecera `Authorization: Bearer <token>`.'
+        expira_en:
+          type: string
+          format: date-time
     EstadoReserva:
       type: string
       description: Estados de RF-28.
@@ -597,18 +818,32 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problema'
-    NoProcesable:
-      description: Sintácticamente válida pero viola una regla de negocio
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problema'
     DemasiadasPeticiones:
       description: Se superó la cuota de la cuenta o del agente (RNF-08)
       headers:
         Retry-After:
           schema:
             type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+    NoAutorizado:
+      description: |
+        Falta el token de acceso, o ya no vale. No distingue entre "no lo mandaste"
+        y "el que mandaste está mal": para quien prueba tokens, saber cuál de las
+        dos cosas falló es la mitad del trabajo hecho.
+
+        El vencimiento SÍ se distingue en el `type` del problema, y no es una
+        contradicción: caducar no es un fallo de quien lo presenta, es el
+        funcionamiento normal, y la interfaz tiene que poder decir "vuelve a
+        identificarte" en vez de "no eres tú".
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+    NoProcesable:
+      description: Sintácticamente válida pero viola una regla de negocio
       content:
         application/problem+json:
           schema:

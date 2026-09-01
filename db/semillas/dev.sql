@@ -61,13 +61,28 @@ VALUES ('11111111-1111-1111-1111-111111111111',
 ON CONFLICT DO NOTHING;
 
 -- Lunes a viernes, 9 a 17.
+--
+-- Con NOT EXISTS y no con ON CONFLICT. La unicidad la impone un indice con
+-- expresiones (regla_disponibilidad_uq, migracion 0009), y ON CONFLICT solo
+-- infiere un indice asi repitiendo sus expresiones enteras en la clausula: mas
+-- largo, y silenciosamente inutil en cuanto una de las dos copias cambie.
+--
+-- Antes esto decia ON CONFLICT DO NOTHING a secas y no tenia contra que chocar
+-- --la PK lleva un id generado-- asi que reaplicar la semilla duplicaba las
+-- cinco reglas sin dar ningun error, y la disponibilidad empezaba a devolver
+-- el doble de franjas.
 INSERT INTO negocio.regla_disponibilidad
   (tenant_id, recurso_id, dia_semana, hora_inicio, hora_fin)
 SELECT '11111111-1111-1111-1111-111111111111',
        '44444444-4444-4444-4444-444444444444',
        d, '09:00', '17:00'
 FROM generate_series(1, 5) AS d
-ON CONFLICT DO NOTHING;
+WHERE NOT EXISTS (
+  SELECT 1 FROM negocio.regla_disponibilidad
+  WHERE tenant_id  = '11111111-1111-1111-1111-111111111111'
+    AND recurso_id = '44444444-4444-4444-4444-444444444444'
+    AND dia_semana = d
+);
 
 INSERT INTO negocio.politica_version
   (tenant_id, id, servicio_id, version,
@@ -146,7 +161,12 @@ SELECT 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
        'dddddddd-dddd-dddd-dddd-dddddddddddd',
        d, '09:00', '17:00'
 FROM generate_series(1, 5) AS d
-ON CONFLICT DO NOTHING;
+WHERE NOT EXISTS (
+  SELECT 1 FROM negocio.regla_disponibilidad
+  WHERE tenant_id  = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+    AND recurso_id = 'dddddddd-dddd-dddd-dddd-dddddddddddd'
+    AND dia_semana = d
+);
 
 INSERT INTO negocio.politica_version
   (tenant_id, id, servicio_id, version,

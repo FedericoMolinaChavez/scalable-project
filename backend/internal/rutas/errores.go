@@ -9,6 +9,7 @@ import (
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/datos"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/disponibilidad"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/dominio"
+	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/identidad"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/nucleo"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/transporte"
 )
@@ -56,6 +57,26 @@ func clasificar(err error) (transporte.Clase, string) {
 
 	case errors.Is(err, nucleo.ErrVoucherNoSoportado):
 		return transporte.NoImplementado, err.Error()
+
+	// ------------------------------------------------------------- 409 --
+	// No es un fallo de la petición: la reserva simplemente ya no está en un
+	// estado desde el que se pueda cancelar. Es un conflicto con el estado
+	// actual del recurso, que es exactamente lo que significa un 409.
+	case errors.Is(err, nucleo.ErrNoCancelable):
+		return transporte.EstadoIncompatible, err.Error()
+
+	// ------------------------------------------------------------- 422 --
+	// Fuera de plazo es una regla del negocio, no un permiso: la respuesta
+	// lleva cuántas horas hacían falta, porque "no se puede" a secas obliga a
+	// adivinar por qué.
+	case errors.Is(err, nucleo.ErrFueraDePlazo):
+		return transporte.ReglaNegocio, err.Error()
+
+	// ------------------------------------------------------------- 401 --
+	case errors.Is(err, identidad.ErrTokenVencido):
+		return transporte.TokenVencido, ""
+	case errors.Is(err, identidad.ErrTokenInvalido), errors.Is(err, consulta.ErrSinAlcance):
+		return transporte.NoAutorizado, ""
 
 	// ------------------------------------------------------------- 500 --
 	default:

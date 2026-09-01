@@ -1,15 +1,7 @@
 import { queryOptions } from '@tanstack/react-query'
 
-import { cliente, ErrorApi } from './cliente'
-
-/**
- * Tenant de desarrollo. Provisional, igual que la cabecera que lo transporta:
- * cuando exista autenticación (RF-12) saldrá del token y esto desaparece.
- */
-const TENANT = '11111111-1111-1111-1111-111111111111'
-
-/** Se exporta porque la escritura de `mutaciones.ts` manda la misma cabecera. */
-export const cabeceras = { 'X-Tenant-Id': TENANT }
+import { cabeceras, cliente, ErrorApi } from './cliente'
+import { autorizacion } from './sesion'
 
 /**
  * Claves de caché, centralizadas.
@@ -75,12 +67,20 @@ export const consultaDisponibilidad = (servicioId: string, desde: string, hasta:
     staleTime: 2_000,
   })
 
+/**
+ * Las reservas de quien se identificó (RF-02).
+ *
+ * Lleva el token, y sin él la API responde 401. La cabecera se resuelve dentro
+ * de `queryFn` y no al construir las opciones: `autorizacion()` lee la sesión
+ * vigente en el momento de la petición, y evaluarla antes congelaría el token
+ * de cuando se montó el componente —justo el que acaba de caducar—.
+ */
 export const consultaReservas = () =>
   queryOptions({
     queryKey: claves.reservas(),
     queryFn: async () => {
       const { data, error, response } = await cliente.GET('/v1/reservas', {
-        params: { header: cabeceras },
+        params: { header: { ...cabeceras, ...autorizacion() } },
       })
       if (error) throw new ErrorApi(response.status, error)
       return data.datos
@@ -92,7 +92,7 @@ export const consultaReserva = (id: string) =>
     queryKey: claves.reserva(id),
     queryFn: async () => {
       const { data, error, response } = await cliente.GET('/v1/reservas/{id}', {
-        params: { header: cabeceras, path: { id } },
+        params: { header: { ...cabeceras, ...autorizacion() }, path: { id } },
       })
       if (error) throw new ErrorApi(response.status, error)
       return data

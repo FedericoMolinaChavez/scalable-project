@@ -1,0 +1,69 @@
+# Identificación del cliente por código de un solo uso (RF-02).
+
+codigo:
+  post:
+    operationId: solicitarCodigo
+    security: []  # es la puerta de entrada: exigir token aqui seria circular
+    summary: Pedir un código para ver las reservas propias
+    description: |
+      Manda un código de seis dígitos al correo indicado (RF-02, con los
+      parámetros de RF-19: seis dígitos, vigencia corta, un solo uso).
+
+      **Responde igual exista o no ese correo** (RF-12 A12). Distinguirlos
+      permitiría enumerar quién ha reservado en el negocio probando direcciones.
+
+      Pedir un código nuevo invalida el anterior del mismo destino: tres códigos
+      vivos a la vez triplicarían lo que puede adivinar quien los esté probando.
+    tags: [sesiones]
+    parameters:
+      - $ref: '../componentes/parametros.yaml#/Tenant'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../componentes/esquemas/sesiones.yaml#/SolicitudCodigo'
+    responses:
+      '202':
+        description: |
+          Aceptado. NO significa que el correo exista ni que se haya entregado
+          nada: significa que si existe, el código va en camino. Es un 202 y no
+          un 200 justamente porque no se puede afirmar el resultado sin
+          filtrarlo.
+      '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '429': { $ref: '../componentes/respuestas.yaml#/DemasiadasPeticiones' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+token:
+  post:
+    operationId: canjearCodigo
+    security: []  # el codigo ES la credencial; el token sale de aqui
+    summary: Canjear el código por un token de acceso
+    tags: [sesiones]
+    parameters:
+      - $ref: '../componentes/parametros.yaml#/Tenant'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../componentes/esquemas/sesiones.yaml#/CanjeCodigo'
+    responses:
+      '200':
+        description: Código correcto
+        content:
+          application/json:
+            schema:
+              $ref: '../componentes/esquemas/sesiones.yaml#/TokenAcceso'
+      '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '401':
+        description: |
+          El código no vale: equivocado, caducado, ya usado o inexistente. Los
+          cuatro casos responden igual, porque cada distinción le diría a quien
+          esté probando códigos si va por buen camino.
+        content:
+          application/problem+json:
+            schema:
+              $ref: '../componentes/esquemas/comunes.yaml#/Problema'
+      '429': { $ref: '../componentes/respuestas.yaml#/DemasiadasPeticiones' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }

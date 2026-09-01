@@ -64,6 +64,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sesiones/codigo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pedir un código para ver las reservas propias
+         * @description Manda un código de seis dígitos al correo indicado (RF-02, con los
+         *     parámetros de RF-19: seis dígitos, vigencia corta, un solo uso).
+         *
+         *     **Responde igual exista o no ese correo** (RF-12 A12). Distinguirlos
+         *     permitiría enumerar quién ha reservado en el negocio probando direcciones.
+         *
+         *     Pedir un código nuevo invalida el anterior del mismo destino: tres códigos
+         *     vivos a la vez triplicarían lo que puede adivinar quien los esté probando.
+         */
+        post: operations["solicitarCodigo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sesiones/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Canjear el código por un token de acceso */
+        post: operations["canjearCodigo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/reservas": {
         parameters: {
             query?: never;
@@ -71,7 +115,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Reservas de la cuenta (RF-02, filtros de RF-09) */
+        /**
+         * Reservas de quien pide (RF-02, filtros de RF-09)
+         * @description El alcance NO es fijo: sale de quién presenta el token (RF-23). Hoy solo
+         *     existe el token de invitado, así que devuelve las reservas hechas con el
+         *     correo que ese token acredita.
+         *
+         *     Cuando exista RF-12, la misma ruta devolverá las de la cuenta a un
+         *     `usuario` y las del tenant a un `administrador` (RF-32). Es una operación
+         *     con el alcance acotado por la cuenta, no tres rutas distintas por rol.
+         */
         get: operations["listarReservas"];
         put?: never;
         /**
@@ -98,10 +151,45 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Detalle de una reserva (RF-03) */
+        /**
+         * Detalle de una reserva (RF-03)
+         * @description Una reserva que existe pero es de otra persona responde `404`, no `403`.
+         *     Un 403 confirmaría que esa reserva existe, y con identificadores ajenos
+         *     eso permite comprobar cuáles son reales.
+         */
         get: operations["obtenerReserva"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reservas/{id}/cancelacion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancelar una reserva (RF-06)
+         * @description Aplica la política que la reserva congeló al crearse, no la vigente hoy
+         *     (RF-15). Es lo que impide que un negocio endurezca su política el martes y
+         *     se la aplique a quien reservó el lunes bajo otras condiciones.
+         *
+         *     Fuera del plazo de cancelación responde `422` con lo que faltaba, no un
+         *     `403`: no es una cuestión de permisos, es que la regla del negocio no lo
+         *     permite en ese momento.
+         *
+         *     El reembolso NO ocurre aquí. Se dispara aparte (RF-29) y por eso la
+         *     respuesta no dice nada del dinero: prometerlo en esta respuesta sería
+         *     afirmar algo que este componente no puede garantizar.
+         */
+        post: operations["cancelarReserva"];
         delete?: never;
         options?: never;
         head?: never;
@@ -221,6 +309,46 @@ export interface components {
             calculada_en: string;
         };
         /**
+         * @description Pide un código al correo con el que se reservó.
+         *
+         *     La respuesta es SIEMPRE la misma exista o no ese correo (RF-12 A12). Una
+         *     respuesta que los distinguiera convertiría esta ruta en un buscador de
+         *     clientes del negocio: se prueban direcciones y las que contesten distinto
+         *     son las que reservaron.
+         */
+        SolicitudCodigo: {
+            /**
+             * Format: email
+             * @description El correo con el que se hizo la reserva.
+             * @example ana@ejemplo.test
+             */
+            destino: string;
+        };
+        CanjeCodigo: {
+            /** Format: email */
+            destino: string;
+            /**
+             * @description Los seis dígitos recibidos. Un solo uso y tres intentos (RF-12 A2):
+             *     agotados, el código se quema y hay que pedir otro.
+             * @example 042317
+             */
+            codigo: string;
+        };
+        /**
+         * @description Lo que se entrega al acertar el código.
+         *
+         *     Es de vigencia corta y no se puede revocar: un invitado no tiene sesión que
+         *     gestionar, así que la única defensa de este token es que caduque pronto. Por
+         *     eso viaja `expira_en`: la interfaz puede pedir que se identifique otra vez
+         *     ANTES de que falle una petición, en vez de después.
+         */
+        TokenAcceso: {
+            /** @description Se manda en la cabecera `Authorization: Bearer <token>`. */
+            token: string;
+            /** Format: date-time */
+            expira_en: string;
+        };
+        /**
          * @description Estados de RF-28.
          * @enum {string}
          */
@@ -309,8 +437,27 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problema"];
             };
         };
-        /** @description Sintácticamente válida pero viola una regla de negocio */
-        NoProcesable: {
+        /** @description Se superó la cuota de la cuenta o del agente (RNF-08) */
+        DemasiadasPeticiones: {
+            headers: {
+                "Retry-After"?: number;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problema"];
+            };
+        };
+        /**
+         * @description Falta el token de acceso, o ya no vale. No distingue entre "no lo mandaste"
+         *     y "el que mandaste está mal": para quien prueba tokens, saber cuál de las
+         *     dos cosas falló es la mitad del trabajo hecho.
+         *
+         *     El vencimiento SÍ se distingue en el `type` del problema, y no es una
+         *     contradicción: caducar no es un fallo de quien lo presenta, es el
+         *     funcionamiento normal, y la interfaz tiene que poder decir "vuelve a
+         *     identificarte" en vez de "no eres tú".
+         */
+        NoAutorizado: {
             headers: {
                 [name: string]: unknown;
             };
@@ -318,10 +465,9 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problema"];
             };
         };
-        /** @description Se superó la cuota de la cuenta o del agente (RNF-08) */
-        DemasiadasPeticiones: {
+        /** @description Sintácticamente válida pero viola una regla de negocio */
+        NoProcesable: {
             headers: {
-                "Retry-After"?: number;
                 [name: string]: unknown;
             };
             content: {
@@ -443,6 +589,92 @@ export interface operations {
             500: components["responses"]["ErrorInterno"];
         };
     };
+    solicitarCodigo: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+                 *     (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+                 *     de un cliente en producción permitiría leer los datos de cualquier otro
+                 *     tenant.
+                 */
+                "X-Tenant-Id": components["parameters"]["Tenant"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SolicitudCodigo"];
+            };
+        };
+        responses: {
+            /**
+             * @description Aceptado. NO significa que el correo exista ni que se haya entregado
+             *     nada: significa que si existe, el código va en camino. Es un 202 y no
+             *     un 200 justamente porque no se puede afirmar el resultado sin
+             *     filtrarlo.
+             */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["PeticionInvalida"];
+            429: components["responses"]["DemasiadasPeticiones"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    canjearCodigo: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+                 *     (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+                 *     de un cliente en producción permitiría leer los datos de cualquier otro
+                 *     tenant.
+                 */
+                "X-Tenant-Id": components["parameters"]["Tenant"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CanjeCodigo"];
+            };
+        };
+        responses: {
+            /** @description Código correcto */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenAcceso"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            /**
+             * @description El código no vale: equivocado, caducado, ya usado o inexistente. Los
+             *     cuatro casos responden igual, porque cada distinción le diría a quien
+             *     esté probando códigos si va por buen camino.
+             */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            429: components["responses"]["DemasiadasPeticiones"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
     listarReservas: {
         parameters: {
             query?: {
@@ -481,6 +713,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
             500: components["responses"]["ErrorInterno"];
         };
     };
@@ -570,7 +803,54 @@ export interface operations {
                     "application/json": components["schemas"]["Reserva"];
                 };
             };
+            401: components["responses"]["NoAutorizado"];
             404: components["responses"]["NoEncontrado"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    cancelarReserva: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+                 *     (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+                 *     de un cliente en producción permitiría leer los datos de cualquier otro
+                 *     tenant.
+                 */
+                "X-Tenant-Id": components["parameters"]["Tenant"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La reserva, ya cancelada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reserva"];
+                };
+            };
+            401: components["responses"]["NoAutorizado"];
+            404: components["responses"]["NoEncontrado"];
+            /**
+             * @description La reserva ya no está en un estado que se pueda cancelar: ya estaba
+             *     cancelada, ya se completó, o el bloqueo expiró solo.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            422: components["responses"]["NoProcesable"];
             500: components["responses"]["ErrorInterno"];
         };
     };

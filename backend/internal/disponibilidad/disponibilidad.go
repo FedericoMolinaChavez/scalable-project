@@ -10,13 +10,17 @@ package disponibilidad
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/api"
+	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/cache"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/datos"
 )
 
@@ -28,13 +32,35 @@ import (
 // el mes que muestra un calendario.
 const VentanaMaxima = 31 * 24 * time.Hour
 
-// Servicio calcula disponibilidad.
-type Servicio struct {
-	bd *datos.BD
+// Staleness es la desactualización que RNF-10 autoriza, y por tanto la vigencia
+// exacta de lo que se guarda en el caché.
+//
+// No es configurable a propósito. Es un número del requisito, no del
+// despliegue: subirlo rompería RNF-10 en silencio, y bajarlo tiraría por la
+// borda la razón de que el caché exista. El cliente cachea lo mismo
+// (`staleTime: 2_000` en consultas.ts) y por el mismo motivo.
+const Staleness = 2 * time.Second
+
+// Caché es lo que este servicio necesita de Valkey. Es una interfaz y no el
+// tipo concreto para poder probar el camino sin caché y el de caché caído sin
+// levantar ni apagar nada.
+type Caché interface {
+	Leer(ctx context.Context, clave string) ([]byte, error)
+	Guardar(ctx context.Context, clave string, valor []byte, vigencia time.Duration) error
 }
 
-func Nuevo(bd *datos.BD) *Servicio {
-	return &Servicio{bd: bd}
+// Servicio calcula disponibilidad.
+type Servicio struct {
+	bd       *datos.BD
+	cache    Caché
+	registro *slog.Logger
+}
+
+// Nuevo construye el servicio. `cache` puede ser nil: entonces cada consulta va
+// a PostgreSQL, que es correcto pero es exactamente lo que RNF-03 no aguanta a
+// escala. Se admite nil para que las pruebas puedan medir el camino de abajo.
+func Nuevo(bd *datos.BD, cache Caché, registro *slog.Logger) *Servicio {
+	return &Servicio{bd: bd, cache: cache, registro: registro}
 }
 
 // ErrRangoInvalido: `hasta` no es posterior a `desde`. Un rango vacío no es
@@ -78,6 +104,14 @@ func (e ErrVentanaExcesiva) Error() string {
 // perfectamente una reserva de ayer, y así debe ser, porque el administrador
 // necesitará registrar asistencias a posteriori (RF-32)—, así que lo filtra
 // esta consulta, que es la que sirve a quien está eligiendo una cita.
+//
+// Sobre el DISTINCT: una franja libre es una franja, la cubran una regla o
+// tres. Dos reglas SOLAPADAS del mismo recurso —"lunes de 9 a 17" y "lunes de
+// 13 a 15", que un administrador puede configurar sin querer— producen la misma
+// franja dos veces por el join con `ventanas`, y el cliente la pintaría
+// duplicada. Las reglas idénticas ya no pueden existir (regla_disponibilidad_uq,
+// migración 0009); las solapadas sí, y son configuración legítima aunque
+// redundante.
 //
 // Sobre las pendientes vencidas: solo ocupan cupo las confirmadas y las
 // pendientes cuyo expira_en no ha pasado. El predicado de la restricción
@@ -144,7 +178,13 @@ franjas AS (
     make_interval(mins => s.duracion_min)
   ) AS g(inicio)
 )
-SELECT f.recurso_id::text, lower(f.periodo), upper(f.periodo)
+-- Con alias, y el ORDER BY sobre ellos: con SELECT DISTINCT, PostgreSQL exige
+-- que lo que ordena esté en la lista de selección, y f.recurso_id a secas no lo
+-- está: lo que se selecciona es su conversión a texto.
+SELECT DISTINCT
+       f.recurso_id::text  AS recurso_id,
+       lower(f.periodo)    AS inicio,
+       upper(f.periodo)    AS fin
 FROM franjas f
 CROSS JOIN parametros p
 CROSS JOIN servicio s
@@ -162,7 +202,7 @@ WHERE f.periodo <@ tstzrange(p.desde, p.hasta, '[)')
     WHERE e.periodo && f.periodo
       AND (e.recurso_id = f.recurso_id OR e.sede_id = s.sede_id)
   )
-ORDER BY lower(f.periodo), f.recurso_id`
+ORDER BY inicio, recurso_id`
 
 // Consultar devuelve las franjas libres de un servicio en [desde, hasta).
 //
@@ -177,6 +217,14 @@ func (s *Servicio) Consultar(
 	}
 	if hasta.Sub(desde) > VentanaMaxima {
 		return api.Disponibilidad{}, ErrVentanaExcesiva{Maxima: VentanaMaxima}
+	}
+
+	// El caché va delante de todo lo demás: es el 90% del tráfico de RNF-03, y
+	// servirlo desde aquí es lo que hace que ese número sea sostenible contra
+	// las réplicas. Un acierto no toca PostgreSQL en absoluto.
+	clave := claveCache(tenant, servicio, desde, hasta)
+	if guardada, hay := s.desdeCache(ctx, clave); hay {
+		return guardada, nil
 	}
 
 	resultado := api.Disponibilidad{
@@ -234,5 +282,75 @@ func (s *Servicio) Consultar(
 	// mentiría por el tiempo que tardó la consulta.
 	resultado.CalculadaEn = time.Now().UTC()
 
+	// Se guarda CON su calculada_en dentro. Es la diferencia entre un campo
+	// útil y uno decorativo: si se sellara al servir, cada respuesta desde el
+	// caché diría "recién calculado" y el cliente no podría saber que está
+	// mirando algo de hace dos segundos, que es justo lo que el campo existe
+	// para contarle.
+	s.aCache(ctx, clave, resultado)
+
 	return resultado, nil
+}
+
+// claveCache identifica una proyección.
+//
+// El tenant va SIEMPRE dentro. Es la única línea que separa una respuesta
+// cacheada de una fuga entre negocios: bajo RLS la consulta no puede devolver
+// filas de otro tenant, pero el caché está por encima de RLS y una clave sin
+// tenant serviría lo de uno a otro sin que PostgreSQL llegara a enterarse.
+//
+// Los instantes van en Unix y no formateados: dos representaciones del mismo
+// momento producirían dos claves para la misma pregunta.
+func claveCache(tenant, servicio uuid.UUID, desde, hasta time.Time) string {
+	return fmt.Sprintf("disp:%s:%s:%d:%d",
+		tenant, servicio, desde.UTC().Unix(), hasta.UTC().Unix())
+}
+
+// desdeCache intenta servir sin tocar PostgreSQL.
+//
+// Cualquier problema —caché ausente, Valkey caído, valor ilegible— devuelve
+// "no hay" y la consulta sigue contra el motor. El caché acelera; no decide, y
+// no puede impedir que se responda.
+func (s *Servicio) desdeCache(ctx context.Context, clave string) (api.Disponibilidad, bool) {
+	if s.cache == nil {
+		return api.Disponibilidad{}, false
+	}
+
+	crudo, err := s.cache.Leer(ctx, clave)
+	if err != nil {
+		// Un fallo de caché es el caso normal la primera vez y no merece una
+		// línea de registro; un Valkey caído sí, porque significa que TODO el
+		// tráfico está cayendo sobre las réplicas.
+		if !errors.Is(err, cache.ErrVacio) {
+			s.registro.WarnContext(ctx, "el caché de disponibilidad no responde; se sirve desde PostgreSQL",
+				slog.String("error", err.Error()))
+		}
+		return api.Disponibilidad{}, false
+	}
+
+	var guardada api.Disponibilidad
+	if err := json.Unmarshal(crudo, &guardada); err != nil {
+		// Un valor ilegible es un formato viejo tras un despliegue. No es un
+		// error que propagar: caduca solo en 2 s y mientras tanto se sirve
+		// desde el motor.
+		return api.Disponibilidad{}, false
+	}
+
+	return guardada, true
+}
+
+func (s *Servicio) aCache(ctx context.Context, clave string, resultado api.Disponibilidad) {
+	if s.cache == nil {
+		return
+	}
+
+	crudo, err := json.Marshal(resultado)
+	if err != nil {
+		return
+	}
+
+	if err := s.cache.Guardar(ctx, clave, crudo, Staleness); err != nil {
+		s.registro.WarnContext(ctx, "no se pudo guardar la proyección de disponibilidad",
+			slog.String("error", err.Error()))
+	}
 }

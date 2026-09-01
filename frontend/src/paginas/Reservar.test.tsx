@@ -36,6 +36,11 @@ const FRANJA = {
 
 const fetchSimulado = vi.fn()
 
+/** Las peticiones que se hicieron, ya tipadas: mock.calls es any[][]. */
+function peticiones(): Request[] {
+  return fetchSimulado.mock.calls.map((llamada) => llamada[0] as Request)
+}
+
 /** Enruta cada petición simulada según su URL, como haría el backend real. */
 function responder(porRuta: {
   disponibilidad?: () => Response
@@ -106,12 +111,12 @@ describe('Reservar', () => {
     renderizar(<Reservar />)
 
     await waitFor(() => {
-      const llamadas = fetchSimulado.mock.calls.map(([p]: [Request]) => new URL(p.url))
+      const llamadas = peticiones().map((p) => new URL(p.url))
       expect(llamadas.some((u) => u.pathname === '/v1/disponibilidad')).toBe(true)
     })
 
-    const url = fetchSimulado.mock.calls
-      .map(([p]: [Request]) => new URL(p.url))
+    const url = peticiones()
+      .map((p) => new URL(p.url))
       .find((u) => u.pathname === '/v1/disponibilidad')!
 
     // La medianoche de Bogotá es la 05:00 UTC. Si la ventana empezara a las
@@ -150,8 +155,7 @@ describe('Reservar', () => {
     await usuario.click(screen.getByRole('button', { name: '09:00 – 10:00' }))
 
     await waitFor(() => {
-      const post = fetchSimulado.mock.calls
-        .map(([p]: [Request]) => p)
+      const post = peticiones()
         .find((p) => p.method === 'POST')
       expect(post).toBeDefined()
 
@@ -202,7 +206,7 @@ describe('Reservar', () => {
 
     // Reintentar un 409 es insistir en un cupo que ya no está, y multiplica la
     // carga sobre el núcleo justo cuando hay contención (RF-01, alt. 3).
-    const escrituras = fetchSimulado.mock.calls.filter(([p]: [Request]) => p.method === 'POST')
+    const escrituras = peticiones().filter((p) => p.method === "POST")
     expect(escrituras).toHaveLength(1)
   })
 
@@ -215,9 +219,7 @@ describe('Reservar', () => {
 
     await screen.findByRole('button', { name: '09:00 – 10:00' })
     const consultasAntes = () =>
-      fetchSimulado.mock.calls.filter(
-        ([p]: [Request]) => new URL(p.url).pathname === '/v1/disponibilidad',
-      ).length
+      peticiones().filter((p) => new URL(p.url).pathname === "/v1/disponibilidad").length
 
     const antes = consultasAntes()
     await rellenarContacto(usuario)
