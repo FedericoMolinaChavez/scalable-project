@@ -1,0 +1,18 @@
+# Configuración del generador de Go. El generador está fijado en backend/go.mod
+# con la directiva `tool`, así que su versión viaja con el repositorio y no
+# depende de lo que cada máquina tenga instalado.
+package: api
+output: ../backend/internal/api/api.gen.go
+
+generate:
+  # Interfaz de servidor sobre net/http, coherente con la decisión de no usar
+  # framework: el enrutado por patrones de Go 1.22+ basta.
+  std-http-server: true
+  models: true
+  strict-server: true
+
+output-options:
+  # Con esto el manejador devuelve (respuesta, error) tipados en vez de
+  # escribir en el ResponseWriter a mano. El compilador pasa a garantizar que
+  # cada ruta solo devuelve los códigos que el contrato declara.
+  skip-prune: false

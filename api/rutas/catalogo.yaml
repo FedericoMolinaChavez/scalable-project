@@ -1,0 +1,44 @@
+# Catálogo: sedes y servicios (RF-26).
+
+sedes:
+  get:
+    operationId: listarSedes
+    # Publica a proposito: el catalogo de un negocio se puede mirar sin
+    # identificarse. security vacio lo dice explicitamente, para que se lea
+    # como una decision y no como un olvido.
+    security: []
+    summary: Sedes del tenant
+    tags: [catalogo]
+    parameters:
+      - $ref: '../componentes/parametros.yaml#/Tenant'
+    responses:
+      '200':
+        description: Listado de sedes
+        content:
+          application/json:
+            schema:
+              $ref: '../componentes/esquemas/catalogo.yaml#/ListaSedes'
+      '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+servicios:
+  get:
+    operationId: listarServicios
+    security: []  # publica, igual que las sedes
+    summary: Servicios ofrecidos, opcionalmente filtrados por sede
+    tags: [catalogo]
+    parameters:
+      - $ref: '../componentes/parametros.yaml#/Tenant'
+      - name: sede_id
+        in: query
+        required: false
+        schema: { type: string, format: uuid }
+    responses:
+      '200':
+        description: Listado de servicios
+        content:
+          application/json:
+            schema:
+              $ref: '../componentes/esquemas/catalogo.yaml#/ListaServicios'
+      '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }

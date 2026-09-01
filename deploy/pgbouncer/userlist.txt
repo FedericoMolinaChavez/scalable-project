@@ -1,0 +1,5 @@
+;; Credenciales de desarrollo. app_dev / dev lo crea db/semillas/dev.sql.
+;; En produccion no existe este archivo: los usuarios de conexion los crea
+;; CloudNativePG con sealed secrets (db/README.md).
+"app_dev" "dev"
+"postgres" "postgres"

@@ -1,0 +1,109 @@
+# =============================================================================
+# Puerta de calidad
+# =============================================================================
+# Corre lo mismo que `task ci` en local, con dos diferencias que solo son
+# posibles aqui:
+#
+#   1. `back:test:race` en vez de `back:test`. El detector de carreras exige
+#      CGO y un compilador C que Windows no trae, asi que en local es opcional
+#      y aqui es obligatorio. Es la variante que de verdad importa: 45 pods
+#      escribiendo sin coordinarse (ARQ-03) no perdonan una carrera.
+#   2. `db:test`, que levanta su propio PostgreSQL desechable y comprueba las
+#      invariantes del motor y la prueba de concurrencia con pgbench.
+#
+# La infraestructura se levanta con el compose DEL REPOSITORIO y no con los
+# `services:` del runner. No es comodidad: los `services:` publicarian
+# PostgreSQL directamente, y entonces las pruebas de Go no pasarian por
+# PgBouncer en modo transaccion, que es justo donde se manifiestan el SET LOCAL
+# del tenant y la prohibicion de prepared statements cacheados. Probar sin el
+# pooler es probar otro sistema.
+# =============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Un push nuevo cancela el anterior de la misma rama: la respuesta que importa
+# es la del ultimo commit.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Las versiones salen de los archivos que ya las fijan, no de literales
+      # aqui: un literal duplicado se desincroniza del proyecto sin que nada lo
+      # note.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: arduino/setup-task@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Version fijada, no `latest`. Un linter que se actualiza solo convierte
+      # cualquier regla nueva en un fallo de CI sobre codigo que nadie toco, en
+      # un commit que no tiene nada que ver. Es la misma que corre en local.
+      - name: Instalar golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh \
+            | sh -s -- -b "$(go env GOPATH)/bin" v2.13.2
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      # El Taskfile lee el .env con `dotenv:`. Se copia el ejemplo tal cual, que
+      # es el mismo primer paso que documenta el README para desarrollo: si el
+      # ejemplo se queda corto, CI falla igual que le fallaria a alguien que
+      # clone el repositorio y siga las instrucciones.
+      - name: Preparar el entorno
+        run: cp .env.example .env
+
+      - name: Levantar la infraestructura
+        run: task infra:up
+
+      - name: Instalar dependencias del frontend
+        run: task front:install
+
+      # --- La puerta, paso a paso -------------------------------------------
+      # Separados y no como un unico `task ci` para que el paso que falla se vea
+      # en la lista sin abrir el registro.
+
+      - name: Contrato al dia con el codigo generado
+        run: task api:verificar
+
+      - name: Lint del backend
+        run: task back:lint
+
+      - name: Pruebas del backend CON detector de carreras
+        run: task back:test:race
+
+      - name: Lint del frontend
+        run: task front:lint
+
+      - name: Pruebas del frontend
+        run: task front:test
+
+      - name: Invariantes y concurrencia en el motor
+        run: task db:test
+
+      # Si algo falla, el registro de la infraestructura suele decir por que
+      # antes que el de la prueba.
+      - name: Registros de la infraestructura
+        if: failure()
+        run: docker compose -f deploy/docker-compose.yml logs --tail=100

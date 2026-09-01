@@ -1,0 +1,23 @@
+# Franjas libres (RF-26).
+
+Franja:
+  type: object
+  required: [periodo, recurso_id]
+  properties:
+    periodo: { $ref: './comunes.yaml#/Periodo' }
+    recurso_id: { type: string, format: uuid }
+
+Disponibilidad:
+  type: object
+  required: [servicio_id, franjas, calculada_en]
+  properties:
+    servicio_id: { type: string, format: uuid }
+    franjas:
+      type: array
+      items: { $ref: './disponibilidad.yaml#/Franja' }
+    calculada_en:
+      type: string
+      format: date-time
+      description: |
+        Cuándo se calculó esta vista. El cliente puede saber así cuánta
+        desactualización está viendo, dentro de los 2 s que RNF-10 permite.

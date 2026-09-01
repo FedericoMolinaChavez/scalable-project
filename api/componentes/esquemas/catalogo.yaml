@@ -1,0 +1,52 @@
+# Sedes y servicios (RF-26, RF-30).
+
+EstadoCatalogo:
+  type: string
+  enum: [activo, inactivo]
+
+Sede:
+  type: object
+  required: [id, nombre, zona_horaria, estado]
+  properties:
+    id: { type: string, format: uuid }
+    nombre: { type: string }
+    zona_horaria:
+      type: string
+      description: |
+        Identificador IANA. Se guarda por sede y no global porque un tenant
+        puede operar en varias zonas (RF-38), y una franja horaria sin zona es
+        ambigua dos veces al año.
+      examples: ['America/Bogota']
+    direccion: { type: string }
+    estado: { $ref: './catalogo.yaml#/EstadoCatalogo' }
+
+ListaSedes:
+  type: object
+  required: [datos]
+  properties:
+    datos:
+      type: array
+      items: { $ref: './catalogo.yaml#/Sede' }
+
+Servicio:
+  type: object
+  required: [id, sede_id, nombre, duracion_min, precio, estado]
+  properties:
+    id: { type: string, format: uuid }
+    sede_id: { type: string, format: uuid }
+    nombre: { type: string }
+    descripcion: { type: string }
+    duracion_min:
+      type: integer
+      minimum: 1
+      description: Duración en minutos.
+    precio: { $ref: './comunes.yaml#/Dinero' }
+    estado: { $ref: './catalogo.yaml#/EstadoCatalogo' }
+
+ListaServicios:
+  type: object
+  required: [datos]
+  properties:
+    datos:
+      type: array
+      items: { $ref: './catalogo.yaml#/Servicio' }

@@ -1,0 +1,76 @@
+# Reservas (RF-01, RF-02, RF-03, RF-28).
+
+EstadoReserva:
+  type: string
+  description: Estados de RF-28.
+  enum:
+    - pendiente
+    - confirmada
+    - en_curso
+    - completada
+    - cancelada
+    - no_show
+    - expirada
+
+Contacto:
+  type: object
+  required: [nombre, email]
+  properties:
+    nombre: { type: string, minLength: 1, maxLength: 200 }
+    email: { type: string, format: email }
+    telefono: { type: string }
+
+NuevaReserva:
+  type: object
+  required: [servicio_id, recurso_id, periodo, contacto]
+  properties:
+    servicio_id: { type: string, format: uuid }
+    recurso_id: { type: string, format: uuid }
+    periodo: { $ref: './comunes.yaml#/Periodo' }
+    contacto: { $ref: './reservas.yaml#/Contacto' }
+    voucher_codigo:
+      type: string
+      description: Código de descuento, si aplica (RF-08).
+
+Reserva:
+  type: object
+  required: [id, servicio_id, recurso_id, periodo, estado, precio_cobrado, creada_en]
+  properties:
+    id: { type: string, format: uuid }
+    servicio_id: { type: string, format: uuid }
+    recurso_id: { type: string, format: uuid }
+    periodo: { $ref: './comunes.yaml#/Periodo' }
+    estado: { $ref: './reservas.yaml#/EstadoReserva' }
+    precio_cobrado: { $ref: './comunes.yaml#/Dinero' }
+    contacto: { $ref: './reservas.yaml#/Contacto' }
+    expira_en:
+      type: string
+      format: date-time
+      description: |
+        Solo mientras el estado es `pendiente`. Pasado ese instante el cupo
+        puede liberarse (RF-27).
+    creada_en: { type: string, format: date-time }
+
+ReservaCreada:
+  type: object
+  description: |
+    Lo que devuelve la ruta crítica: la reserva ya con el cupo garantizado, más
+    el secreto que el cliente necesita para confirmar el pago contra Stripe
+    directamente, sin que el importe pase por este backend.
+  required: [reserva]
+  properties:
+    reserva: { $ref: './reservas.yaml#/Reserva' }
+    pago_client_secret:
+      type: string
+      description: '`client_secret` del PaymentIntent de Stripe.'
+
+ListaReservas:
+  type: object
+  required: [datos]
+  properties:
+    datos:
+      type: array
+      items: { $ref: './reservas.yaml#/Reserva' }
+    siguiente_cursor:
+      type: string
+      description: Ausente cuando no hay más páginas.

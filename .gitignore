@@ -4,3 +4,32 @@
 # Rendered UML output (regenerate with scripts/render-uml.*)
 /docs/uml/rendered/*
 !/docs/uml/rendered/.gitkeep
+
+# --- Go ---
+/backend/bin/
+*.exe
+*.test
+*.out
+
+# --- Node / frontend ---
+node_modules/
+/frontend/dist/
+/frontend/.vite/
+*.tsbuildinfo
+
+# Caché de huellas de Task (sources/generates). Es estado local de la máquina:
+# versionarla haría que `task` se creyera al día en un clon recién hecho.
+/.task/
+
+# --- Entorno local ---
+.env
+.env.*
+!.env.example
+
+# --- Editores / SO ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json

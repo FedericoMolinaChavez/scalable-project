@@ -1,0 +1,21 @@
+# Configuración del validador del contrato.
+
+extends:
+  - recommended
+
+rules:
+  # Ninguna operación declara `security`, y el validador tiene razón: hoy la
+  # API no tiene autenticación. El tenant llega en la cabecera X-Tenant-Id, que
+  # es provisional y está marcada como tal en componentes/parametros.yaml.
+  #
+  # Se degrada a aviso en vez de silenciarse: la regla debe seguir apareciendo
+  # en cada ejecución hasta que RF-12 exista, momento en el cual se declara el
+  # esquema Bearer y esta línea desaparece. Declararlo ahora sería peor que no
+  # tenerlo: el contrato prometería una autenticación que el servidor no
+  # comprueba.
+  security-defined: warn
+
+  # El servidor de desarrollo es localhost, no example.com. La regla existe
+  # para que no se publique un contrato con servidores de ejemplo, y aquí no
+  # aplica.
+  no-server-example.com: off

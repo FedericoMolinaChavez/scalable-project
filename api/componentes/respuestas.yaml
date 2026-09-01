@@ -1,0 +1,52 @@
+# Respuestas de error, comunes a todas las rutas. Todas usan el mismo formato
+# (RFC 9457) para que un error sea indistinguible venga del componente que venga.
+
+PeticionInvalida:
+  description: La petición está mal formada
+  content:
+    application/problem+json:
+      schema: { $ref: './esquemas/comunes.yaml#/Problema' }
+
+NoEncontrado:
+  description: |
+    No existe. Bajo RLS, "no existe" y "existe pero es de otro tenant" son
+    indistinguibles, y así debe ser: distinguirlos filtraría la existencia de
+    datos ajenos.
+  content:
+    application/problem+json:
+      schema: { $ref: './esquemas/comunes.yaml#/Problema' }
+
+NoAutorizado:
+  description: |
+    Falta el token de acceso, o ya no vale. No distingue entre "no lo mandaste"
+    y "el que mandaste está mal": para quien prueba tokens, saber cuál de las
+    dos cosas falló es la mitad del trabajo hecho.
+
+    El vencimiento SÍ se distingue en el `type` del problema, y no es una
+    contradicción: caducar no es un fallo de quien lo presenta, es el
+    funcionamiento normal, y la interfaz tiene que poder decir "vuelve a
+    identificarte" en vez de "no eres tú".
+  content:
+    application/problem+json:
+      schema: { $ref: './esquemas/comunes.yaml#/Problema' }
+
+NoProcesable:
+  description: Sintácticamente válida pero viola una regla de negocio
+  content:
+    application/problem+json:
+      schema: { $ref: './esquemas/comunes.yaml#/Problema' }
+
+DemasiadasPeticiones:
+  description: Se superó la cuota de la cuenta o del agente (RNF-08)
+  headers:
+    Retry-After:
+      schema: { type: integer }
+  content:
+    application/problem+json:
+      schema: { $ref: './esquemas/comunes.yaml#/Problema' }
+
+ErrorInterno:
+  description: Error no previsto
+  content:
+    application/problem+json:
+      schema: { $ref: './esquemas/comunes.yaml#/Problema' }

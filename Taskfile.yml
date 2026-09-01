@@ -1,0 +1,204 @@
+version: "3"
+
+vars:
+  BACKEND: backend
+  FRONTEND: frontend
+
+dotenv: [".env"]
+
+env:
+  # Puerto 6432: PgBouncer, no PostgreSQL. La composición no publica el 5432
+  # al host a propósito. Credenciales de db/semillas/dev.sql.
+  DATABASE_URL: '{{.DATABASE_URL | default "postgres://app_dev:dev@localhost:6432/reservas?sslmode=disable"}}'
+
+tasks:
+  default:
+    desc: Lista las tareas disponibles
+    cmd: task --list
+
+  # ---------------------------------------------------------------- backend --
+  back:tidy:
+    desc: Sincroniza go.mod y go.sum
+    dir: "{{.BACKEND}}"
+    cmd: go mod tidy
+
+  back:build:
+    desc: Compila todos los binarios de cmd/ en backend/bin/
+    dir: "{{.BACKEND}}"
+    cmd: go build -o bin/ ./cmd/...
+
+  back:run:
+    desc: "Ejecuta un servicio: task back:run -- nucleo"
+    dir: "{{.BACKEND}}"
+    cmd: go run ./cmd/{{.CLI_ARGS}}
+
+  back:test:
+    desc: Pruebas de Go
+    dir: "{{.BACKEND}}"
+    cmd: go test ./...
+
+  back:test:race:
+    desc: >-
+      Pruebas con detector de carreras. Necesita CGO y un compilador C, que
+      Windows no trae; en local se corre dentro del contenedor, en CI va nativo
+      sobre los ejecutores de Linux. Es la variante que importa para el núcleo:
+      45 pods escribiendo sin coordinarse (ARQ-03) no perdonan una carrera.
+    dir: "{{.BACKEND}}"
+    env:
+      CGO_ENABLED: "1"
+    cmd: go test -race ./...
+
+  back:lint:
+    desc: golangci-lint sobre todo el backend
+    dir: "{{.BACKEND}}"
+    cmd: golangci-lint run
+
+  back:fmt:
+    desc: Formatea e importa
+    dir: "{{.BACKEND}}"
+    cmd: golangci-lint fmt
+
+  # --------------------------------------------------------------- frontend --
+  front:install:
+    desc: Instala dependencias del frontend
+    dir: "{{.FRONTEND}}"
+    cmd: npm ci
+
+  front:dev:
+    desc: Servidor de desarrollo de Vite
+    dir: "{{.FRONTEND}}"
+    cmd: npm run dev
+
+  front:build:
+    desc: Compilación de producción
+    dir: "{{.FRONTEND}}"
+    cmd: npm run build
+
+  # Las dos tareas que invoca `ci` llevan guarda: mientras frontend/package.json
+  # no exista (se genera en la fase 5), Task las da por hechas y las omite en
+  # vez de romper la puerta de calidad. En cuanto exista, entran solas.
+  front:lint:
+    dir: "{{.FRONTEND}}"
+    status:
+      - "! test -f package.json"
+    cmd: npm run lint
+
+  front:test:
+    dir: "{{.FRONTEND}}"
+    status:
+      - "! test -f package.json"
+    cmd: npm run test
+
+  # ------------------------------------------------------------------- api --
+  # El contrato de api/openapi.yaml es la fuente de verdad de los dos lados.
+  # Generar en vez de escribir a mano es lo que hace que romper el contrato
+  # rompa la compilación de Go y de TypeScript, en vez de aparecer como un
+  # fallo en tiempo de ejecución con el frontend ya desplegado.
+  api:empaquetar:
+    desc: >-
+      Resuelve los $ref de api/*.yaml en un documento unico. Hace falta porque
+      oapi-codegen no resuelve referencias a archivos externos: pide
+      --import-mapping, que sirve para mapear specs distintos a paquetes Go
+      distintos, no para partir uno solo por legibilidad.
+    sources:
+      - "api/openapi.yaml"
+      - "api/rutas/*.yaml"
+      - "api/componentes/**/*.yaml"
+    generates: ["api/openapi.bundled.yaml"]
+    cmd: npx --yes @redocly/cli@latest bundle --config api/redocly.yaml api/openapi.yaml -o api/openapi.bundled.yaml
+
+  api:go:
+    desc: Regenera los tipos y la interfaz de servidor de Go
+    deps: [api:empaquetar]
+    dir: "{{.BACKEND}}"
+    sources: ["../api/openapi.bundled.yaml", "../api/oapi-codegen.yaml"]
+    generates: ["internal/api/api.gen.go"]
+    cmd: go tool oapi-codegen -config ../api/oapi-codegen.yaml ../api/openapi.bundled.yaml
+
+  api:ts:
+    desc: Regenera los tipos de TypeScript
+    deps: [api:empaquetar]
+    sources: ["api/openapi.bundled.yaml"]
+    generates: ["frontend/src/api/esquema.ts"]
+    cmd: npx --yes openapi-typescript@7 api/openapi.bundled.yaml -o frontend/src/api/esquema.ts
+
+  api:validar:
+    desc: Comprueba que el contrato es OpenAPI valido antes de generar nada
+    cmd: npx --yes @redocly/cli@latest lint --config api/redocly.yaml api/openapi.yaml
+
+  api:generar:
+    desc: Regenera todo desde el contrato
+    cmds:
+      - task: api:empaquetar
+      - task: api:go
+      - task: api:ts
+
+  api:verificar:
+    desc: >-
+      Falla si el código generado no coincide con el contrato. Va en CI: sin
+      esto, alguien edita openapi.yaml, olvida regenerar, y el contrato y el
+      código dicen cosas distintas sin que nada lo note.
+    cmds:
+      - task: api:generar
+      # Se apunta a los archivos GENERADOS y no a sus directorios. En CI da
+      # igual —todo está confirmado, así que el único diff posible viene de
+      # regenerar—, pero en local `frontend/src/api` contiene también el cliente
+      # y las consultas, escritos a mano: cualquier cambio sin confirmar ahí
+      # hacía fallar esta comprobación como si el contrato estuviera
+      # desincronizado, que es justo lo que no estaba pasando.
+      - cmd: >-
+          git diff --exit-code --
+          api/openapi.bundled.yaml
+          backend/internal/api/api.gen.go
+          frontend/src/api/esquema.ts
+
+  # ------------------------------------------------------------------ datos --
+  infra:up:
+    desc: Levanta PostgreSQL, PgBouncer, Valkey, NATS, MinIO y Mailpit
+    # --wait no devuelve hasta que los healthcheck pasan. Sin esto, el comando
+    # termina en cuanto los contenedores arrancan y lo siguiente que se ejecute
+    # —una prueba, un servicio— se encuentra PostgreSQL todavía aplicando el
+    # esquema. En local se nota como un fallo intermitente al arrancar; en CI,
+    # como uno que solo aparece a veces.
+    cmd: docker compose -f deploy/docker-compose.yml up -d --wait
+
+  infra:down:
+    desc: Detiene la infraestructura local (conserva los volúmenes)
+    cmd: docker compose -f deploy/docker-compose.yml down
+
+  infra:reset:
+    desc: Detiene la infraestructura local y BORRA los volúmenes
+    prompt: Esto elimina la base de datos local. ¿Continuar?
+    cmd: docker compose -f deploy/docker-compose.yml down -v
+
+  infra:estado:
+    desc: Estado y salud de cada servicio
+    cmd: docker compose -f deploy/docker-compose.yml ps
+
+  infra:logs:
+    desc: "Registros; acota con: task infra:logs -- postgres"
+    cmd: docker compose -f deploy/docker-compose.yml logs -f --tail=100 {{.CLI_ARGS}}
+
+  infra:psql:
+    desc: Consola psql a través de PgBouncer (nunca directa a PostgreSQL)
+    cmd: >-
+      docker compose -f deploy/docker-compose.yml exec -e PGPASSWORD=dev
+      postgres psql -h pgbouncer -p 6432 -U app_dev -d reservas
+
+  db:test:
+    desc: Invariantes y prueba de concurrencia contra un PostgreSQL desechable
+    # Invocado a través de bash y no directamente. En Windows, Task intenta
+    # ejecutar el .sh como un binario y falla con "%1 is not a valid Win32
+    # application"; el guion en sí funciona igual en Git Bash que en Linux, y ya
+    # se ocupa de traducir las rutas.
+    cmd: bash ./db/pruebas/ejecutar.sh
+
+  # --------------------------------------------------------------------- ci --
+  ci:
+    desc: Todo lo que debe pasar antes de un push
+    cmds:
+      - task: api:verificar
+      - task: back:lint
+      - task: back:test
+      - task: front:lint
+      - task: front:test

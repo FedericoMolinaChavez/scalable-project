@@ -1,0 +1,77 @@
+openapi: 3.1.0
+
+# Raíz del contrato. Deliberadamente corta: aquí solo está el mapa de rutas.
+# Cada endpoint vive en rutas/ y cada esquema en componentes/, para que seguir
+# uno no obligue a saltar entre dos zonas de un archivo de cientos de líneas.
+#
+# Los generadores no leen este archivo, leen openapi.bundled.yaml, que es el
+# resultado de resolver estos $ref. Ver README.md.
+
+info:
+  title: API de reservas
+  version: 0.1.0
+  description: |
+    Contrato único entre el backend en Go y el frontend en React. Los tipos de
+    ambos lados se generan desde aquí, así que este archivo es la fuente de
+    verdad: un cambio que rompa el contrato rompe la compilación de los dos, en
+    vez de aparecer como un fallo en tiempo de ejecución.
+
+    Solo cubre la rebanada inicial —catálogo, disponibilidad y creación de
+    reservas—. El resto de los RF se añaden a medida que se implementan.
+
+servers:
+  - url: http://localhost:8080
+    description: Desarrollo local
+
+tags:
+  - name: catalogo
+    description: Sedes y servicios (RF-26)
+  - name: disponibilidad
+    description: Consulta de horarios libres (RF-26)
+  - name: reservas
+    description: Creación y consulta de reservas (RF-01, RF-02, RF-03, RF-06)
+  - name: sesiones
+    description: Identificación del cliente por código de un solo uso (RF-02)
+
+components:
+  securitySchemes:
+    TokenCliente:
+      type: http
+      scheme: bearer
+      description: |
+        El token que devuelve `POST /v1/sesiones/token` tras acertar el código.
+
+        Acredita UNA cosa: que quien lo presenta controla ese correo. No hay
+        cuenta detrás, así que tampoco hay roles: el alcance es exactamente las
+        reservas hechas con esa dirección. Cuando exista RF-12, el mismo
+        encabezado transportará tokens de cuenta y el alcance saldrá del tipo
+        de cuenta (RF-23).
+
+        Es de vigencia corta y no se puede revocar. Un invitado no tiene sesión
+        que gestionar (RF-25 es de cuentas), así que caducar pronto es la única
+        defensa que tiene.
+
+paths:
+  /v1/sedes:
+    $ref: './rutas/catalogo.yaml#/sedes'
+
+  /v1/servicios:
+    $ref: './rutas/catalogo.yaml#/servicios'
+
+  /v1/disponibilidad:
+    $ref: './rutas/disponibilidad.yaml#/disponibilidad'
+
+  /v1/sesiones/codigo:
+    $ref: './rutas/sesiones.yaml#/codigo'
+
+  /v1/sesiones/token:
+    $ref: './rutas/sesiones.yaml#/token'
+
+  /v1/reservas:
+    $ref: './rutas/reservas.yaml#/coleccion'
+
+  /v1/reservas/{id}:
+    $ref: './rutas/reservas.yaml#/porId'
+
+  /v1/reservas/{id}/cancelacion:
+    $ref: './rutas/reservas.yaml#/cancelacion'

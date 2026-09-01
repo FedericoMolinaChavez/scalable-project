@@ -1,0 +1,30 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - bodyclose      # respuestas HTTP sin cerrar: fuga de conexiones bajo la carga de RNF-03
+    - contextcheck   # cada consulta debe heredar el contexto para respetar el presupuesto de RNF-01
+    - errorlint      # errors.As sobre *pgconn.PgError; comparar cadenas rompería la traduccion de 23P01
+    - noctx          # prohibe peticiones HTTP sin contexto, y por tanto sin timeout
+    - rowserrcheck
+    - sqlclosecheck
+    - revive
+  settings:
+    revive:
+      rules:
+        - name: unused-parameter
+          disabled: true
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/FedericoMolinaChavez/scalable-project/backend
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

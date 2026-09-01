@@ -1,0 +1,11 @@
+{
+  "recommendations": [
+    "golang.go",
+    "task.vscode-task",
+    "editorconfig.editorconfig",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "bradlc.vscode-tailwindcss",
+    "jebbs.plantuml"
+  ]
+}
