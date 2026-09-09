@@ -11,6 +11,7 @@ import (
 
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/api"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/datos"
+	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/dominio"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/reservas"
 )
 
@@ -62,13 +63,22 @@ var estadosCancelables = map[api.EstadoReserva]bool{
 
 // Cancelar aplica la cancelación y devuelve la reserva ya cancelada.
 //
-// `destino` es el correo que el token acreditó. La reserva solo se cancela si
-// es suya, y esa comprobación va DENTRO de la misma transacción que escribe:
-// comprobarla antes dejaría una ventana en la que la reserva cambia de manos
-// —o de estado— entre el permiso y el efecto.
+// `alcance` es lo que el token acreditó (RF-23): el correo de un invitado, la
+// cuenta de quien tiene una, o el tenant entero de un administrador (RF-32). La
+// reserva solo se cancela si cae dentro, y esa comprobación va DENTRO de la
+// misma transacción que escribe: comprobarla antes dejaría una ventana en la
+// que la reserva cambia de manos —o de estado— entre el permiso y el efecto.
+//
+// `agente` no amplía el alcance y no puede: viene ya recortado del token de
+// RF-13. Solo cambia quién queda escrito en la traza.
 func (s *Servicio) Cancelar(
-	ctx context.Context, tenant uuid.UUID, reservaID uuid.UUID, destino string,
+	ctx context.Context, tenant uuid.UUID, reservaID uuid.UUID,
+	alcance dominio.Alcance, agente string,
 ) (api.Reserva, error) {
+	if alcance.Vacio() {
+		return api.Reserva{}, dominio.ErrSinAlcance
+	}
+
 	var reserva api.Reserva
 
 	err := s.bd.EnTenant(ctx, tenant.String(), func(tx pgx.Tx) error {
@@ -83,21 +93,26 @@ func (s *Servicio) Cancelar(
 		// dos deciden que se puede, y se escriben dos transiciones para un solo
 		// cambio.
 		//
-		// El filtro por contacto_email es la autorización, y por eso va en el
-		// WHERE y no en un `if` posterior: una reserva de otra persona
-		// devuelve cero filas, igual que una que no existe. Desde fuera son
-		// indistinguibles, que es justo lo que evita usar identificadores
-		// ajenos para comprobar cuáles son reales.
+		// El alcance es la autorización, y por eso va en el WHERE y no en un
+		// `if` posterior: una reserva fuera de él devuelve cero filas, igual
+		// que una que no existe. Desde fuera son indistinguibles, que es justo
+		// lo que evita usar identificadores ajenos para comprobar cuáles son
+		// reales.
 		err := tx.QueryRow(ctx, `
 			SELECT r.estado::text, lower(r.periodo), p.rango_cancelacion_horas
 			FROM negocio.reserva r
 			JOIN negocio.politica_version p
 			  ON p.tenant_id = r.tenant_id AND p.id = r.politica_version_id
 			WHERE r.id = $1
-			  AND r.cuenta_id IS NULL
-			  AND lower(r.contacto_email) = $2
+			  AND (
+			        $2::boolean
+			        OR ($3::uuid IS NOT NULL AND r.cuenta_id = $3::uuid)
+			        OR ($4::text IS NOT NULL
+			            AND r.cuenta_id IS NULL
+			            AND lower(r.contacto_email) = $4::text)
+			      )
 			FOR UPDATE OF r`,
-			reservaID, destino,
+			reservaID, alcance.TenantCompleto, nulo(alcance.Cuenta), nulo(alcance.Destino),
 		).Scan(&estado, &inicio, &horasCancelacion)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return datos.ErrNoEncontrado
@@ -113,8 +128,14 @@ func (s *Servicio) Cancelar(
 		// El plazo se mide contra el INICIO de la cita, no contra ahora mismo
 		// ni contra la fecha de creación: "hasta 24 horas antes" habla de la
 		// cita, que es lo que el negocio pierde si nadie la ocupa.
+		//
+		// Al administrador no se le aplica (RF-32). La política de RF-15 acota
+		// lo que puede hacer un CLIENTE con la reserva que compró; el negocio
+		// cancela lo suyo cuando le hace falta —una avería, una baja— y una
+		// regla que se lo impidiera dejaría la agenda mintiendo sobre lo que de
+		// verdad va a ocurrir.
 		restantes := time.Until(inicio).Hours()
-		if restantes < float64(horasCancelacion) {
+		if !alcance.TenantCompleto && restantes < float64(horasCancelacion) {
 			return ErrPlazoVencido{
 				HorasRequeridas: horasCancelacion,
 				HorasRestantes:  restantes,
@@ -128,16 +149,17 @@ func (s *Servicio) Cancelar(
 			return err
 		}
 
-		// La historia se escribe en la misma transacción que el cambio (RF-28).
-		// actor_tipo 'sistema' porque transicion_actor_coherente exige que solo
-		// el sistema tenga actor_id nulo, y un invitado no tiene cuenta que
-		// poner ahí. Con RF-12 esto pasa a 'usuario' con su identificador.
+		// La historia se escribe en la misma transacción que el cambio (RF-28),
+		// con el actor que de verdad la causó: RF-36 pregunta quién hizo qué, y
+		// una traza que diga "sistema" para todo no puede responderlo.
+		actor, actorID, motivo := actorDeCancelacion(alcance, agente)
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO negocio.transicion_estado
-				(tenant_id, reserva_id, estado_anterior, estado_nuevo, actor_tipo, motivo)
-			VALUES ($1, $2, $3::negocio.estado_reserva, 'cancelada', 'sistema', $4)`,
-			tenant, reservaID, estado,
-			"cancelada por quien reservó, identificado con un código (RF-06)"); err != nil {
+				(tenant_id, reserva_id, estado_anterior, estado_nuevo,
+				 actor_tipo, actor_id, motivo)
+			VALUES ($1, $2, $3::negocio.estado_reserva, 'cancelada',
+			        $4::negocio.actor_tipo, NULLIF($5, '')::uuid, $6)`,
+			tenant, reservaID, estado, actor, actorID, motivo); err != nil {
 			return err
 		}
 
@@ -156,4 +178,37 @@ func (s *Servicio) Cancelar(
 	}
 
 	return reserva, nil
+}
+
+// actorDeCancelacion decide quién queda escrito en la traza de RF-28.
+//
+// El orden es agente, administrador, cuenta, invitado, y cada rama contesta una
+// pregunta distinta que RF-36 puede hacer después. Un agente gana sobre la
+// cuenta porque lo que se registra es quién EJECUTÓ, no en nombre de quién: eso
+// ya está en la propia reserva. Y un administrador no es un usuario: que el
+// negocio cancele una cita y que la cancele el cliente son dos hechos
+// distintos, y el reembolso de RF-29 los trata distinto.
+func actorDeCancelacion(a dominio.Alcance, agente string) (tipo, id, motivo string) {
+	switch {
+	case agente != "":
+		return "agente", agente, "cancelada por un agente en nombre de la cuenta (RF-04)"
+	case a.TenantCompleto:
+		return "administrador", a.Cuenta, "cancelada por el negocio desde su agenda (RF-32)"
+	case a.Cuenta != "":
+		return "usuario", a.Cuenta, "cancelada por su titular (RF-06)"
+	default:
+		// Invitado: no hay cuenta que poner, y transicion_actor_coherente exige
+		// que solo el sistema tenga actor_id nulo.
+		return "sistema", "", "cancelada por quien reservó, identificado con un código (RF-06)"
+	}
+}
+
+// nulo convierte una cadena vacía en NULL para el motor. Ver el homónimo de
+// internal/consulta: el alcance decide por "este criterio aplica o no", y una
+// cadena vacía comparada con una columna vacía sería una coincidencia.
+func nulo(v string) *string {
+	if v == "" {
+		return nil
+	}
+	return &v
 }

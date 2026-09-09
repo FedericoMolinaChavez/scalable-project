@@ -1,0 +1,63 @@
+# Agentes (RF-13, RF-04, RF-05, RNF-07).
+#
+# Un agente no es una cuenta y no inicia sesión como nadie: presenta su
+# credencial y pide un token para actuar EN NOMBRE de una cuenta concreta, con
+# una lista de acciones concreta. El alcance que recibe es siempre el
+# subconjunto `acciones solicitadas ∩ alcance de la cuenta impersonada`
+# (RF-23), nunca un permiso propio.
+
+AccionAgente:
+  type: string
+  description: |
+    Las acciones que un token de agente puede autorizar. Es un enum cerrado y no
+    texto libre: el alcance de RF-13 se calcula intersecando esta lista con la
+    de la cuenta impersonada, y una acción que nadie sabe interpretar no se
+    puede intersecar con nada, solo aceptar de más.
+  enum:
+    - reservar          # RF-04
+    - listar_reservas   # RF-05
+    - cancelar_reserva  # RF-06 en nombre de la cuenta
+
+IntercambioAgente:
+  type: object
+  description: |
+    El intercambio de RF-13: credencial del agente + cuenta sobre la que quiere
+    actuar + acciones que pide.
+
+    Las tres condiciones se comprueban por separado y las tres devuelven lo
+    mismo (`403`): que el agente exista y esté activo, que esa cuenta lo haya
+    autorizado (RNF-07) y que las acciones estén dentro del alcance de esa
+    cuenta (RF-23). Distinguirlas en la respuesta le diría a quien prueba
+    credenciales qué parte acertó.
+  required: [credencial, cuenta_id, acciones]
+  properties:
+    credencial:
+      type: string
+      minLength: 32
+      maxLength: 256
+    cuenta_id:
+      type: string
+      format: uuid
+      description: La cuenta en cuyo nombre se va a actuar.
+    acciones:
+      type: array
+      minItems: 1
+      items: { $ref: './agentes.yaml#/AccionAgente' }
+
+TokenAgente:
+  type: object
+  description: |
+    El token de validación de RF-13: vigencia corta y un solo propósito.
+
+    Devuelve el alcance CONCEDIDO, que puede ser menor que el pedido. Es
+    información que el agente necesita: sin ella, la única forma de descubrir
+    que una acción quedó fuera es intentarla y recibir un rechazo delante de la
+    persona a la que está atendiendo.
+  required: [token, expira_en, alcance]
+  properties:
+    token: { type: string }
+    expira_en: { type: string, format: date-time }
+    alcance:
+      type: array
+      items: { $ref: './agentes.yaml#/AccionAgente' }
+    cuenta_impersonada_id: { type: string, format: uuid }

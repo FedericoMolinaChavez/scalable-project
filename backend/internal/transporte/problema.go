@@ -68,6 +68,20 @@ var (
 		Estado: http.StatusUnauthorized,
 	}
 
+	// FueraDeAlcance es RF-23 diciendo que no. Se distingue de NoAutorizado a
+	// propósito: un 401 significa "no sé quién eres" y la interfaz responde
+	// pidiendo identificarse otra vez, cosa que aquí no arreglaría nada.
+	//
+	// Y no sustituye al 404 de un recurso ajeno. Cuando decir "existe pero no
+	// es tuyo" ya filtra la existencia del recurso, la respuesta correcta sigue
+	// siendo NoEncontrado; este 403 es para las acciones cuyo alcance no
+	// depende de un identificador que haya que adivinar.
+	FueraDeAlcance = Clase{
+		Tipo:   "https://api.reservas/errores/fuera-de-alcance",
+		Titulo: "Esa acción queda fuera del alcance de tu cuenta",
+		Estado: http.StatusForbidden,
+	}
+
 	// EstadoIncompatible: la operación es válida y quien la pide tiene derecho,
 	// pero el recurso ya no está en un estado que la admita. Cancelar algo ya
 	// cancelado no es un error de la petición ni una regla de negocio violada:
@@ -75,6 +89,16 @@ var (
 	EstadoIncompatible = Clase{
 		Tipo:   "https://api.reservas/errores/estado-incompatible",
 		Titulo: "La reserva ya no está en ese estado",
+		Estado: http.StatusConflict,
+	}
+
+	// ContactoEnUso: el correo o el teléfono ya son de otra cuenta (RF-22). Es
+	// un 409 y no un 422 porque la petición es válida y no viola ninguna regla:
+	// lo que ocurre es que ese valor ya está tomado, que es un conflicto con el
+	// estado actual del sistema.
+	ContactoEnUso = Clase{
+		Tipo:   "https://api.reservas/errores/contacto-en-uso",
+		Titulo: "Ese correo o teléfono ya está registrado",
 		Estado: http.StatusConflict,
 	}
 

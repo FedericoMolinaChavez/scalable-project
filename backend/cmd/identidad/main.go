@@ -1,9 +1,12 @@
 // Binario identidad — Servicio de Identidad (ARQ-01).
 //
-// Vive en el borde, junto al Gateway, y por ahora resuelve solo RF-02: que
-// quien reservó como invitado pueda demostrar que es él y volver a ver lo suyo.
-// RF-12 —contraseñas, magic link, 2FA, sesiones con refresco— es el siguiente
-// inquilino de este binario, no otro.
+// Vive en el borde, junto al Gateway, y resuelve todo lo que tiene que ver con
+// quién es alguien: el código del invitado que vuelve a ver lo suyo (RF-02), el
+// alta y el perfil de una cuenta (RF-24, RF-22), el inicio de sesión con
+// contraseña o magic link con su par de tokens (RF-12), la verificación de
+// contacto (RF-19), la recuperación de contraseña (RF-18), las sesiones y la
+// baja (RF-25), las preferencias de aviso (RF-21) y los tokens de agente
+// (RF-13).
 //
 // Es un dominio de fallo propio y por eso es un proceso propio: manda correo,
 // y un relé SMTP lento o caído no puede arrastrar consigo la ruta de reserva.
@@ -69,15 +72,25 @@ func montar(ctx context.Context, cfg plataforma.Config, registro *slog.Logger, s
 	}()
 
 	rutas.Montar(servidor, rutas.Componentes{
-		Identidad: identidad.Nuevo(
-			bd, emisor, firmante, limites, registro,
-			cfg.Identidad.TTLCodigo, cfg.Identidad.MaxIntentos, cfg.Identidad.MaxEnviosHora),
+		Identidad: identidad.Nuevo(bd, emisor, firmante, limites, registro, identidad.Opciones{
+			TTLCodigo:        cfg.Identidad.TTLCodigo,
+			TTLEnlace:        cfg.Identidad.TTLEnlace,
+			TTLRefresco:      cfg.Identidad.TTLRefresco,
+			MaxIntentos:      cfg.Identidad.MaxIntentos,
+			MaxEnviosHora:    cfg.Identidad.MaxEnviosHora,
+			MaxIntentosLogin: cfg.Identidad.MaxIntentosLogin,
+			BloqueoLogin:     cfg.Identidad.BloqueoLogin,
+			BaseURL:          cfg.Identidad.URLApp,
+		}),
 		Verificador: firmante,
 	}, registro, cfg.TiempoPeticion)
 
 	registro.Info("identidad montada",
 		slog.Duration("ttl_codigo", cfg.Identidad.TTLCodigo),
+		slog.Duration("ttl_enlace", cfg.Identidad.TTLEnlace),
 		slog.Duration("ttl_acceso", cfg.Identidad.TTLAcceso),
+		slog.Duration("ttl_refresco", cfg.Identidad.TTLRefresco),
+		slog.String("url_app", cfg.Identidad.URLApp),
 		slog.String("smtp", cfg.Identidad.SMTPHost+":"+cfg.Identidad.SMTPPuerto))
 	return nil
 }

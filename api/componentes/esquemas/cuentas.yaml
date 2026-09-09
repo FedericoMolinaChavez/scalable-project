@@ -1,0 +1,287 @@
+# Cuentas y acceso (RF-12, RF-18, RF-19, RF-21, RF-22, RF-23, RF-24, RF-25).
+#
+# Es la otra mitad de sesiones.yaml. Aquella resuelve al INVITADO que vuelve a
+# ver lo suyo (RF-02): sin cuenta, sin contraseña y sin nada que revocar. Esta
+# resuelve a quien SÍ tiene cuenta, y con ella aparecen las tres cosas que un
+# invitado no tiene: un tipo de cuenta del que sale su alcance (RF-23), un token
+# de refresco, y una lista de sesiones que se puede mirar y cortar (RF-25).
+
+TipoCuenta:
+  type: string
+  description: |
+    Los tres de RF-23. NO se asigna: `administrador` se deriva de ser dueño de
+    un tenant (RF-35) y `super_admin` es el operador de la plataforma. Una
+    cuenta que se registra por la vía normal es siempre `usuario`.
+  enum:
+    - usuario
+    - administrador
+    - super_admin
+
+EstadoCuenta:
+  type: string
+  enum:
+    - pendiente_verificacion
+    - activa
+    - suspendida
+    - eliminada
+
+CanalContacto:
+  type: string
+  description: Por dónde viaja un código o un enlace de un solo uso.
+  enum:
+    - email
+    - sms
+
+CanalNotificacion:
+  type: string
+  description: |
+    Los tres canales de RF-21. Es una lista más larga que `CanalContacto` a
+    propósito: un push sirve para avisar, no para transportar un código de un
+    solo uso.
+  enum:
+    - email
+    - sms
+    - push
+
+NuevaCuenta:
+  type: object
+  description: |
+    Registro de RF-24.
+
+    Responde `202` exista o no ya ese correo, y nunca dice cuál de los dos casos
+    fue (RF-24, y el mismo criterio de RF-12 A12). Distinguirlos convertiría el
+    formulario de alta en un comprobador de direcciones registradas.
+  required: [nombre, contrasena, acepta_terminos]
+  properties:
+    nombre: { type: string, minLength: 1, maxLength: 200 }
+    email: { type: string, format: email }
+    telefono:
+      type: string
+      pattern: '^\+[1-9][0-9]{7,14}$'
+      description: E.164. Se guarda normalizado; el formato para mostrar es del cliente.
+    contrasena:
+      type: string
+      minLength: 12
+      maxLength: 128
+      description: |
+        La política de seguridad la comprueba el servidor y devuelve un `422`
+        con el motivo por campo si no se cumple. La longitud mínima está aquí
+        además de allí para que el cliente pueda avisar antes de enviar.
+    acepta_terminos:
+      type: boolean
+      description: |
+        RF-24 lo exige explícitamente. Un `false` es un `422`, no un `400`: la
+        petición está bien formada, lo que falta es un requisito del negocio.
+
+Cuenta:
+  type: object
+  description: El perfil de RF-22, tal como lo ve su propio dueño.
+  required: [id, tipo, estado, email_verificado, telefono_verificado, creada_en]
+  properties:
+    id: { type: string, format: uuid }
+    nombre: { type: string }
+    email: { type: string, format: email }
+    telefono: { type: string }
+    email_verificado: { type: boolean }
+    telefono_verificado: { type: boolean }
+    tipo: { $ref: './cuentas.yaml#/TipoCuenta' }
+    tenant_id:
+      type: string
+      format: uuid
+      description: |
+        Solo en un `administrador`, y significa "administra este negocio", NO
+        "reserva en él". Un `usuario` no lo lleva aunque tenga reservas en
+        veinte tenants distintos.
+    estado: { $ref: './cuentas.yaml#/EstadoCuenta' }
+    creada_en: { type: string, format: date-time }
+
+ActualizacionCuenta:
+  type: object
+  description: |
+    RF-22. Todo opcional: se envía lo que cambia.
+
+    Cambiar el correo o el teléfono lo marca como NO verificado y dispara la
+    verificación de RF-19. Es lo que impide que apuntar la cuenta a una
+    dirección ajena baste para recibir los avisos de otra persona.
+  properties:
+    nombre: { type: string, minLength: 1, maxLength: 200 }
+    email: { type: string, format: email }
+    telefono: { type: string, pattern: '^\+[1-9][0-9]{7,14}$' }
+
+Credenciales:
+  type: object
+  description: Inicio de sesión con contraseña (RF-12).
+  required: [identificador, contrasena]
+  properties:
+    identificador:
+      type: string
+      description: El correo de la cuenta.
+    contrasena:
+      type: string
+      maxLength: 128
+
+ParTokens:
+  type: object
+  description: |
+    Lo que entrega un inicio de sesión de cuenta: los dos tokens de RF-12.
+
+    El de acceso va firmado y se verifica sin tocar la base, que es lo que le
+    permite sostener la ruta de lectura; el de refresco se canjea contra
+    `plataforma.sesion` y ahí sí se comprueba si la sesión fue revocada (RF-25).
+    De esa asimetría sale una consecuencia que conviene tener presente:
+    revocar corta el refresco al instante y el acceso al vencer.
+  required: [acceso, expira_en, refresco, refresco_expira_en]
+  properties:
+    acceso:
+      type: string
+      description: 'Se manda en la cabecera `Authorization: Bearer <token>`.'
+    expira_en: { type: string, format: date-time }
+    refresco:
+      type: string
+      description: |
+        Se guarda y no se manda en cada petición. Rota en cada canje: el valor
+        entregado deja de valer en cuanto se usa, de modo que si alguien lo
+        copió, el primero de los dos en canjearlo deja al otro fuera y el robo
+        se nota.
+    refresco_expira_en: { type: string, format: date-time }
+
+SolicitudRefresco:
+  type: object
+  required: [refresco]
+  properties:
+    refresco: { type: string }
+
+Sesion:
+  type: object
+  description: Una sesión activa, tal como la lista RF-25.
+  required: [id, ultimo_acceso, creada_en, expira_en, actual]
+  properties:
+    id: { type: string, format: uuid }
+    dispositivo: { type: string }
+    ip: { type: string }
+    ultimo_acceso: { type: string, format: date-time }
+    creada_en: { type: string, format: date-time }
+    expira_en: { type: string, format: date-time }
+    actual:
+      type: boolean
+      description: |
+        Si es la sesión desde la que se está mirando. Sin esto, "cerrar sesión
+        en el otro dispositivo" obliga a adivinar cuál de las dos filas es la
+        propia.
+
+ListaSesiones:
+  type: object
+  required: [datos]
+  properties:
+    datos:
+      type: array
+      items: { $ref: './cuentas.yaml#/Sesion' }
+
+SolicitudEnlace:
+  type: object
+  description: |
+    Magic link de RF-12: un enlace de un solo uso, quince minutos de vigencia.
+
+    Responde igual exista o no la cuenta (RF-12 A12).
+  required: [destino]
+  properties:
+    destino: { type: string, format: email }
+
+CanjeEnlace:
+  type: object
+  required: [token]
+  properties:
+    token:
+      type: string
+      description: El valor que viaja en el enlace recibido por correo.
+
+SolicitudRecuperacion:
+  type: object
+  description: |
+    RF-18. Responde igual exista o no la cuenta y no envía nada si no existe.
+  required: [destino]
+  properties:
+    destino: { type: string, format: email }
+
+Restablecimiento:
+  type: object
+  description: |
+    El camino de RF-18 para quien NO puede entrar: la prueba de identidad es el
+    enlace que recibió por correo.
+
+    Se invalidan todas las sesiones activas (RF-18). Una contraseña se
+    restablece justamente cuando se sospecha que alguien más la tiene, y dejar
+    vivas las sesiones abiertas con la anterior vaciaría el gesto.
+  required: [token, contrasena_nueva]
+  properties:
+    token:
+      type: string
+      description: El valor que viaja en el enlace de recuperación.
+    contrasena_nueva:
+      type: string
+      minLength: 12
+      maxLength: 128
+
+CambioContrasena:
+  type: object
+  description: |
+    El camino de RF-18 para quien ya entró: la prueba de identidad es la
+    contraseña actual, y se exige aunque haya sesión. Un token robado no debe
+    bastar para quedarse con la cuenta cambiando su contraseña.
+
+    Se invalidan las demás sesiones, no la que hace el cambio: aquí quien lo
+    pide ya demostró saber la contraseña anterior, así que echarlo de su propia
+    sesión sería castigar el gesto correcto.
+  required: [contrasena_actual, contrasena_nueva]
+  properties:
+    contrasena_actual:
+      type: string
+      maxLength: 128
+    contrasena_nueva:
+      type: string
+      minLength: 12
+      maxLength: 128
+
+SolicitudVerificacion:
+  type: object
+  description: RF-19. Reenvía la verificación del contacto indicado.
+  required: [canal]
+  properties:
+    canal: { $ref: './cuentas.yaml#/CanalContacto' }
+
+CanjeVerificacion:
+  type: object
+  description: |
+    RF-19. Un solo valor para los dos canales: el enlace del correo trae un
+    token largo y el SMS trae seis dígitos, pero desde aquí ambos son "lo que
+    llegó al canal", y separarlos en dos campos obligaría a decidir cuál de los
+    dos se está usando en una petición que ya lo dice por el valor.
+  required: [valor]
+  properties:
+    valor: { type: string }
+
+Preferencia:
+  type: object
+  description: |
+    Una fila de RF-21: este canal, para este tipo de aviso, habilitado o no.
+
+    Lo que no aparece en la lista NO está deshabilitado: está en el valor por
+    defecto del producto. Es la diferencia que permite que activar un tipo nuevo
+    alcance a quien nunca tocó esta pantalla.
+  required: [canal, tipo, habilitado]
+  properties:
+    canal: { $ref: './cuentas.yaml#/CanalNotificacion' }
+    tipo:
+      type: string
+      minLength: 1
+      maxLength: 64
+      examples: ['recordatorio']
+    habilitado: { type: boolean }
+
+ListaPreferencias:
+  type: object
+  required: [datos]
+  properties:
+    datos:
+      type: array
+      items: { $ref: './cuentas.yaml#/Preferencia' }

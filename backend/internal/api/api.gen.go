@@ -18,6 +18,66 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AccionAgente.
+const (
+	CancelarReserva AccionAgente = "cancelar_reserva"
+	ListarReservas  AccionAgente = "listar_reservas"
+	Reservar        AccionAgente = "reservar"
+)
+
+// Valid indicates whether the value is a known member of the AccionAgente enum.
+func (e AccionAgente) Valid() bool {
+	switch e {
+	case CancelarReserva:
+		return true
+	case ListarReservas:
+		return true
+	case Reservar:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CanalContacto.
+const (
+	CanalContactoEmail CanalContacto = "email"
+	CanalContactoSms   CanalContacto = "sms"
+)
+
+// Valid indicates whether the value is a known member of the CanalContacto enum.
+func (e CanalContacto) Valid() bool {
+	switch e {
+	case CanalContactoEmail:
+		return true
+	case CanalContactoSms:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CanalNotificacion.
+const (
+	CanalNotificacionEmail CanalNotificacion = "email"
+	CanalNotificacionPush  CanalNotificacion = "push"
+	CanalNotificacionSms   CanalNotificacion = "sms"
+)
+
+// Valid indicates whether the value is a known member of the CanalNotificacion enum.
+func (e CanalNotificacion) Valid() bool {
+	switch e {
+	case CanalNotificacionEmail:
+		return true
+	case CanalNotificacionPush:
+		return true
+	case CanalNotificacionSms:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EstadoCatalogo.
 const (
 	Activo   EstadoCatalogo = "activo"
@@ -30,6 +90,30 @@ func (e EstadoCatalogo) Valid() bool {
 	case Activo:
 		return true
 	case Inactivo:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EstadoCuenta.
+const (
+	Activa                EstadoCuenta = "activa"
+	Eliminada             EstadoCuenta = "eliminada"
+	PendienteVerificacion EstadoCuenta = "pendiente_verificacion"
+	Suspendida            EstadoCuenta = "suspendida"
+)
+
+// Valid indicates whether the value is a known member of the EstadoCuenta enum.
+func (e EstadoCuenta) Valid() bool {
+	switch e {
+	case Activa:
+		return true
+	case Eliminada:
+		return true
+	case PendienteVerificacion:
+		return true
+	case Suspendida:
 		return true
 	default:
 		return false
@@ -69,6 +153,64 @@ func (e EstadoReserva) Valid() bool {
 	}
 }
 
+// Defines values for TipoCuenta.
+const (
+	Administrador TipoCuenta = "administrador"
+	SuperAdmin    TipoCuenta = "super_admin"
+	Usuario       TipoCuenta = "usuario"
+)
+
+// Valid indicates whether the value is a known member of the TipoCuenta enum.
+func (e TipoCuenta) Valid() bool {
+	switch e {
+	case Administrador:
+		return true
+	case SuperAdmin:
+		return true
+	case Usuario:
+		return true
+	default:
+		return false
+	}
+}
+
+// AccionAgente Las acciones que un token de agente puede autorizar. Es un enum cerrado y no
+// texto libre: el alcance de RF-13 se calcula intersecando esta lista con la
+// de la cuenta impersonada, y una acción que nadie sabe interpretar no se
+// puede intersecar con nada, solo aceptar de más.
+type AccionAgente string
+
+// ActualizacionCuenta RF-22. Todo opcional: se envía lo que cambia.
+//
+// Cambiar el correo o el teléfono lo marca como NO verificado y dispara la
+// verificación de RF-19. Es lo que impide que apuntar la cuenta a una
+// dirección ajena baste para recibir los avisos de otra persona.
+type ActualizacionCuenta struct {
+	Email    *openapi_types.Email `json:"email,omitempty"`
+	Nombre   *string              `json:"nombre,omitempty"`
+	Telefono *string              `json:"telefono,omitempty"`
+}
+
+// CambioContrasena El camino de RF-18 para quien ya entró: la prueba de identidad es la
+// contraseña actual, y se exige aunque haya sesión. Un token robado no debe
+// bastar para quedarse con la cuenta cambiando su contraseña.
+//
+// Se invalidan las demás sesiones, no la que hace el cambio: aquí quien lo
+// pide ya demostró saber la contraseña anterior, así que echarlo de su propia
+// sesión sería castigar el gesto correcto.
+type CambioContrasena struct {
+	ContrasenaActual string `json:"contrasena_actual"`
+	ContrasenaNueva  string `json:"contrasena_nueva"`
+}
+
+// CanalContacto Por dónde viaja un código o un enlace de un solo uso.
+type CanalContacto string
+
+// CanalNotificacion Los tres canales de RF-21. Es una lista más larga que `CanalContacto` a
+// propósito: un push sirve para avisar, no para transportar un código de un
+// solo uso.
+type CanalNotificacion string
+
 // CanjeCodigo defines model for CanjeCodigo.
 type CanjeCodigo struct {
 	// Codigo Los seis dígitos recibidos. Un solo uso y tres intentos (RF-12 A2):
@@ -80,11 +222,55 @@ type CanjeCodigo struct {
 	Destino openapi_types.Email `json:"destino"`
 }
 
+// CanjeEnlace defines model for CanjeEnlace.
+type CanjeEnlace struct {
+	// Token El valor que viaja en el enlace recibido por correo.
+	Token string `json:"token"`
+}
+
+// CanjeVerificacion RF-19. Un solo valor para los dos canales: el enlace del correo trae un
+// token largo y el SMS trae seis dígitos, pero desde aquí ambos son "lo que
+// llegó al canal", y separarlos en dos campos obligaría a decidir cuál de los
+// dos se está usando en una petición que ya lo dice por el valor.
+type CanjeVerificacion struct {
+	Valor string `json:"valor"`
+}
+
 // Contacto defines model for Contacto.
 type Contacto struct {
 	Email    openapi_types.Email `json:"email"`
 	Nombre   string              `json:"nombre"`
 	Telefono *string             `json:"telefono,omitempty"`
+}
+
+// Credenciales Inicio de sesión con contraseña (RF-12).
+type Credenciales struct {
+	Contrasena string `json:"contrasena"`
+
+	// Identificador El correo de la cuenta.
+	Identificador string `json:"identificador"`
+}
+
+// Cuenta El perfil de RF-22, tal como lo ve su propio dueño.
+type Cuenta struct {
+	CreadaEn           time.Time            `json:"creada_en"`
+	Email              *openapi_types.Email `json:"email,omitempty"`
+	EmailVerificado    bool                 `json:"email_verificado"`
+	Estado             EstadoCuenta         `json:"estado"`
+	Id                 openapi_types.UUID   `json:"id"`
+	Nombre             *string              `json:"nombre,omitempty"`
+	Telefono           *string              `json:"telefono,omitempty"`
+	TelefonoVerificado bool                 `json:"telefono_verificado"`
+
+	// TenantId Solo en un `administrador`, y significa "administra este negocio", NO
+	// "reserva en él". Un `usuario` no lo lleva aunque tenga reservas en
+	// veinte tenants distintos.
+	TenantId *openapi_types.UUID `json:"tenant_id,omitempty"`
+
+	// Tipo Los tres de RF-23. NO se asigna: `administrador` se deriva de ser dueño de
+	// un tenant (RF-35) y `super_admin` es el operador de la plataforma. Una
+	// cuenta que se registra por la vía normal es siempre `usuario`.
+	Tipo TipoCuenta `json:"tipo"`
 }
 
 // Dinero El monto va como cadena decimal, no como número. En JSON los números son de
@@ -114,6 +300,9 @@ type Disponibilidad struct {
 // EstadoCatalogo defines model for EstadoCatalogo.
 type EstadoCatalogo string
 
+// EstadoCuenta defines model for EstadoCuenta.
+type EstadoCuenta string
+
 // EstadoReserva Estados de RF-28.
 type EstadoReserva string
 
@@ -128,6 +317,27 @@ type Franja struct {
 	// perfectamente válidas.
 	Periodo   Periodo            `json:"periodo"`
 	RecursoId openapi_types.UUID `json:"recurso_id"`
+}
+
+// IntercambioAgente El intercambio de RF-13: credencial del agente + cuenta sobre la que quiere
+// actuar + acciones que pide.
+//
+// Las tres condiciones se comprueban por separado y las tres devuelven lo
+// mismo (`403`): que el agente exista y esté activo, que esa cuenta lo haya
+// autorizado (RNF-07) y que las acciones estén dentro del alcance de esa
+// cuenta (RF-23). Distinguirlas en la respuesta le diría a quien prueba
+// credenciales qué parte acertó.
+type IntercambioAgente struct {
+	Acciones   []AccionAgente `json:"acciones"`
+	Credencial string         `json:"credencial"`
+
+	// CuentaId La cuenta en cuyo nombre se va a actuar.
+	CuentaId openapi_types.UUID `json:"cuenta_id"`
+}
+
+// ListaPreferencias defines model for ListaPreferencias.
+type ListaPreferencias struct {
+	Datos []Preferencia `json:"datos"`
 }
 
 // ListaReservas defines model for ListaReservas.
@@ -146,6 +356,32 @@ type ListaSedes struct {
 // ListaServicios defines model for ListaServicios.
 type ListaServicios struct {
 	Datos []Servicio `json:"datos"`
+}
+
+// ListaSesiones defines model for ListaSesiones.
+type ListaSesiones struct {
+	Datos []Sesion `json:"datos"`
+}
+
+// NuevaCuenta Registro de RF-24.
+//
+// Responde `202` exista o no ya ese correo, y nunca dice cuál de los dos casos
+// fue (RF-24, y el mismo criterio de RF-12 A12). Distinguirlos convertiría el
+// formulario de alta en un comprobador de direcciones registradas.
+type NuevaCuenta struct {
+	// AceptaTerminos RF-24 lo exige explícitamente. Un `false` es un `422`, no un `400`: la
+	// petición está bien formada, lo que falta es un requisito del negocio.
+	AceptaTerminos bool `json:"acepta_terminos"`
+
+	// Contrasena La política de seguridad la comprueba el servidor y devuelve un `422`
+	// con el motivo por campo si no se cumple. La longitud mínima está aquí
+	// además de allí para que el cliente pueda avisar antes de enviar.
+	Contrasena string               `json:"contrasena"`
+	Email      *openapi_types.Email `json:"email,omitempty"`
+	Nombre     string               `json:"nombre"`
+
+	// Telefono E.164. Se guarda normalizado; el formato para mostrar es del cliente.
+	Telefono *string `json:"telefono,omitempty"`
 }
 
 // NuevaReserva defines model for NuevaReserva.
@@ -167,6 +403,26 @@ type NuevaReserva struct {
 	VoucherCodigo *string `json:"voucher_codigo,omitempty"`
 }
 
+// ParTokens Lo que entrega un inicio de sesión de cuenta: los dos tokens de RF-12.
+//
+// El de acceso va firmado y se verifica sin tocar la base, que es lo que le
+// permite sostener la ruta de lectura; el de refresco se canjea contra
+// `plataforma.sesion` y ahí sí se comprueba si la sesión fue revocada (RF-25).
+// De esa asimetría sale una consecuencia que conviene tener presente:
+// revocar corta el refresco al instante y el acceso al vencer.
+type ParTokens struct {
+	// Acceso Se manda en la cabecera `Authorization: Bearer <token>`.
+	Acceso   string    `json:"acceso"`
+	ExpiraEn time.Time `json:"expira_en"`
+
+	// Refresco Se guarda y no se manda en cada petición. Rota en cada canje: el valor
+	// entregado deja de valer en cuanto se usa, de modo que si alguien lo
+	// copió, el primero de los dos en canjearlo deja al otro fuera y el robo
+	// se nota.
+	Refresco         string    `json:"refresco"`
+	RefrescoExpiraEn time.Time `json:"refresco_expira_en"`
+}
+
 // Periodo Intervalo semiabierto `[inicio, fin)`. El límite inferior entra, el superior
 // no.
 //
@@ -177,6 +433,22 @@ type NuevaReserva struct {
 type Periodo struct {
 	Fin    time.Time `json:"fin"`
 	Inicio time.Time `json:"inicio"`
+}
+
+// Preferencia Una fila de RF-21: este canal, para este tipo de aviso, habilitado o no.
+//
+// Lo que no aparece en la lista NO está deshabilitado: está en el valor por
+// defecto del producto. Es la diferencia que permite que activar un tipo nuevo
+// alcance a quien nunca tocó esta pantalla.
+type Preferencia struct {
+	// Canal Los tres canales de RF-21. Es una lista más larga que `CanalContacto` a
+	// propósito: un push sirve para avisar, no para transportar un código de un
+	// solo uso.
+	Canal      CanalNotificacion `json:"canal"`
+	Habilitado bool              `json:"habilitado"`
+
+	// Tipo Examples: recordatorio
+	Tipo string `json:"tipo"`
 }
 
 // Problema Formato de error único de la API, según RFC 9457 (problem details). Se usa
@@ -249,6 +521,19 @@ type ReservaCreada struct {
 	Reserva          Reserva `json:"reserva"`
 }
 
+// Restablecimiento El camino de RF-18 para quien NO puede entrar: la prueba de identidad es el
+// enlace que recibió por correo.
+//
+// Se invalidan todas las sesiones activas (RF-18). Una contraseña se
+// restablece justamente cuando se sospecha que alguien más la tiene, y dejar
+// vivas las sesiones abiertas con la anterior vaciaría el gesto.
+type Restablecimiento struct {
+	ContrasenaNueva string `json:"contrasena_nueva"`
+
+	// Token El valor que viaja en el enlace de recuperación.
+	Token string `json:"token"`
+}
+
 // Sede defines model for Sede.
 type Sede struct {
 	Direccion *string            `json:"direccion,omitempty"`
@@ -284,6 +569,20 @@ type Servicio struct {
 	SedeId openapi_types.UUID `json:"sede_id"`
 }
 
+// Sesion Una sesión activa, tal como la lista RF-25.
+type Sesion struct {
+	// Actual Si es la sesión desde la que se está mirando. Sin esto, "cerrar sesión
+	// en el otro dispositivo" obliga a adivinar cuál de las dos filas es la
+	// propia.
+	Actual       bool               `json:"actual"`
+	CreadaEn     time.Time          `json:"creada_en"`
+	Dispositivo  *string            `json:"dispositivo,omitempty"`
+	ExpiraEn     time.Time          `json:"expira_en"`
+	Id           openapi_types.UUID `json:"id"`
+	Ip           *string            `json:"ip,omitempty"`
+	UltimoAcceso time.Time          `json:"ultimo_acceso"`
+}
+
 // SolicitudCodigo Pide un código al correo con el que se reservó.
 //
 // La respuesta es SIEMPRE la misma exista o no ese correo (RF-12 A12). Una
@@ -297,6 +596,34 @@ type SolicitudCodigo struct {
 	Destino openapi_types.Email `json:"destino"`
 }
 
+// SolicitudEnlace Magic link de RF-12: un enlace de un solo uso, quince minutos de vigencia.
+//
+// Responde igual exista o no la cuenta (RF-12 A12).
+type SolicitudEnlace struct {
+	Destino openapi_types.Email `json:"destino"`
+}
+
+// SolicitudRecuperacion RF-18. Responde igual exista o no la cuenta y no envía nada si no existe.
+type SolicitudRecuperacion struct {
+	Destino openapi_types.Email `json:"destino"`
+}
+
+// SolicitudRefresco defines model for SolicitudRefresco.
+type SolicitudRefresco struct {
+	Refresco string `json:"refresco"`
+}
+
+// SolicitudVerificacion RF-19. Reenvía la verificación del contacto indicado.
+type SolicitudVerificacion struct {
+	// Canal Por dónde viaja un código o un enlace de un solo uso.
+	Canal CanalContacto `json:"canal"`
+}
+
+// TipoCuenta Los tres de RF-23. NO se asigna: `administrador` se deriva de ser dueño de
+// un tenant (RF-35) y `super_admin` es el operador de la plataforma. Una
+// cuenta que se registra por la vía normal es siempre `usuario`.
+type TipoCuenta string
+
 // TokenAcceso Lo que se entrega al acertar el código.
 //
 // Es de vigencia corta y no se puede revocar: un invitado no tiene sesión que
@@ -308,6 +635,19 @@ type TokenAcceso struct {
 
 	// Token Se manda en la cabecera `Authorization: Bearer <token>`.
 	Token string `json:"token"`
+}
+
+// TokenAgente El token de validación de RF-13: vigencia corta y un solo propósito.
+//
+// Devuelve el alcance CONCEDIDO, que puede ser menor que el pedido. Es
+// información que el agente necesita: sin ella, la única forma de descubrir
+// que una acción quedó fuera es intentarla y recibir un rechazo delante de la
+// persona a la que está atendiendo.
+type TokenAgente struct {
+	Alcance             []AccionAgente      `json:"alcance"`
+	CuentaImpersonadaId *openapi_types.UUID `json:"cuenta_impersonada_id,omitempty"`
+	ExpiraEn            time.Time           `json:"expira_en"`
+	Token               string              `json:"token"`
 }
 
 // Tenant defines model for Tenant.
@@ -324,6 +664,12 @@ type DemasiadasPeticiones = Problema
 // errores de forma uniforme y para que una respuesta de error sea
 // indistinguible venga del componente de ARQ-01 que venga.
 type ErrorInterno = Problema
+
+// FueraDeAlcance Formato de error único de la API, según RFC 9457 (problem details). Se usa
+// un estándar en vez de un formato propio para que el cliente pueda tratar los
+// errores de forma uniforme y para que una respuesta de error sea
+// indistinguible venga del componente de ARQ-01 que venga.
+type FueraDeAlcance = Problema
 
 // NoAutorizado Formato de error único de la API, según RFC 9457 (problem details). Se usa
 // un estándar en vez de un formato propio para que el cliente pueda tratar los
@@ -371,7 +717,13 @@ type ListarReservasParams struct {
 	Estado *[]EstadoReserva `form:"estado,omitempty" json:"estado,omitempty"`
 	Desde  *time.Time       `form:"desde,omitempty" json:"desde,omitempty"`
 	Hasta  *time.Time       `form:"hasta,omitempty" json:"hasta,omitempty"`
-	Limite *int             `form:"limite,omitempty" json:"limite,omitempty"`
+
+	// SedeId Agenda de una sede (RF-32).
+	SedeId *openapi_types.UUID `form:"sede_id,omitempty" json:"sede_id,omitempty"`
+
+	// RecursoId Agenda de un recurso concreto (RF-32).
+	RecursoId *openapi_types.UUID `form:"recurso_id,omitempty" json:"recurso_id,omitempty"`
+	Limite    *int                `form:"limite,omitempty" json:"limite,omitempty"`
 
 	// Cursor Cursor opaco de la página siguiente. Paginación por cursor y no por
 	// desplazamiento: con OFFSET, insertar una fila mientras se pagina
@@ -456,17 +808,92 @@ type CanjearCodigoParams struct {
 	XTenantId Tenant `json:"X-Tenant-Id"`
 }
 
+// IntercambiarTokenAgenteJSONRequestBody defines body for IntercambiarTokenAgente for application/json ContentType.
+type IntercambiarTokenAgenteJSONRequestBody = IntercambioAgente
+
+// RegistrarCuentaJSONRequestBody defines body for RegistrarCuenta for application/json ContentType.
+type RegistrarCuentaJSONRequestBody = NuevaCuenta
+
+// SolicitarRecuperacionJSONRequestBody defines body for SolicitarRecuperacion for application/json ContentType.
+type SolicitarRecuperacionJSONRequestBody = SolicitudRecuperacion
+
+// RestablecerContrasenaJSONRequestBody defines body for RestablecerContrasena for application/json ContentType.
+type RestablecerContrasenaJSONRequestBody = Restablecimiento
+
+// SolicitarVerificacionJSONRequestBody defines body for SolicitarVerificacion for application/json ContentType.
+type SolicitarVerificacionJSONRequestBody = SolicitudVerificacion
+
+// CanjearVerificacionJSONRequestBody defines body for CanjearVerificacion for application/json ContentType.
+type CanjearVerificacionJSONRequestBody = CanjeVerificacion
+
+// ActualizarCuentaPropiaJSONRequestBody defines body for ActualizarCuentaPropia for application/json ContentType.
+type ActualizarCuentaPropiaJSONRequestBody = ActualizacionCuenta
+
+// CambiarContrasenaJSONRequestBody defines body for CambiarContrasena for application/json ContentType.
+type CambiarContrasenaJSONRequestBody = CambioContrasena
+
+// GuardarPreferenciasJSONRequestBody defines body for GuardarPreferencias for application/json ContentType.
+type GuardarPreferenciasJSONRequestBody = ListaPreferencias
+
 // CrearReservaJSONRequestBody defines body for CrearReserva for application/json ContentType.
 type CrearReservaJSONRequestBody = NuevaReserva
 
 // SolicitarCodigoJSONRequestBody defines body for SolicitarCodigo for application/json ContentType.
 type SolicitarCodigoJSONRequestBody = SolicitudCodigo
 
+// IniciarSesionJSONRequestBody defines body for IniciarSesion for application/json ContentType.
+type IniciarSesionJSONRequestBody = Credenciales
+
+// SolicitarEnlaceJSONRequestBody defines body for SolicitarEnlace for application/json ContentType.
+type SolicitarEnlaceJSONRequestBody = SolicitudEnlace
+
+// CanjearEnlaceJSONRequestBody defines body for CanjearEnlace for application/json ContentType.
+type CanjearEnlaceJSONRequestBody = CanjeEnlace
+
+// RefrescarSesionJSONRequestBody defines body for RefrescarSesion for application/json ContentType.
+type RefrescarSesionJSONRequestBody = SolicitudRefresco
+
 // CanjearCodigoJSONRequestBody defines body for CanjearCodigo for application/json ContentType.
 type CanjearCodigoJSONRequestBody = CanjeCodigo
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// IntercambiarTokenAgente Intercambiar la credencial por un token de acciones (RF-13)
+	// (POST /v1/agentes/token)
+	IntercambiarTokenAgente(w http.ResponseWriter, r *http.Request)
+	// RegistrarCuenta Registrar una cuenta (RF-24)
+	// (POST /v1/cuentas)
+	RegistrarCuenta(w http.ResponseWriter, r *http.Request)
+	// SolicitarRecuperacion Pedir el enlace de recuperación de contraseña (RF-18)
+	// (POST /v1/cuentas/contrasena/recuperacion)
+	SolicitarRecuperacion(w http.ResponseWriter, r *http.Request)
+	// RestablecerContrasena Restablecer la contraseña con el enlace recibido (RF-18)
+	// (POST /v1/cuentas/contrasena/restablecimiento)
+	RestablecerContrasena(w http.ResponseWriter, r *http.Request)
+	// SolicitarVerificacion Pedir la verificación del contacto (RF-19)
+	// (POST /v1/cuentas/verificacion)
+	SolicitarVerificacion(w http.ResponseWriter, r *http.Request)
+	// CanjearVerificacion Canjear el enlace o el código de verificación (RF-19)
+	// (POST /v1/cuentas/verificacion/canje)
+	CanjearVerificacion(w http.ResponseWriter, r *http.Request)
+	// EliminarCuentaPropia Eliminar la cuenta (RF-25)
+	// (DELETE /v1/cuentas/yo)
+	EliminarCuentaPropia(w http.ResponseWriter, r *http.Request)
+	// ObtenerCuentaPropia El perfil propio (RF-22)
+	// (GET /v1/cuentas/yo)
+	ObtenerCuentaPropia(w http.ResponseWriter, r *http.Request)
+	// ActualizarCuentaPropia Editar el perfil (RF-22)
+	// (PATCH /v1/cuentas/yo)
+	ActualizarCuentaPropia(w http.ResponseWriter, r *http.Request)
+	// CambiarContrasena Cambiar la propia contraseña (RF-18, y destino de RF-12 A9)
+	// (POST /v1/cuentas/yo/contrasena)
+	CambiarContrasena(w http.ResponseWriter, r *http.Request)
+	// ListarPreferencias Preferencias de notificación (RF-21)
+	// (GET /v1/cuentas/yo/preferencias)
+	ListarPreferencias(w http.ResponseWriter, r *http.Request)
+	// GuardarPreferencias Guardar preferencias de notificación (RF-21)
+	// (PUT /v1/cuentas/yo/preferencias)
+	GuardarPreferencias(w http.ResponseWriter, r *http.Request)
 	// ConsultarDisponibilidad Franjas libres de un servicio en un rango
 	// (GET /v1/disponibilidad)
 	ConsultarDisponibilidad(w http.ResponseWriter, r *http.Request, params ConsultarDisponibilidadParams)
@@ -488,12 +915,33 @@ type ServerInterface interface {
 	// ListarServicios Servicios ofrecidos, opcionalmente filtrados por sede
 	// (GET /v1/servicios)
 	ListarServicios(w http.ResponseWriter, r *http.Request, params ListarServiciosParams)
+	// RevocarTodasLasSesiones Cerrar todas las sesiones (RF-25)
+	// (DELETE /v1/sesiones)
+	RevocarTodasLasSesiones(w http.ResponseWriter, r *http.Request)
+	// ListarSesiones Sesiones activas (RF-25)
+	// (GET /v1/sesiones)
+	ListarSesiones(w http.ResponseWriter, r *http.Request)
 	// SolicitarCodigo Pedir un código para ver las reservas propias
 	// (POST /v1/sesiones/codigo)
 	SolicitarCodigo(w http.ResponseWriter, r *http.Request, params SolicitarCodigoParams)
+	// IniciarSesion Iniciar sesión con contraseña (RF-12)
+	// (POST /v1/sesiones/contrasena)
+	IniciarSesion(w http.ResponseWriter, r *http.Request)
+	// SolicitarEnlace Pedir un magic link para entrar (RF-12)
+	// (POST /v1/sesiones/enlace)
+	SolicitarEnlace(w http.ResponseWriter, r *http.Request)
+	// CanjearEnlace Canjear el magic link por una sesión (RF-12)
+	// (POST /v1/sesiones/enlace/canje)
+	CanjearEnlace(w http.ResponseWriter, r *http.Request)
+	// RefrescarSesion Renovar el par de tokens (RF-12)
+	// (POST /v1/sesiones/refresco)
+	RefrescarSesion(w http.ResponseWriter, r *http.Request)
 	// CanjearCodigo Canjear el código por un token de acceso
 	// (POST /v1/sesiones/token)
 	CanjearCodigo(w http.ResponseWriter, r *http.Request, params CanjearCodigoParams)
+	// RevocarSesion Revocar una sesión concreta (RF-25)
+	// (DELETE /v1/sesiones/{id})
+	RevocarSesion(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -504,6 +952,174 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// IntercambiarTokenAgente operation middleware
+func (siw *ServerInterfaceWrapper) IntercambiarTokenAgente(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.IntercambiarTokenAgente(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RegistrarCuenta operation middleware
+func (siw *ServerInterfaceWrapper) RegistrarCuenta(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RegistrarCuenta(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SolicitarRecuperacion operation middleware
+func (siw *ServerInterfaceWrapper) SolicitarRecuperacion(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SolicitarRecuperacion(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestablecerContrasena operation middleware
+func (siw *ServerInterfaceWrapper) RestablecerContrasena(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestablecerContrasena(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SolicitarVerificacion operation middleware
+func (siw *ServerInterfaceWrapper) SolicitarVerificacion(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SolicitarVerificacion(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CanjearVerificacion operation middleware
+func (siw *ServerInterfaceWrapper) CanjearVerificacion(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CanjearVerificacion(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EliminarCuentaPropia operation middleware
+func (siw *ServerInterfaceWrapper) EliminarCuentaPropia(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EliminarCuentaPropia(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ObtenerCuentaPropia operation middleware
+func (siw *ServerInterfaceWrapper) ObtenerCuentaPropia(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ObtenerCuentaPropia(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ActualizarCuentaPropia operation middleware
+func (siw *ServerInterfaceWrapper) ActualizarCuentaPropia(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ActualizarCuentaPropia(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CambiarContrasena operation middleware
+func (siw *ServerInterfaceWrapper) CambiarContrasena(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CambiarContrasena(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListarPreferencias operation middleware
+func (siw *ServerInterfaceWrapper) ListarPreferencias(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListarPreferencias(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GuardarPreferencias operation middleware
+func (siw *ServerInterfaceWrapper) GuardarPreferencias(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GuardarPreferencias(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ConsultarDisponibilidad operation middleware
 func (siw *ServerInterfaceWrapper) ConsultarDisponibilidad(w http.ResponseWriter, r *http.Request) {
@@ -633,6 +1249,32 @@ func (siw *ServerInterfaceWrapper) ListarReservas(w http.ResponseWriter, r *http
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "hasta"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hasta", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sede_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sede_id", r.URL.Query(), &params.SedeId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sede_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sede_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "recurso_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "recurso_id", r.URL.Query(), &params.RecursoId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "recurso_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recurso_id", Err: err})
 		}
 		return
 	}
@@ -978,6 +1620,34 @@ func (siw *ServerInterfaceWrapper) ListarServicios(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// RevocarTodasLasSesiones operation middleware
+func (siw *ServerInterfaceWrapper) RevocarTodasLasSesiones(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevocarTodasLasSesiones(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListarSesiones operation middleware
+func (siw *ServerInterfaceWrapper) ListarSesiones(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListarSesiones(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SolicitarCodigo operation middleware
 func (siw *ServerInterfaceWrapper) SolicitarCodigo(w http.ResponseWriter, r *http.Request) {
 
@@ -1023,6 +1693,62 @@ func (siw *ServerInterfaceWrapper) SolicitarCodigo(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// IniciarSesion operation middleware
+func (siw *ServerInterfaceWrapper) IniciarSesion(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.IniciarSesion(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SolicitarEnlace operation middleware
+func (siw *ServerInterfaceWrapper) SolicitarEnlace(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SolicitarEnlace(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CanjearEnlace operation middleware
+func (siw *ServerInterfaceWrapper) CanjearEnlace(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CanjearEnlace(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RefrescarSesion operation middleware
+func (siw *ServerInterfaceWrapper) RefrescarSesion(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RefrescarSesion(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CanjearCodigo operation middleware
 func (siw *ServerInterfaceWrapper) CanjearCodigo(w http.ResponseWriter, r *http.Request) {
 
@@ -1059,6 +1785,32 @@ func (siw *ServerInterfaceWrapper) CanjearCodigo(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CanjearCodigo(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevocarSesion operation middleware
+func (siw *ServerInterfaceWrapper) RevocarSesion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevocarSesion(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1193,6 +1945,25 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/disponibilidad", wrapper.ConsultarDisponibilidad)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/sesiones/codigo", wrapper.SolicitarCodigo)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/sesiones/token", wrapper.CanjearCodigo)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/sesiones/contrasena", wrapper.IniciarSesion)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/sesiones/enlace", wrapper.SolicitarEnlace)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/sesiones/enlace/canje", wrapper.CanjearEnlace)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/sesiones/refresco", wrapper.RefrescarSesion)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/sesiones", wrapper.RevocarTodasLasSesiones)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/sesiones", wrapper.ListarSesiones)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/sesiones/{id}", wrapper.RevocarSesion)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/cuentas", wrapper.RegistrarCuenta)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/cuentas/yo", wrapper.EliminarCuentaPropia)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/cuentas/yo", wrapper.ObtenerCuentaPropia)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/cuentas/yo", wrapper.ActualizarCuentaPropia)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/cuentas/yo/preferencias", wrapper.ListarPreferencias)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/cuentas/yo/preferencias", wrapper.GuardarPreferencias)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/cuentas/verificacion", wrapper.SolicitarVerificacion)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/cuentas/verificacion/canje", wrapper.CanjearVerificacion)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/cuentas/yo/contrasena", wrapper.CambiarContrasena)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/cuentas/contrasena/restablecimiento", wrapper.RestablecerContrasena)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/cuentas/contrasena/recuperacion", wrapper.SolicitarRecuperacion)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/agentes/token", wrapper.IntercambiarTokenAgente)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/reservas", wrapper.ListarReservas)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/reservas", wrapper.CrearReserva)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/reservas/{id}", wrapper.ObtenerReserva)
@@ -1212,6 +1983,8 @@ type DemasiadasPeticionesApplicationProblemPlusJSONResponse struct {
 
 type ErrorInternoApplicationProblemPlusJSONResponse Problema
 
+type FueraDeAlcanceApplicationProblemPlusJSONResponse Problema
+
 type NoAutorizadoApplicationProblemPlusJSONResponse Problema
 
 type NoEncontradoApplicationProblemPlusJSONResponse Problema
@@ -1219,6 +1992,1047 @@ type NoEncontradoApplicationProblemPlusJSONResponse Problema
 type NoProcesableApplicationProblemPlusJSONResponse Problema
 
 type PeticionInvalidaApplicationProblemPlusJSONResponse Problema
+
+type IntercambiarTokenAgenteRequestObject struct {
+	Body *IntercambiarTokenAgenteJSONRequestBody
+}
+
+type IntercambiarTokenAgenteResponseObject interface {
+	VisitIntercambiarTokenAgenteResponse(w http.ResponseWriter) error
+}
+
+type IntercambiarTokenAgente200JSONResponse TokenAgente
+
+func (response IntercambiarTokenAgente200JSONResponse) VisitIntercambiarTokenAgenteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type IntercambiarTokenAgente400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response IntercambiarTokenAgente400ApplicationProblemPlusJSONResponse) VisitIntercambiarTokenAgenteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type IntercambiarTokenAgente403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response IntercambiarTokenAgente403ApplicationProblemPlusJSONResponse) VisitIntercambiarTokenAgenteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type IntercambiarTokenAgente429ApplicationProblemPlusJSONResponse struct {
+	DemasiadasPeticionesApplicationProblemPlusJSONResponse
+}
+
+func (response IntercambiarTokenAgente429ApplicationProblemPlusJSONResponse) VisitIntercambiarTokenAgenteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type IntercambiarTokenAgente500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response IntercambiarTokenAgente500ApplicationProblemPlusJSONResponse) VisitIntercambiarTokenAgenteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RegistrarCuentaRequestObject struct {
+	Body *RegistrarCuentaJSONRequestBody
+}
+
+type RegistrarCuentaResponseObject interface {
+	VisitRegistrarCuentaResponse(w http.ResponseWriter) error
+}
+
+type RegistrarCuenta202Response struct {
+}
+
+func (response RegistrarCuenta202Response) VisitRegistrarCuentaResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type RegistrarCuenta400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response RegistrarCuenta400ApplicationProblemPlusJSONResponse) VisitRegistrarCuentaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RegistrarCuenta422ApplicationProblemPlusJSONResponse struct {
+	NoProcesableApplicationProblemPlusJSONResponse
+}
+
+func (response RegistrarCuenta422ApplicationProblemPlusJSONResponse) VisitRegistrarCuentaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RegistrarCuenta429ApplicationProblemPlusJSONResponse struct {
+	DemasiadasPeticionesApplicationProblemPlusJSONResponse
+}
+
+func (response RegistrarCuenta429ApplicationProblemPlusJSONResponse) VisitRegistrarCuentaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RegistrarCuenta500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response RegistrarCuenta500ApplicationProblemPlusJSONResponse) VisitRegistrarCuentaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SolicitarRecuperacionRequestObject struct {
+	Body *SolicitarRecuperacionJSONRequestBody
+}
+
+type SolicitarRecuperacionResponseObject interface {
+	VisitSolicitarRecuperacionResponse(w http.ResponseWriter) error
+}
+
+type SolicitarRecuperacion202Response struct {
+}
+
+func (response SolicitarRecuperacion202Response) VisitSolicitarRecuperacionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type SolicitarRecuperacion400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response SolicitarRecuperacion400ApplicationProblemPlusJSONResponse) VisitSolicitarRecuperacionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SolicitarRecuperacion429ApplicationProblemPlusJSONResponse struct {
+	DemasiadasPeticionesApplicationProblemPlusJSONResponse
+}
+
+func (response SolicitarRecuperacion429ApplicationProblemPlusJSONResponse) VisitSolicitarRecuperacionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SolicitarRecuperacion500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response SolicitarRecuperacion500ApplicationProblemPlusJSONResponse) VisitSolicitarRecuperacionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestablecerContrasenaRequestObject struct {
+	Body *RestablecerContrasenaJSONRequestBody
+}
+
+type RestablecerContrasenaResponseObject interface {
+	VisitRestablecerContrasenaResponse(w http.ResponseWriter) error
+}
+
+type RestablecerContrasena204Response struct {
+}
+
+func (response RestablecerContrasena204Response) VisitRestablecerContrasenaResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RestablecerContrasena400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response RestablecerContrasena400ApplicationProblemPlusJSONResponse) VisitRestablecerContrasenaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestablecerContrasena401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response RestablecerContrasena401ApplicationProblemPlusJSONResponse) VisitRestablecerContrasenaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestablecerContrasena422ApplicationProblemPlusJSONResponse struct {
+	NoProcesableApplicationProblemPlusJSONResponse
+}
+
+func (response RestablecerContrasena422ApplicationProblemPlusJSONResponse) VisitRestablecerContrasenaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestablecerContrasena429ApplicationProblemPlusJSONResponse struct {
+	DemasiadasPeticionesApplicationProblemPlusJSONResponse
+}
+
+func (response RestablecerContrasena429ApplicationProblemPlusJSONResponse) VisitRestablecerContrasenaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestablecerContrasena500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response RestablecerContrasena500ApplicationProblemPlusJSONResponse) VisitRestablecerContrasenaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SolicitarVerificacionRequestObject struct {
+	Body *SolicitarVerificacionJSONRequestBody
+}
+
+type SolicitarVerificacionResponseObject interface {
+	VisitSolicitarVerificacionResponse(w http.ResponseWriter) error
+}
+
+type SolicitarVerificacion202Response struct {
+}
+
+func (response SolicitarVerificacion202Response) VisitSolicitarVerificacionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type SolicitarVerificacion400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response SolicitarVerificacion400ApplicationProblemPlusJSONResponse) VisitSolicitarVerificacionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SolicitarVerificacion401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response SolicitarVerificacion401ApplicationProblemPlusJSONResponse) VisitSolicitarVerificacionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SolicitarVerificacion422ApplicationProblemPlusJSONResponse struct {
+	NoProcesableApplicationProblemPlusJSONResponse
+}
+
+func (response SolicitarVerificacion422ApplicationProblemPlusJSONResponse) VisitSolicitarVerificacionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SolicitarVerificacion429ApplicationProblemPlusJSONResponse struct {
+	DemasiadasPeticionesApplicationProblemPlusJSONResponse
+}
+
+func (response SolicitarVerificacion429ApplicationProblemPlusJSONResponse) VisitSolicitarVerificacionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SolicitarVerificacion500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response SolicitarVerificacion500ApplicationProblemPlusJSONResponse) VisitSolicitarVerificacionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CanjearVerificacionRequestObject struct {
+	Body *CanjearVerificacionJSONRequestBody
+}
+
+type CanjearVerificacionResponseObject interface {
+	VisitCanjearVerificacionResponse(w http.ResponseWriter) error
+}
+
+type CanjearVerificacion200JSONResponse Cuenta
+
+func (response CanjearVerificacion200JSONResponse) VisitCanjearVerificacionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CanjearVerificacion400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response CanjearVerificacion400ApplicationProblemPlusJSONResponse) VisitCanjearVerificacionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CanjearVerificacion401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response CanjearVerificacion401ApplicationProblemPlusJSONResponse) VisitCanjearVerificacionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CanjearVerificacion429ApplicationProblemPlusJSONResponse struct {
+	DemasiadasPeticionesApplicationProblemPlusJSONResponse
+}
+
+func (response CanjearVerificacion429ApplicationProblemPlusJSONResponse) VisitCanjearVerificacionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CanjearVerificacion500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response CanjearVerificacion500ApplicationProblemPlusJSONResponse) VisitCanjearVerificacionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EliminarCuentaPropiaRequestObject struct {
+}
+
+type EliminarCuentaPropiaResponseObject interface {
+	VisitEliminarCuentaPropiaResponse(w http.ResponseWriter) error
+}
+
+type EliminarCuentaPropia204Response struct {
+}
+
+func (response EliminarCuentaPropia204Response) VisitEliminarCuentaPropiaResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type EliminarCuentaPropia401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response EliminarCuentaPropia401ApplicationProblemPlusJSONResponse) VisitEliminarCuentaPropiaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EliminarCuentaPropia403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response EliminarCuentaPropia403ApplicationProblemPlusJSONResponse) VisitEliminarCuentaPropiaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EliminarCuentaPropia500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response EliminarCuentaPropia500ApplicationProblemPlusJSONResponse) VisitEliminarCuentaPropiaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ObtenerCuentaPropiaRequestObject struct {
+}
+
+type ObtenerCuentaPropiaResponseObject interface {
+	VisitObtenerCuentaPropiaResponse(w http.ResponseWriter) error
+}
+
+type ObtenerCuentaPropia200JSONResponse Cuenta
+
+func (response ObtenerCuentaPropia200JSONResponse) VisitObtenerCuentaPropiaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ObtenerCuentaPropia401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response ObtenerCuentaPropia401ApplicationProblemPlusJSONResponse) VisitObtenerCuentaPropiaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ObtenerCuentaPropia403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response ObtenerCuentaPropia403ApplicationProblemPlusJSONResponse) VisitObtenerCuentaPropiaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ObtenerCuentaPropia500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response ObtenerCuentaPropia500ApplicationProblemPlusJSONResponse) VisitObtenerCuentaPropiaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarCuentaPropiaRequestObject struct {
+	Body *ActualizarCuentaPropiaJSONRequestBody
+}
+
+type ActualizarCuentaPropiaResponseObject interface {
+	VisitActualizarCuentaPropiaResponse(w http.ResponseWriter) error
+}
+
+type ActualizarCuentaPropia200JSONResponse Cuenta
+
+func (response ActualizarCuentaPropia200JSONResponse) VisitActualizarCuentaPropiaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarCuentaPropia400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response ActualizarCuentaPropia400ApplicationProblemPlusJSONResponse) VisitActualizarCuentaPropiaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarCuentaPropia401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response ActualizarCuentaPropia401ApplicationProblemPlusJSONResponse) VisitActualizarCuentaPropiaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarCuentaPropia403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response ActualizarCuentaPropia403ApplicationProblemPlusJSONResponse) VisitActualizarCuentaPropiaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarCuentaPropia409ApplicationProblemPlusJSONResponse Problema
+
+func (response ActualizarCuentaPropia409ApplicationProblemPlusJSONResponse) VisitActualizarCuentaPropiaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarCuentaPropia422ApplicationProblemPlusJSONResponse struct {
+	NoProcesableApplicationProblemPlusJSONResponse
+}
+
+func (response ActualizarCuentaPropia422ApplicationProblemPlusJSONResponse) VisitActualizarCuentaPropiaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarCuentaPropia500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response ActualizarCuentaPropia500ApplicationProblemPlusJSONResponse) VisitActualizarCuentaPropiaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CambiarContrasenaRequestObject struct {
+	Body *CambiarContrasenaJSONRequestBody
+}
+
+type CambiarContrasenaResponseObject interface {
+	VisitCambiarContrasenaResponse(w http.ResponseWriter) error
+}
+
+type CambiarContrasena204Response struct {
+}
+
+func (response CambiarContrasena204Response) VisitCambiarContrasenaResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type CambiarContrasena400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response CambiarContrasena400ApplicationProblemPlusJSONResponse) VisitCambiarContrasenaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CambiarContrasena401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response CambiarContrasena401ApplicationProblemPlusJSONResponse) VisitCambiarContrasenaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CambiarContrasena403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response CambiarContrasena403ApplicationProblemPlusJSONResponse) VisitCambiarContrasenaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CambiarContrasena422ApplicationProblemPlusJSONResponse struct {
+	NoProcesableApplicationProblemPlusJSONResponse
+}
+
+func (response CambiarContrasena422ApplicationProblemPlusJSONResponse) VisitCambiarContrasenaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CambiarContrasena500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response CambiarContrasena500ApplicationProblemPlusJSONResponse) VisitCambiarContrasenaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarPreferenciasRequestObject struct {
+}
+
+type ListarPreferenciasResponseObject interface {
+	VisitListarPreferenciasResponse(w http.ResponseWriter) error
+}
+
+type ListarPreferencias200JSONResponse ListaPreferencias
+
+func (response ListarPreferencias200JSONResponse) VisitListarPreferenciasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarPreferencias401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response ListarPreferencias401ApplicationProblemPlusJSONResponse) VisitListarPreferenciasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarPreferencias403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response ListarPreferencias403ApplicationProblemPlusJSONResponse) VisitListarPreferenciasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarPreferencias500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response ListarPreferencias500ApplicationProblemPlusJSONResponse) VisitListarPreferenciasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GuardarPreferenciasRequestObject struct {
+	Body *GuardarPreferenciasJSONRequestBody
+}
+
+type GuardarPreferenciasResponseObject interface {
+	VisitGuardarPreferenciasResponse(w http.ResponseWriter) error
+}
+
+type GuardarPreferencias200JSONResponse ListaPreferencias
+
+func (response GuardarPreferencias200JSONResponse) VisitGuardarPreferenciasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GuardarPreferencias400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response GuardarPreferencias400ApplicationProblemPlusJSONResponse) VisitGuardarPreferenciasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GuardarPreferencias401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response GuardarPreferencias401ApplicationProblemPlusJSONResponse) VisitGuardarPreferenciasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GuardarPreferencias403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response GuardarPreferencias403ApplicationProblemPlusJSONResponse) VisitGuardarPreferenciasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GuardarPreferencias422ApplicationProblemPlusJSONResponse struct {
+	NoProcesableApplicationProblemPlusJSONResponse
+}
+
+func (response GuardarPreferencias422ApplicationProblemPlusJSONResponse) VisitGuardarPreferenciasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GuardarPreferencias500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response GuardarPreferencias500ApplicationProblemPlusJSONResponse) VisitGuardarPreferenciasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type ConsultarDisponibilidadRequestObject struct {
 	Params ConsultarDisponibilidadParams
@@ -1340,6 +3154,22 @@ func (response ListarReservas401ApplicationProblemPlusJSONResponse) VisitListarR
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarReservas403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response ListarReservas403ApplicationProblemPlusJSONResponse) VisitListarReservasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1760,6 +3590,138 @@ func (response ListarServicios500ApplicationProblemPlusJSONResponse) VisitListar
 	return err
 }
 
+type RevocarTodasLasSesionesRequestObject struct {
+}
+
+type RevocarTodasLasSesionesResponseObject interface {
+	VisitRevocarTodasLasSesionesResponse(w http.ResponseWriter) error
+}
+
+type RevocarTodasLasSesiones204Response struct {
+}
+
+func (response RevocarTodasLasSesiones204Response) VisitRevocarTodasLasSesionesResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevocarTodasLasSesiones401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response RevocarTodasLasSesiones401ApplicationProblemPlusJSONResponse) VisitRevocarTodasLasSesionesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevocarTodasLasSesiones403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response RevocarTodasLasSesiones403ApplicationProblemPlusJSONResponse) VisitRevocarTodasLasSesionesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevocarTodasLasSesiones500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response RevocarTodasLasSesiones500ApplicationProblemPlusJSONResponse) VisitRevocarTodasLasSesionesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarSesionesRequestObject struct {
+}
+
+type ListarSesionesResponseObject interface {
+	VisitListarSesionesResponse(w http.ResponseWriter) error
+}
+
+type ListarSesiones200JSONResponse ListaSesiones
+
+func (response ListarSesiones200JSONResponse) VisitListarSesionesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarSesiones401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response ListarSesiones401ApplicationProblemPlusJSONResponse) VisitListarSesionesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarSesiones403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response ListarSesiones403ApplicationProblemPlusJSONResponse) VisitListarSesionesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarSesiones500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response ListarSesiones500ApplicationProblemPlusJSONResponse) VisitListarSesionesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SolicitarCodigoRequestObject struct {
 	Params SolicitarCodigoParams
 	Body   *SolicitarCodigoJSONRequestBody
@@ -1817,6 +3779,353 @@ type SolicitarCodigo500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response SolicitarCodigo500ApplicationProblemPlusJSONResponse) VisitSolicitarCodigoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type IniciarSesionRequestObject struct {
+	Body *IniciarSesionJSONRequestBody
+}
+
+type IniciarSesionResponseObject interface {
+	VisitIniciarSesionResponse(w http.ResponseWriter) error
+}
+
+type IniciarSesion200JSONResponse ParTokens
+
+func (response IniciarSesion200JSONResponse) VisitIniciarSesionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type IniciarSesion400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response IniciarSesion400ApplicationProblemPlusJSONResponse) VisitIniciarSesionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type IniciarSesion401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response IniciarSesion401ApplicationProblemPlusJSONResponse) VisitIniciarSesionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type IniciarSesion422ApplicationProblemPlusJSONResponse struct {
+	NoProcesableApplicationProblemPlusJSONResponse
+}
+
+func (response IniciarSesion422ApplicationProblemPlusJSONResponse) VisitIniciarSesionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type IniciarSesion429ApplicationProblemPlusJSONResponse struct {
+	DemasiadasPeticionesApplicationProblemPlusJSONResponse
+}
+
+func (response IniciarSesion429ApplicationProblemPlusJSONResponse) VisitIniciarSesionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type IniciarSesion500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response IniciarSesion500ApplicationProblemPlusJSONResponse) VisitIniciarSesionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SolicitarEnlaceRequestObject struct {
+	Body *SolicitarEnlaceJSONRequestBody
+}
+
+type SolicitarEnlaceResponseObject interface {
+	VisitSolicitarEnlaceResponse(w http.ResponseWriter) error
+}
+
+type SolicitarEnlace202Response struct {
+}
+
+func (response SolicitarEnlace202Response) VisitSolicitarEnlaceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type SolicitarEnlace400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response SolicitarEnlace400ApplicationProblemPlusJSONResponse) VisitSolicitarEnlaceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SolicitarEnlace429ApplicationProblemPlusJSONResponse struct {
+	DemasiadasPeticionesApplicationProblemPlusJSONResponse
+}
+
+func (response SolicitarEnlace429ApplicationProblemPlusJSONResponse) VisitSolicitarEnlaceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SolicitarEnlace500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response SolicitarEnlace500ApplicationProblemPlusJSONResponse) VisitSolicitarEnlaceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CanjearEnlaceRequestObject struct {
+	Body *CanjearEnlaceJSONRequestBody
+}
+
+type CanjearEnlaceResponseObject interface {
+	VisitCanjearEnlaceResponse(w http.ResponseWriter) error
+}
+
+type CanjearEnlace200JSONResponse ParTokens
+
+func (response CanjearEnlace200JSONResponse) VisitCanjearEnlaceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CanjearEnlace400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response CanjearEnlace400ApplicationProblemPlusJSONResponse) VisitCanjearEnlaceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CanjearEnlace401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response CanjearEnlace401ApplicationProblemPlusJSONResponse) VisitCanjearEnlaceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CanjearEnlace422ApplicationProblemPlusJSONResponse struct {
+	NoProcesableApplicationProblemPlusJSONResponse
+}
+
+func (response CanjearEnlace422ApplicationProblemPlusJSONResponse) VisitCanjearEnlaceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CanjearEnlace429ApplicationProblemPlusJSONResponse struct {
+	DemasiadasPeticionesApplicationProblemPlusJSONResponse
+}
+
+func (response CanjearEnlace429ApplicationProblemPlusJSONResponse) VisitCanjearEnlaceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CanjearEnlace500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response CanjearEnlace500ApplicationProblemPlusJSONResponse) VisitCanjearEnlaceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefrescarSesionRequestObject struct {
+	Body *RefrescarSesionJSONRequestBody
+}
+
+type RefrescarSesionResponseObject interface {
+	VisitRefrescarSesionResponse(w http.ResponseWriter) error
+}
+
+type RefrescarSesion200JSONResponse ParTokens
+
+func (response RefrescarSesion200JSONResponse) VisitRefrescarSesionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefrescarSesion400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response RefrescarSesion400ApplicationProblemPlusJSONResponse) VisitRefrescarSesionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefrescarSesion401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response RefrescarSesion401ApplicationProblemPlusJSONResponse) VisitRefrescarSesionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefrescarSesion500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response RefrescarSesion500ApplicationProblemPlusJSONResponse) VisitRefrescarSesionResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -1916,8 +4225,124 @@ func (response CanjearCodigo500ApplicationProblemPlusJSONResponse) VisitCanjearC
 	return err
 }
 
+type RevocarSesionRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type RevocarSesionResponseObject interface {
+	VisitRevocarSesionResponse(w http.ResponseWriter) error
+}
+
+type RevocarSesion204Response struct {
+}
+
+func (response RevocarSesion204Response) VisitRevocarSesionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevocarSesion401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response RevocarSesion401ApplicationProblemPlusJSONResponse) VisitRevocarSesionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevocarSesion403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response RevocarSesion403ApplicationProblemPlusJSONResponse) VisitRevocarSesionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevocarSesion404ApplicationProblemPlusJSONResponse struct {
+	NoEncontradoApplicationProblemPlusJSONResponse
+}
+
+func (response RevocarSesion404ApplicationProblemPlusJSONResponse) VisitRevocarSesionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevocarSesion500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response RevocarSesion500ApplicationProblemPlusJSONResponse) VisitRevocarSesionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// IntercambiarTokenAgente Intercambiar la credencial por un token de acciones (RF-13)
+	// (POST /v1/agentes/token)
+	IntercambiarTokenAgente(ctx context.Context, request IntercambiarTokenAgenteRequestObject) (IntercambiarTokenAgenteResponseObject, error)
+	// RegistrarCuenta Registrar una cuenta (RF-24)
+	// (POST /v1/cuentas)
+	RegistrarCuenta(ctx context.Context, request RegistrarCuentaRequestObject) (RegistrarCuentaResponseObject, error)
+	// SolicitarRecuperacion Pedir el enlace de recuperación de contraseña (RF-18)
+	// (POST /v1/cuentas/contrasena/recuperacion)
+	SolicitarRecuperacion(ctx context.Context, request SolicitarRecuperacionRequestObject) (SolicitarRecuperacionResponseObject, error)
+	// RestablecerContrasena Restablecer la contraseña con el enlace recibido (RF-18)
+	// (POST /v1/cuentas/contrasena/restablecimiento)
+	RestablecerContrasena(ctx context.Context, request RestablecerContrasenaRequestObject) (RestablecerContrasenaResponseObject, error)
+	// SolicitarVerificacion Pedir la verificación del contacto (RF-19)
+	// (POST /v1/cuentas/verificacion)
+	SolicitarVerificacion(ctx context.Context, request SolicitarVerificacionRequestObject) (SolicitarVerificacionResponseObject, error)
+	// CanjearVerificacion Canjear el enlace o el código de verificación (RF-19)
+	// (POST /v1/cuentas/verificacion/canje)
+	CanjearVerificacion(ctx context.Context, request CanjearVerificacionRequestObject) (CanjearVerificacionResponseObject, error)
+	// EliminarCuentaPropia Eliminar la cuenta (RF-25)
+	// (DELETE /v1/cuentas/yo)
+	EliminarCuentaPropia(ctx context.Context, request EliminarCuentaPropiaRequestObject) (EliminarCuentaPropiaResponseObject, error)
+	// ObtenerCuentaPropia El perfil propio (RF-22)
+	// (GET /v1/cuentas/yo)
+	ObtenerCuentaPropia(ctx context.Context, request ObtenerCuentaPropiaRequestObject) (ObtenerCuentaPropiaResponseObject, error)
+	// ActualizarCuentaPropia Editar el perfil (RF-22)
+	// (PATCH /v1/cuentas/yo)
+	ActualizarCuentaPropia(ctx context.Context, request ActualizarCuentaPropiaRequestObject) (ActualizarCuentaPropiaResponseObject, error)
+	// CambiarContrasena Cambiar la propia contraseña (RF-18, y destino de RF-12 A9)
+	// (POST /v1/cuentas/yo/contrasena)
+	CambiarContrasena(ctx context.Context, request CambiarContrasenaRequestObject) (CambiarContrasenaResponseObject, error)
+	// ListarPreferencias Preferencias de notificación (RF-21)
+	// (GET /v1/cuentas/yo/preferencias)
+	ListarPreferencias(ctx context.Context, request ListarPreferenciasRequestObject) (ListarPreferenciasResponseObject, error)
+	// GuardarPreferencias Guardar preferencias de notificación (RF-21)
+	// (PUT /v1/cuentas/yo/preferencias)
+	GuardarPreferencias(ctx context.Context, request GuardarPreferenciasRequestObject) (GuardarPreferenciasResponseObject, error)
 	// ConsultarDisponibilidad Franjas libres de un servicio en un rango
 	// (GET /v1/disponibilidad)
 	ConsultarDisponibilidad(ctx context.Context, request ConsultarDisponibilidadRequestObject) (ConsultarDisponibilidadResponseObject, error)
@@ -1939,12 +4364,33 @@ type StrictServerInterface interface {
 	// ListarServicios Servicios ofrecidos, opcionalmente filtrados por sede
 	// (GET /v1/servicios)
 	ListarServicios(ctx context.Context, request ListarServiciosRequestObject) (ListarServiciosResponseObject, error)
+	// RevocarTodasLasSesiones Cerrar todas las sesiones (RF-25)
+	// (DELETE /v1/sesiones)
+	RevocarTodasLasSesiones(ctx context.Context, request RevocarTodasLasSesionesRequestObject) (RevocarTodasLasSesionesResponseObject, error)
+	// ListarSesiones Sesiones activas (RF-25)
+	// (GET /v1/sesiones)
+	ListarSesiones(ctx context.Context, request ListarSesionesRequestObject) (ListarSesionesResponseObject, error)
 	// SolicitarCodigo Pedir un código para ver las reservas propias
 	// (POST /v1/sesiones/codigo)
 	SolicitarCodigo(ctx context.Context, request SolicitarCodigoRequestObject) (SolicitarCodigoResponseObject, error)
+	// IniciarSesion Iniciar sesión con contraseña (RF-12)
+	// (POST /v1/sesiones/contrasena)
+	IniciarSesion(ctx context.Context, request IniciarSesionRequestObject) (IniciarSesionResponseObject, error)
+	// SolicitarEnlace Pedir un magic link para entrar (RF-12)
+	// (POST /v1/sesiones/enlace)
+	SolicitarEnlace(ctx context.Context, request SolicitarEnlaceRequestObject) (SolicitarEnlaceResponseObject, error)
+	// CanjearEnlace Canjear el magic link por una sesión (RF-12)
+	// (POST /v1/sesiones/enlace/canje)
+	CanjearEnlace(ctx context.Context, request CanjearEnlaceRequestObject) (CanjearEnlaceResponseObject, error)
+	// RefrescarSesion Renovar el par de tokens (RF-12)
+	// (POST /v1/sesiones/refresco)
+	RefrescarSesion(ctx context.Context, request RefrescarSesionRequestObject) (RefrescarSesionResponseObject, error)
 	// CanjearCodigo Canjear el código por un token de acceso
 	// (POST /v1/sesiones/token)
 	CanjearCodigo(ctx context.Context, request CanjearCodigoRequestObject) (CanjearCodigoResponseObject, error)
+	// RevocarSesion Revocar una sesión concreta (RF-25)
+	// (DELETE /v1/sesiones/{id})
+	RevocarSesion(ctx context.Context, request RevocarSesionRequestObject) (RevocarSesionResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -1984,6 +4430,357 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// IntercambiarTokenAgente operation middleware
+func (sh *strictHandler) IntercambiarTokenAgente(w http.ResponseWriter, r *http.Request) {
+	var request IntercambiarTokenAgenteRequestObject
+
+	var body IntercambiarTokenAgenteJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.IntercambiarTokenAgente(ctx, request.(IntercambiarTokenAgenteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "IntercambiarTokenAgente")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(IntercambiarTokenAgenteResponseObject); ok {
+		if err := validResponse.VisitIntercambiarTokenAgenteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RegistrarCuenta operation middleware
+func (sh *strictHandler) RegistrarCuenta(w http.ResponseWriter, r *http.Request) {
+	var request RegistrarCuentaRequestObject
+
+	var body RegistrarCuentaJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RegistrarCuenta(ctx, request.(RegistrarCuentaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RegistrarCuenta")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RegistrarCuentaResponseObject); ok {
+		if err := validResponse.VisitRegistrarCuentaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SolicitarRecuperacion operation middleware
+func (sh *strictHandler) SolicitarRecuperacion(w http.ResponseWriter, r *http.Request) {
+	var request SolicitarRecuperacionRequestObject
+
+	var body SolicitarRecuperacionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SolicitarRecuperacion(ctx, request.(SolicitarRecuperacionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SolicitarRecuperacion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SolicitarRecuperacionResponseObject); ok {
+		if err := validResponse.VisitSolicitarRecuperacionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RestablecerContrasena operation middleware
+func (sh *strictHandler) RestablecerContrasena(w http.ResponseWriter, r *http.Request) {
+	var request RestablecerContrasenaRequestObject
+
+	var body RestablecerContrasenaJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RestablecerContrasena(ctx, request.(RestablecerContrasenaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RestablecerContrasena")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RestablecerContrasenaResponseObject); ok {
+		if err := validResponse.VisitRestablecerContrasenaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SolicitarVerificacion operation middleware
+func (sh *strictHandler) SolicitarVerificacion(w http.ResponseWriter, r *http.Request) {
+	var request SolicitarVerificacionRequestObject
+
+	var body SolicitarVerificacionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SolicitarVerificacion(ctx, request.(SolicitarVerificacionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SolicitarVerificacion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SolicitarVerificacionResponseObject); ok {
+		if err := validResponse.VisitSolicitarVerificacionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CanjearVerificacion operation middleware
+func (sh *strictHandler) CanjearVerificacion(w http.ResponseWriter, r *http.Request) {
+	var request CanjearVerificacionRequestObject
+
+	var body CanjearVerificacionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CanjearVerificacion(ctx, request.(CanjearVerificacionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CanjearVerificacion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CanjearVerificacionResponseObject); ok {
+		if err := validResponse.VisitCanjearVerificacionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EliminarCuentaPropia operation middleware
+func (sh *strictHandler) EliminarCuentaPropia(w http.ResponseWriter, r *http.Request) {
+	var request EliminarCuentaPropiaRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EliminarCuentaPropia(ctx, request.(EliminarCuentaPropiaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EliminarCuentaPropia")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EliminarCuentaPropiaResponseObject); ok {
+		if err := validResponse.VisitEliminarCuentaPropiaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ObtenerCuentaPropia operation middleware
+func (sh *strictHandler) ObtenerCuentaPropia(w http.ResponseWriter, r *http.Request) {
+	var request ObtenerCuentaPropiaRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ObtenerCuentaPropia(ctx, request.(ObtenerCuentaPropiaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ObtenerCuentaPropia")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ObtenerCuentaPropiaResponseObject); ok {
+		if err := validResponse.VisitObtenerCuentaPropiaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ActualizarCuentaPropia operation middleware
+func (sh *strictHandler) ActualizarCuentaPropia(w http.ResponseWriter, r *http.Request) {
+	var request ActualizarCuentaPropiaRequestObject
+
+	var body ActualizarCuentaPropiaJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ActualizarCuentaPropia(ctx, request.(ActualizarCuentaPropiaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ActualizarCuentaPropia")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ActualizarCuentaPropiaResponseObject); ok {
+		if err := validResponse.VisitActualizarCuentaPropiaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CambiarContrasena operation middleware
+func (sh *strictHandler) CambiarContrasena(w http.ResponseWriter, r *http.Request) {
+	var request CambiarContrasenaRequestObject
+
+	var body CambiarContrasenaJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CambiarContrasena(ctx, request.(CambiarContrasenaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CambiarContrasena")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CambiarContrasenaResponseObject); ok {
+		if err := validResponse.VisitCambiarContrasenaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListarPreferencias operation middleware
+func (sh *strictHandler) ListarPreferencias(w http.ResponseWriter, r *http.Request) {
+	var request ListarPreferenciasRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListarPreferencias(ctx, request.(ListarPreferenciasRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListarPreferencias")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListarPreferenciasResponseObject); ok {
+		if err := validResponse.VisitListarPreferenciasResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GuardarPreferencias operation middleware
+func (sh *strictHandler) GuardarPreferencias(w http.ResponseWriter, r *http.Request) {
+	var request GuardarPreferenciasRequestObject
+
+	var body GuardarPreferenciasJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GuardarPreferencias(ctx, request.(GuardarPreferenciasRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GuardarPreferencias")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GuardarPreferenciasResponseObject); ok {
+		if err := validResponse.VisitGuardarPreferenciasResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ConsultarDisponibilidad operation middleware
@@ -2177,6 +4974,54 @@ func (sh *strictHandler) ListarServicios(w http.ResponseWriter, r *http.Request,
 	}
 }
 
+// RevocarTodasLasSesiones operation middleware
+func (sh *strictHandler) RevocarTodasLasSesiones(w http.ResponseWriter, r *http.Request) {
+	var request RevocarTodasLasSesionesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevocarTodasLasSesiones(ctx, request.(RevocarTodasLasSesionesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevocarTodasLasSesiones")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevocarTodasLasSesionesResponseObject); ok {
+		if err := validResponse.VisitRevocarTodasLasSesionesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListarSesiones operation middleware
+func (sh *strictHandler) ListarSesiones(w http.ResponseWriter, r *http.Request) {
+	var request ListarSesionesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListarSesiones(ctx, request.(ListarSesionesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListarSesiones")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListarSesionesResponseObject); ok {
+		if err := validResponse.VisitListarSesionesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // SolicitarCodigo operation middleware
 func (sh *strictHandler) SolicitarCodigo(w http.ResponseWriter, r *http.Request, params SolicitarCodigoParams) {
 	var request SolicitarCodigoRequestObject
@@ -2210,6 +5055,130 @@ func (sh *strictHandler) SolicitarCodigo(w http.ResponseWriter, r *http.Request,
 	}
 }
 
+// IniciarSesion operation middleware
+func (sh *strictHandler) IniciarSesion(w http.ResponseWriter, r *http.Request) {
+	var request IniciarSesionRequestObject
+
+	var body IniciarSesionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.IniciarSesion(ctx, request.(IniciarSesionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "IniciarSesion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(IniciarSesionResponseObject); ok {
+		if err := validResponse.VisitIniciarSesionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SolicitarEnlace operation middleware
+func (sh *strictHandler) SolicitarEnlace(w http.ResponseWriter, r *http.Request) {
+	var request SolicitarEnlaceRequestObject
+
+	var body SolicitarEnlaceJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SolicitarEnlace(ctx, request.(SolicitarEnlaceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SolicitarEnlace")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SolicitarEnlaceResponseObject); ok {
+		if err := validResponse.VisitSolicitarEnlaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CanjearEnlace operation middleware
+func (sh *strictHandler) CanjearEnlace(w http.ResponseWriter, r *http.Request) {
+	var request CanjearEnlaceRequestObject
+
+	var body CanjearEnlaceJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CanjearEnlace(ctx, request.(CanjearEnlaceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CanjearEnlace")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CanjearEnlaceResponseObject); ok {
+		if err := validResponse.VisitCanjearEnlaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RefrescarSesion operation middleware
+func (sh *strictHandler) RefrescarSesion(w http.ResponseWriter, r *http.Request) {
+	var request RefrescarSesionRequestObject
+
+	var body RefrescarSesionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RefrescarSesion(ctx, request.(RefrescarSesionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RefrescarSesion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RefrescarSesionResponseObject); ok {
+		if err := validResponse.VisitRefrescarSesionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CanjearCodigo operation middleware
 func (sh *strictHandler) CanjearCodigo(w http.ResponseWriter, r *http.Request, params CanjearCodigoParams) {
 	var request CanjearCodigoRequestObject
@@ -2236,6 +5205,32 @@ func (sh *strictHandler) CanjearCodigo(w http.ResponseWriter, r *http.Request, p
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CanjearCodigoResponseObject); ok {
 		if err := validResponse.VisitCanjearCodigoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevocarSesion operation middleware
+func (sh *strictHandler) RevocarSesion(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request RevocarSesionRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevocarSesion(ctx, request.(RevocarSesionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevocarSesion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevocarSesionResponseObject); ok {
+		if err := validResponse.VisitRevocarSesionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

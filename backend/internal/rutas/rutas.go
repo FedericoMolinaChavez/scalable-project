@@ -82,6 +82,10 @@ func Montar(s *plataforma.Servidor, c Componentes, registro *slog.Logger, plazo 
 		// necesita para poder correlacionarse; la recuperación por fuera del
 		// resto, para que un pánico dentro de las métricas también se atrape.
 		transporte.ConIdPeticion(),
+		// De dónde llega la petición: lo que RF-12 registra al entrar y lo que
+		// RF-25 muestra al listar sesiones. Va aquí y no en el manejador
+		// porque el manejador generado no recibe el *http.Request.
+		transporte.ConCliente(),
 		transporte.ConRecuperacion(registro),
 		transporte.ConRegistro(registro),
 		transporte.ConMetricas(s.Metricas().PeticionesHTTP, s.Metricas().DuracionHTTP),
@@ -113,9 +117,40 @@ func Montar(s *plataforma.Servidor, c Componentes, registro *slog.Logger, plazo 
 	}
 	if c.Identidad != nil {
 		// Públicas a propósito: son la puerta de entrada, y exigir un token
-		// para pedir un token sería circular.
+		// para pedir un token sería circular. Lo mismo vale para el alta
+		// (RF-24), la recuperación (RF-18) y los dos canjes por enlace: quien
+		// llega a ellas es justamente quien todavía no puede entrar.
 		registrar("POST /v1/sesiones/codigo", envoltura.SolicitarCodigo)
 		registrar("POST /v1/sesiones/token", envoltura.CanjearCodigo)
+		registrar("POST /v1/sesiones/contrasena", envoltura.IniciarSesion)
+		registrar("POST /v1/sesiones/enlace", envoltura.SolicitarEnlace)
+		registrar("POST /v1/sesiones/enlace/canje", envoltura.CanjearEnlace)
+		registrar("POST /v1/sesiones/refresco", envoltura.RefrescarSesion)
+
+		registrar("POST /v1/cuentas", envoltura.RegistrarCuenta)
+		registrar("POST /v1/cuentas/verificacion/canje", envoltura.CanjearVerificacion)
+		registrar("POST /v1/cuentas/contrasena/recuperacion", envoltura.SolicitarRecuperacion)
+		registrar("POST /v1/cuentas/contrasena/restablecimiento", envoltura.RestablecerContrasena)
+
+		// La credencial del agente ES la credencial de esta ruta (RF-13).
+		registrar("POST /v1/agentes/token", envoltura.IntercambiarTokenAgente)
+
+		// Y las que sí exigen cuenta. Un token de invitado llega hasta aquí
+		// —es un token válido— y lo rechaza el manejador con un 403, no el
+		// middleware: la diferencia entre "no te identificaste" y "lo que
+		// traes no acredita una cuenta" es justo lo que la interfaz necesita
+		// para saber si ofrecer iniciar sesión o registrarse.
+		acotada("GET /v1/sesiones", envoltura.ListarSesiones)
+		acotada("DELETE /v1/sesiones", envoltura.RevocarTodasLasSesiones)
+		acotada("DELETE /v1/sesiones/{id}", envoltura.RevocarSesion)
+
+		acotada("GET /v1/cuentas/yo", envoltura.ObtenerCuentaPropia)
+		acotada("PATCH /v1/cuentas/yo", envoltura.ActualizarCuentaPropia)
+		acotada("DELETE /v1/cuentas/yo", envoltura.EliminarCuentaPropia)
+		acotada("GET /v1/cuentas/yo/preferencias", envoltura.ListarPreferencias)
+		acotada("PUT /v1/cuentas/yo/preferencias", envoltura.GuardarPreferencias)
+		acotada("POST /v1/cuentas/yo/contrasena", envoltura.CambiarContrasena)
+		acotada("POST /v1/cuentas/verificacion", envoltura.SolicitarVerificacion)
 	}
 	if c.Consulta != nil {
 		acotada("GET /v1/reservas", envoltura.ListarReservas)
@@ -123,8 +158,16 @@ func Montar(s *plataforma.Servidor, c Componentes, registro *slog.Logger, plazo 
 	}
 	if c.Nucleo != nil {
 		// Crear es pública: RF-01 admite reservar como invitado, y es
-		// justamente eso lo que hace falta que exista RF-02 después.
-		registrar("POST /v1/reservas", envoltura.CrearReserva)
+		// justamente eso lo que hace falta que exista RF-02 después. Pero el
+		// token se mira SI VIENE, porque la misma ruta la usa una cuenta
+		// (RF-12) y un agente en su nombre (RF-04), y sin mirarlo esas dos
+		// reservas quedarían como de invitado.
+		if c.Verificador == nil {
+			panic("rutas: POST /v1/reservas mira el token opcional y no se pasó un Verificador")
+		}
+		s.Registrar("POST /v1/reservas", transporte.Encadenar(
+			http.HandlerFunc(envoltura.CrearReserva),
+			append(append([]transporte.Medio{}, medios...), accesoOpcional(c.Verificador))...))
 		acotada("POST /v1/reservas/{id}/cancelacion", envoltura.CancelarReserva)
 	}
 }

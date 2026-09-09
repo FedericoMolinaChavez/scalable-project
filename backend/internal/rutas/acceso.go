@@ -77,3 +77,40 @@ func tokenDeCabecera(r *http.Request) (string, bool) {
 	valor = strings.TrimSpace(valor)
 	return valor, valor != ""
 }
+
+// accesoOpcional verifica el token cuando lo hay, y deja pasar cuando no.
+//
+// Existe para una sola ruta y por una razón concreta: crear una reserva es
+// pública porque RF-01 admite reservar como INVITADO, pero la misma ruta la usa
+// una cuenta (RF-12) y un agente en nombre de una cuenta (RF-04), y en esos dos
+// casos hay que saber quién es para poder escribir cuenta_id y el índice global.
+//
+// Un token PRESENTE y malo se rechaza, no se ignora. La tentación es tratarlo
+// como si no viniera —total, la ruta es pública— y es justo lo que no hay que
+// hacer: quien manda un token caducado quiere reservar COMO ÉL, y crearle en
+// silencio una reserva de invitado le deja una reserva que después no aparece
+// en su listado y que no puede cancelar desde su cuenta.
+func accesoOpcional(verificador Verificador) transporte.Medio {
+	return func(siguiente http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			token, hay := tokenDeCabecera(r)
+			if !hay {
+				siguiente.ServeHTTP(w, r)
+				return
+			}
+
+			acceso, err := verificador.Verificar(token, time.Now())
+			switch {
+			case errors.Is(err, identidad.ErrTokenVencido):
+				transporte.Escribir(w, transporte.TokenVencido.Cuerpo(r.Context(),
+					"el token caducó; vuelve a identificarte antes de reservar"))
+				return
+			case err != nil:
+				transporte.Escribir(w, transporte.NoAutorizado.Cuerpo(r.Context(), ""))
+				return
+			}
+
+			siguiente.ServeHTTP(w, r.WithContext(identidad.ConAcceso(r.Context(), acceso)))
+		})
+	}
+}

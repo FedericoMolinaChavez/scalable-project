@@ -7,11 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
 
-// El token de acceso: quién demostró tener este correo, y hasta cuándo.
+// El token de acceso: qué demostró quien lo presenta, y hasta cuándo.
 //
 // Formato propio y no JWT, por dos razones concretas:
 //
@@ -33,23 +34,106 @@ import (
 // nombre de la persona o el identificador de sus reservas sería regalar
 // información a cualquiera que lo intercepte, y el contenido de este formato no
 // va cifrado, solo firmado.
-const prefijoVersion = "rv1"
+//
+// La versión es `rv2` y no `rv1` porque el contenido cambió al aparecer las
+// cuentas (RF-12): antes un token solo podía significar "controlo este correo",
+// ahora significa además "soy esta cuenta, de este tipo" o "soy un agente
+// actuando por esta cuenta". Subir el prefijo es justamente para lo que existe:
+// un token del formato anterior se rechaza en la primera comparación en vez de
+// interpretarse con las reglas nuevas y acabar con un alcance que nadie emitió.
+// El coste de invalidar los que hubiera en circulación es nulo: viven minutos.
+const prefijoVersion = "rv2"
+
+// Los tres tipos de cuenta de RF-23. Son constantes de este paquete y no del
+// generado desde el contrato porque el token es anterior al contrato: se emite
+// y se verifica aunque ninguna ruta HTTP esté montada.
+const (
+	TipoUsuario    = "usuario"
+	TipoAdmin      = "administrador"
+	TipoSuperAdmin = "super_admin"
+)
 
 // Acceso es lo que un token demuestra.
+//
+// Las claves JSON son de una letra a propósito: el token viaja en cada
+// petición, va en base64 y no se comprime. `cuenta_impersonada_id` ocuparía más
+// que el UUID que transporta.
 type Acceso struct {
-	// Destino es el correo verificado. Es la identidad completa de un invitado:
-	// no hay cuenta detrás, solo la prueba de que controla esa dirección.
-	Destino string `json:"d"`
+	// Destino es el correo verificado. En un token de invitado es la identidad
+	// COMPLETA: no hay cuenta detrás, solo la prueba de que controla esa
+	// dirección. En uno de cuenta es informativo y el alcance lo da Cuenta.
+	Destino string `json:"d,omitempty"`
 
-	// Expira es cuándo deja de valer. Se comprueba al verificar, y es la única
-	// defensa real: no hay lista de revocación porque no hay sesión que
-	// revocar (RF-25 gestiona sesiones de cuentas, y un invitado no tiene).
+	// Expira es cuándo deja de valer. Es la única defensa real de este token:
+	// no se comprueba contra la base al verificarlo —es lo que le permite
+	// sostener la ruta de lectura de RNF-03— así que revocar una sesión corta
+	// el refresco al instante y este al vencer.
 	Expira int64 `json:"x"`
+
+	// Cuenta es el identificador de la cuenta. Vacío = invitado (RF-02).
+	Cuenta string `json:"c,omitempty"`
+
+	// Tipo es de dónde sale el alcance de RF-23: usuario, administrador o
+	// super_admin. Va DENTRO del token, firmado, y no se relee de la base en
+	// cada petición. La consecuencia hay que aceptarla: degradar a alguien de
+	// administrador a usuario no le quita el alcance hasta que su token venza.
+	// Es el mismo compromiso que la revocación, y se acorta por el mismo sitio.
+	Tipo string `json:"t,omitempty"`
+
+	// Tenant es el negocio que administra, y solo lo lleva un administrador.
+	// Es lo que hace que la cabecera X-Tenant-Id deje de decidir nada para
+	// quien tiene cuenta: un administrador opera sobre SU tenant, no sobre el
+	// que escriba en una cabecera.
+	Tenant string `json:"n,omitempty"`
+
+	// Sesion es la sesión que lo emitió (RF-25). No se comprueba al verificar,
+	// por lo dicho en Expira; sirve para que un refresco sepa a qué fila
+	// pertenece y para poder registrar desde qué sesión se hizo algo.
+	Sesion string `json:"s,omitempty"`
+
+	// Agente, cuando lo hay, es quien actúa EN NOMBRE de Cuenta (RF-13). Su
+	// presencia no amplía nada: el alcance sigue siendo el de la cuenta
+	// impersonada, y además queda acotado por Alcance.
+	Agente string `json:"g,omitempty"`
+
+	// Alcance son las acciones concretas que un token de agente autoriza,
+	// ya intersecadas al emitirlo (RF-13/RF-23). Solo tiene sentido con Agente:
+	// un token de persona no lleva lista porque su alcance es el de su tipo,
+	// no una enumeración.
+	Alcance []string `json:"a,omitempty"`
 }
 
 // Vencido indica si el token ya no vale por tiempo.
 func (a Acceso) Vencido(ahora time.Time) bool {
 	return ahora.Unix() >= a.Expira
+}
+
+// EsInvitado distingue al que reservó sin cuenta (RF-02) del que tiene una.
+//
+// Importa en cada consulta acotada: el alcance de un invitado es el correo con
+// el que reservó, y el de una cuenta es la cuenta. Confundirlos devolvería a un
+// usuario registrado las reservas de invitado de cualquiera que use su misma
+// dirección.
+func (a Acceso) EsInvitado() bool {
+	return a.Cuenta == ""
+}
+
+// PorAgente indica si quien pide no es el titular sino un agente en su nombre.
+func (a Acceso) PorAgente() bool {
+	return a.Agente != ""
+}
+
+// Permite comprueba que la acción esté dentro del alcance del token.
+//
+// Solo acota a los agentes. Una persona no lleva lista de acciones: su alcance
+// sale del tipo de cuenta (RF-23) y lo aplica quien ejecuta la acción, no el
+// token. Un agente sí, porque RF-13 emite su token para un propósito concreto
+// y usarlo para otro es justamente lo que hay que impedir.
+func (a Acceso) Permite(accion string) bool {
+	if !a.PorAgente() {
+		return true
+	}
+	return slices.Contains(a.Alcance, accion)
 }
 
 var (
@@ -76,11 +160,28 @@ func NuevoFirmante(secreto []byte, vigencia time.Duration) *Firmante {
 	return &Firmante{secreto: secreto, vigencia: vigencia}
 }
 
-// Emitir crea un token para un destino ya verificado.
-func (f *Firmante) Emitir(destino string, ahora time.Time) (string, time.Time, error) {
-	expira := ahora.Add(f.vigencia)
+// Vigencia es cuánto vive un token recién emitido. La expone porque es también
+// la ventana de revocación de RF-25, y quien decide esa política necesita poder
+// leerla sin duplicar el número.
+func (f *Firmante) Vigencia() time.Duration {
+	return f.vigencia
+}
 
-	cuerpo, err := json.Marshal(Acceso{Destino: destino, Expira: expira.Unix()})
+// Emitir crea un token para un destino de invitado ya verificado (RF-02).
+func (f *Firmante) Emitir(destino string, ahora time.Time) (string, time.Time, error) {
+	return f.EmitirAcceso(Acceso{Destino: destino}, ahora)
+}
+
+// EmitirAcceso firma un acceso completo: cuenta, tipo, tenant, agente y alcance.
+//
+// La caducidad la pone SIEMPRE esta función y nunca quien llama. Un emisor que
+// aceptara un Expira de fuera acabaría, tarde o temprano, firmando el que
+// venga en una petición.
+func (f *Firmante) EmitirAcceso(acceso Acceso, ahora time.Time) (string, time.Time, error) {
+	expira := ahora.Add(f.vigencia)
+	acceso.Expira = expira.Unix()
+
+	cuerpo, err := json.Marshal(acceso)
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("no se pudo serializar el token: %w", err)
 	}
@@ -126,7 +227,19 @@ func (f *Firmante) Verificar(token string, ahora time.Time) (Acceso, error) {
 	if err := json.Unmarshal(crudo, &acceso); err != nil {
 		return Acceso{}, ErrTokenInvalido
 	}
-	if acceso.Destino == "" {
+
+	// Un token tiene que acreditar a ALGUIEN: un correo de invitado o una
+	// cuenta. Uno sin ninguna de las dos cosas pasa la firma —la firma solo
+	// dice que lo emitimos nosotros— y llegaría al alcance como un sujeto
+	// vacío, que es la forma más silenciosa de no acotar nada.
+	if acceso.Destino == "" && acceso.Cuenta == "" {
+		return Acceso{}, ErrTokenInvalido
+	}
+
+	// Un agente sin alcance no autoriza nada, y ese caso ya lo impide el CHECK
+	// de token_agente al emitirlo. Comprobarlo también aquí cubre el token que
+	// se firmó por otro camino.
+	if acceso.PorAgente() && len(acceso.Alcance) == 0 {
 		return Acceso{}, ErrTokenInvalido
 	}
 

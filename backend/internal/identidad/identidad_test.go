@@ -81,7 +81,7 @@ func servicio(t *testing.T, ttl time.Duration, maxIntentos, maxEnvios int) (*ide
 	return identidad.Nuevo(
 		bd, b, identidad.NuevoFirmante([]byte(secreto), 15*time.Minute),
 		limitador(t), registro,
-		ttl, maxIntentos, maxEnvios,
+		identidad.Opciones{TTLCodigo: ttl, MaxIntentos: maxIntentos, MaxEnviosHora: maxEnvios},
 	), b
 }
 
@@ -233,7 +233,8 @@ func TestUnCodigoCaducadoNoVale(t *testing.T) {
 	b := &buzon{}
 	svc := identidad.Nuevo(
 		bd, b, identidad.NuevoFirmante([]byte(secreto), 15*time.Minute),
-		limitador(t), slog.New(slog.NewTextHandler(io.Discard, nil)), 5*time.Minute, 3, 3)
+		limitador(t), slog.New(slog.NewTextHandler(io.Discard, nil)),
+		identidad.Opciones{TTLCodigo: 5 * time.Minute, MaxIntentos: 3, MaxEnviosHora: 3})
 
 	destino := destinoUnico(t)
 

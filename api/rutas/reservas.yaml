@@ -9,9 +9,15 @@ coleccion:
       existe el token de invitado, así que devuelve las reservas hechas con el
       correo que ese token acredita.
 
-      Cuando exista RF-12, la misma ruta devolverá las de la cuenta a un
-      `usuario` y las del tenant a un `administrador` (RF-32). Es una operación
-      con el alcance acotado por la cuenta, no tres rutas distintas por rol.
+      Con un token de cuenta el alcance sale del tipo (RF-23): un `usuario` ve
+      las suyas, un `administrador` ve las de su tenant (RF-32) y un agente, las
+      de la cuenta que representa (RF-05). Es una operación con el alcance
+      acotado por la cuenta, no cuatro rutas distintas por rol.
+
+      Los filtros `sede_id` y `recurso_id` solo tienen sentido en el alcance del
+      administrador —la agenda de RF-32 se recorre por sede y por recurso— pero
+      no se rechazan a un `usuario`: acotar lo propio por sede es una consulta
+      legítima, y prohibirla obligaría a que el filtro supiera de roles.
     tags: [reservas]
     security:
       - TokenCliente: []
@@ -34,6 +40,16 @@ coleccion:
         in: query
         required: false
         schema: { type: string, format: date-time }
+      - name: sede_id
+        in: query
+        required: false
+        description: Agenda de una sede (RF-32).
+        schema: { type: string, format: uuid }
+      - name: recurso_id
+        in: query
+        required: false
+        description: Agenda de un recurso concreto (RF-32).
+        schema: { type: string, format: uuid }
       - name: limite
         in: query
         required: false
@@ -55,6 +71,7 @@ coleccion:
               $ref: '../componentes/esquemas/reservas.yaml#/ListaReservas'
       '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
       '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
+      '403': { $ref: '../componentes/respuestas.yaml#/FueraDeAlcance' }
       '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
 
   post:
