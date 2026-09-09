@@ -35,8 +35,11 @@ inicio de sesión, cambio y recuperación de contraseña, alta de tenant nuevo
 inicial de las tres anteriores, y en el caso del alta de tenant es el momento en
 que un cliente final se convierte en administrador.
 
-`super_admin` (operador de la plataforma) existe en el modelo de datos y en
-RF-23, pero no se ha confirmado si tiene superficie propia. Decisión abierta.
+`super_admin` (operador de la plataforma) existe en el modelo de datos, en
+RF-23 y en el rol `reservas_soporte`, pero ninguna ruta lo distingue todavía de
+un administrador. Si tiene superficie propia sigue siendo una decisión abierta;
+lo que sí está claro es qué haría en ella: el alta de tenants de RF-35 y la
+consulta global de auditoría de RF-36.
 
 ## Product Purpose
 
@@ -131,7 +134,9 @@ administrador es una agenda por sede y recurso con acciones sobre cada reserva.
 
 **Un cliente puede consultar sus reservas sin tener cuenta.** RF-02 admite dos
 métodos de identificación: iniciar sesión, o recibir un OTP en el teléfono o el
-correo con que reservó. Es la contrapartida de permitir reservar como invitado,
+correo con que reservó. Y quien se registra después no pierde lo de antes: una
+cuenta ve también las reservas que hizo como invitado con su correo ya
+verificado (RF-24). Es la contrapartida de permitir reservar como invitado,
 y significa que la pantalla de «mis reservas» tiene dos puertas de entrada, no
 una. El envío del OTP responde igual exista o no una cuenta asociada, para no
 permitir enumerar usuarios.
@@ -153,11 +158,17 @@ en producción.
 
 Constraints y decisiones abiertas:
 
-- **No hay autenticación todavía.** El tenant va fijo en `consultas.ts` y viaja
-  en una cabecera provisional `X-Tenant-Id`. Sale del token cuando exista RF-12.
-- **El contrato cubre solo la rebanada inicial**: catálogo, disponibilidad y
-  reservas. Las pantallas actuales consumen endpoints que el backend aún no
-  implementa y hoy responden `404`.
+- **La autenticación existe en el backend y no en la interfaz.** RF-12, RF-18,
+  RF-19, RF-21, RF-22, RF-24 y RF-25 están implementados y contratados; ninguna
+  pantalla los usa todavía. El frontend sigue con el tenant fijo en
+  `consultas.ts` y la cabecera `X-Tenant-Id`, que para las rutas públicas
+  —catálogo, disponibilidad, crear reserva— sigue siendo lo correcto: no hay
+  token del que derivar el negocio. Para un administrador ya no manda: su tenant
+  va dentro del token.
+- **El contrato cubre catálogo, disponibilidad, reservas y cuentas.** Lo que
+  todavía no existe es el dinero (RF-33, RF-29, RF-34), la configuración del
+  negocio (RF-14, RF-15, RF-16, RF-17, RF-30, RF-31), las métricas (RF-11) y la
+  auditoría consultable (RF-36).
 - **El pago es Stripe**, confirmado por webhook asíncrono. El diseño del paso de
   pago en el frontend no está resuelto.
 - **Sin sistema de diseño.** `index.css` solo importa Tailwind; no hay tokens,
@@ -193,6 +204,11 @@ Lo que existe de verdad y se puede usar:
   `EstadoConsulta`, la ruta completa de reserva (catálogo → disponibilidad →
   reserva, con el 409 resuelto) y el listado de reservas del tenant, con
   pruebas.
+- **Cuentas y acceso, en el backend**: alta con verificación por correo, inicio
+  de sesión con contraseña y con magic link, par de tokens con refresco
+  rotatorio, sesiones listables y revocables, perfil, recuperación de
+  contraseña, preferencias de aviso y tokens de agente. Todo con el alcance de
+  RF-23 aplicado en la consulta, no después de traerla.
 - **Semilla de desarrollo** (`db/semillas/dev.sql`): un tenant "Estudio Demo",
   una "Sede Centro", un servicio "Sesión de una hora" a 80.000 COP, una "Sala 1".
 

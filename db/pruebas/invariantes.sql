@@ -335,6 +335,191 @@ SELECT pg_temp.debe_fallar($sql$
 $sql$, '23514', 'excepcion sin recurso ni sede');
 
 
+-- =============================================================================
+-- 7. Cuentas y acceso (ER-02: RF-12, RF-13, RF-21, RF-24, RF-25)
+-- =============================================================================
+-- Estas tablas no llevan RLS por tenant --la unidad de aislamiento aqui es la
+-- CUENTA, no el negocio-- asi que lo que se comprueba no es que un tenant no
+-- vea otro, sino que el motor sostenga las reglas de las que depende el acceso.
+
+-- El alcance de RF-23, expresado estructuralmente: un administrador administra
+-- UN tenant y un usuario no administra ninguno. No es una convencion, es un
+-- CHECK, y por eso no hay tabla de roles que mantener sincronizada.
+SELECT pg_temp.debe_fallar($sql$
+  INSERT INTO plataforma.cuenta (nombre, email, tipo)
+  VALUES ('Admin sin negocio', 'admin-sin-tenant@ejemplo.test', 'administrador')
+$sql$, '23514', 'administrador sin tenant');
+
+SELECT pg_temp.debe_fallar($sql$
+  INSERT INTO plataforma.cuenta (nombre, email, tipo, tenant_id)
+  VALUES ('Usuario con negocio', 'usuario-con-tenant@ejemplo.test', 'usuario',
+          '11111111-1111-1111-1111-111111111111')
+$sql$, '23514', 'usuario atado a un tenant');
+
+-- Una cuenta necesita un canal de contacto: es por donde se verifica (RF-19) y
+-- por donde se recupera (RF-18).
+SELECT pg_temp.debe_fallar($sql$
+  INSERT INTO plataforma.cuenta (nombre, tipo) VALUES ('Nadie', 'usuario')
+$sql$, '23514', 'cuenta sin correo ni telefono');
+
+-- Salvo si esta eliminada. Es exactamente la anonimizacion de RF-25: la fila se
+-- conserva --los comprobantes de RF-34 la referencian-- y lo que desaparece es
+-- lo que identifica a una persona.
+SELECT pg_temp.debe_pasar($sql$
+  INSERT INTO plataforma.cuenta (id, nombre, tipo, estado, anonimizada_en)
+  VALUES ('99999999-9999-9999-9999-999999999901', NULL, 'usuario', 'eliminada', now())
+$sql$, 'cuenta eliminada sin ningun contacto');
+
+-- Y anonimizada_en solo tiene sentido en una cuenta eliminada: una activa con
+-- fecha de anonimizacion seria una contradiccion que despues nadie sabria leer.
+SELECT pg_temp.debe_fallar($sql$
+  INSERT INTO plataforma.cuenta (nombre, email, tipo, estado, anonimizada_en)
+  VALUES ('Viva y anonima', 'viva@ejemplo.test', 'usuario', 'activa', now())
+$sql$, '23514', 'cuenta activa marcada como anonimizada');
+
+-- El correo es unico entre las cuentas VIVAS, y ese matiz es el que permite
+-- volver a registrarse despues de una baja.
+SELECT pg_temp.debe_pasar($sql$
+  INSERT INTO plataforma.cuenta (id, nombre, email, tipo, estado)
+  VALUES ('99999999-9999-9999-9999-999999999902',
+          'Primera', 'repetido@ejemplo.test', 'usuario', 'activa')
+$sql$, 'primera cuenta con un correo');
+
+SELECT pg_temp.debe_fallar($sql$
+  INSERT INTO plataforma.cuenta (nombre, email, tipo)
+  VALUES ('Segunda', 'REPETIDO@ejemplo.test', 'usuario')
+$sql$, '23505', 'segunda cuenta con el mismo correo (sin distinguir mayusculas)');
+
+SELECT pg_temp.debe_pasar($sql$
+  UPDATE plataforma.cuenta
+  SET email = NULL, nombre = NULL, estado = 'eliminada', anonimizada_en = now()
+  WHERE id = '99999999-9999-9999-9999-999999999902'
+$sql$, 'anonimizar la cuenta libera su correo');
+
+SELECT pg_temp.debe_pasar($sql$
+  INSERT INTO plataforma.cuenta (nombre, email, tipo)
+  VALUES ('Vuelve', 'repetido@ejemplo.test', 'usuario')
+$sql$, 'registrarse otra vez con el correo de una cuenta dada de baja');
+
+-- -----------------------------------------------------------------------------
+-- sesion (RF-25)
+-- -----------------------------------------------------------------------------
+
+SELECT pg_temp.debe_pasar($sql$
+  INSERT INTO plataforma.sesion (id, cuenta_id, token_refresco_hash, expira_en)
+  VALUES ('99999999-9999-9999-9999-999999999911',
+          '99999999-9999-9999-9999-999999999901', 'huella-de-refresco-1',
+          now() + interval '30 days')
+$sql$, 'abrir una sesion');
+
+-- Dos sesiones con el mismo refresco serian dos sesiones canjeables con el
+-- mismo secreto, y la de menos no se podria distinguir.
+SELECT pg_temp.debe_fallar($sql$
+  INSERT INTO plataforma.sesion (cuenta_id, token_refresco_hash, expira_en)
+  VALUES ('99999999-9999-9999-9999-999999999901', 'huella-de-refresco-1',
+          now() + interval '30 days')
+$sql$, '23505', 'dos sesiones con el mismo token de refresco');
+
+SELECT pg_temp.debe_fallar($sql$
+  INSERT INTO plataforma.sesion (cuenta_id, token_refresco_hash, expira_en)
+  VALUES ('99999999-9999-9999-9999-999999999901', 'huella-de-refresco-2',
+          now() - interval '1 day')
+$sql$, '23514', 'sesion que nace caducada');
+
+-- Revocar no borra: la fila es evidencia de un acceso que existio (RNF-36).
+SELECT pg_temp.debe_fallar($sql$
+  DELETE FROM plataforma.sesion WHERE id = '99999999-9999-9999-9999-999999999911'
+$sql$, '42501', 'borrar una sesion en vez de revocarla');
+
+-- -----------------------------------------------------------------------------
+-- preferencia_notificacion (RF-21)
+-- -----------------------------------------------------------------------------
+
+SELECT pg_temp.debe_pasar($sql$
+  INSERT INTO plataforma.preferencia_notificacion
+    (cuenta_id, canal, tipo_notificacion, habilitado)
+  VALUES ('99999999-9999-9999-9999-999999999901', 'email', 'recordatorio', false)
+$sql$, 'guardar una preferencia de notificacion');
+
+-- El triple es la clave: no caben dos respuestas contradictorias a "esta cuenta
+-- quiere este tipo por este canal".
+SELECT pg_temp.debe_fallar($sql$
+  INSERT INTO plataforma.preferencia_notificacion
+    (cuenta_id, canal, tipo_notificacion, habilitado)
+  VALUES ('99999999-9999-9999-9999-999999999901', 'email', 'recordatorio', true)
+$sql$, '23505', 'dos preferencias para el mismo canal y tipo');
+
+-- -----------------------------------------------------------------------------
+-- agente y token_agente (RF-13, RNF-07)
+-- -----------------------------------------------------------------------------
+
+SELECT pg_temp.debe_pasar($sql$
+  INSERT INTO plataforma.agente (id, nombre, credencial_hash)
+  VALUES ('99999999-9999-9999-9999-999999999921', 'Agente de prueba', 'huella-credencial-1')
+$sql$, 'registrar un agente');
+
+SELECT pg_temp.debe_fallar($sql$
+  INSERT INTO plataforma.agente (nombre, credencial_hash)
+  VALUES ('Otro agente', 'huella-credencial-1')
+$sql$, '23505', 'dos agentes con la misma credencial');
+
+SELECT pg_temp.debe_fallar($sql$
+  INSERT INTO plataforma.agente (nombre, credencial_hash)
+  VALUES ('   ', 'huella-credencial-2')
+$sql$, '23514', 'agente sin nombre');
+
+-- Un token sin alcance no autoriza nada: pasaria la comprobacion de firma y
+-- fallaria en cada accion, convirtiendo un error de emision en uno de uso.
+SELECT pg_temp.debe_fallar($sql$
+  INSERT INTO plataforma.token_agente
+    (agente_id, cuenta_impersonada_id, alcance, expira_en)
+  VALUES ('99999999-9999-9999-9999-999999999921',
+          '99999999-9999-9999-9999-999999999901',
+          '[]'::jsonb, now() + interval '15 min')
+$sql$, '23514', 'token de agente con alcance vacio');
+
+SELECT pg_temp.debe_fallar($sql$
+  INSERT INTO plataforma.token_agente
+    (agente_id, cuenta_impersonada_id, alcance, expira_en)
+  VALUES ('99999999-9999-9999-9999-999999999921',
+          '99999999-9999-9999-9999-999999999901',
+          '{"reservar": true}'::jsonb, now() + interval '15 min')
+$sql$, '23514', 'alcance de agente que no es una lista');
+
+SELECT pg_temp.debe_pasar($sql$
+  INSERT INTO plataforma.token_agente
+    (agente_id, cuenta_impersonada_id, alcance, expira_en)
+  VALUES ('99999999-9999-9999-9999-999999999921',
+          '99999999-9999-9999-9999-999999999901',
+          '["listar_reservas"]'::jsonb, now() + interval '15 min')
+$sql$, 'token de agente con un alcance concreto');
+
+-- Un agente no puede hablar por una cuenta que no lo autorizo (RNF-07). Eso lo
+-- decide la aplicacion al emitir; lo que el motor sostiene es que la
+-- autorizacion apunte a filas que existen.
+SELECT pg_temp.debe_fallar($sql$
+  INSERT INTO plataforma.autorizacion_agente (cuenta_id, agente_id)
+  VALUES ('99999999-9999-9999-9999-999999999901',
+          '99999999-9999-9999-9999-9999999999ff')
+$sql$, '23503', 'autorizacion hacia un agente que no existe');
+
+-- -----------------------------------------------------------------------------
+-- token_verificacion (RF-12, RF-18, RF-19)
+-- -----------------------------------------------------------------------------
+
+SELECT pg_temp.debe_fallar($sql$
+  INSERT INTO plataforma.token_verificacion
+    (proposito, canal, destino, valor_hash, expira_en)
+  VALUES ('magic_link', 'email', '  ', 'huella', now() + interval '15 min')
+$sql$, '23514', 'token de un solo uso sin destino');
+
+SELECT pg_temp.debe_fallar($sql$
+  INSERT INTO plataforma.token_verificacion
+    (proposito, canal, destino, valor_hash, expira_en)
+  VALUES ('magic_link', 'email', 'x@ejemplo.test', 'huella', now() - interval '1 min')
+$sql$, '23514', 'token que nace caducado');
+
+
 ROLLBACK;
 
 \o

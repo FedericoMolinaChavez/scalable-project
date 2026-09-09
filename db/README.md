@@ -153,16 +153,33 @@ directamente usaría las políticas de esa partición —que no tiene ninguna—
 devolvería filas de todos los tenants del bucket. Acceder por el padre no
 requiere privilegios sobre los hijos, así que revocarlos no cuesta nada.
 
+## Estado de ER-02 y ER-03
+
+ER-02 está completo. Las cinco tablas que faltaban entraron en `0012`
+—`sesion`, `preferencia_notificacion`, `agente`, `autorizacion_agente` y
+`token_agente`— junto con dos correcciones sobre lo que ya existía:
+
+- `cuenta_contacto_minimo` prohibía la anonimización que RF-25 exige y que un
+  comentario de `0003` ya daba por hecha: la tabla documentaba un borrado que
+  ella misma impedía. Ahora exceptúa las cuentas eliminadas.
+- No había índice para buscar un token por su valor, que es como se canjea un
+  ENLACE. Los dos de `0008` entran por destino, que es lo que necesita un
+  código —quien lo teclea escribe también su correo— y no lo que necesita un
+  enlace, que viaja solo en la URL.
+
+El aislamiento de `plataforma.*` sigue siendo por CUENTA y no por tenant, y
+sigue sostenido por la capa de autorización: una política de RLS
+`tenant_id = infra.tenant_actual()` sobre estas tablas rompería justo su razón
+de existir, que es que una persona sea la misma aunque reserve en veinte
+negocios.
+
 ## Pendiente
 
-- `0008` — resto de ER-02: `sesion`, `token_verificacion`,
-  `preferencia_notificacion`, `agente`, `autorizacion_agente`, `token_agente`.
-  Trae consigo el aislamiento por cuenta de `plataforma.*`, hoy sostenido solo
-  por la capa de autorización.
-- `0009` — resto de ER-03 (dinero): `tarifa`, `pago`, `evento_webhook`,
-  `reembolso`, `comprobante`.
-- `0010` — operación: `config_notificacion`, `notificacion_programada`,
-  `evento_auditoria` (`PARTITION BY RANGE`), `outbox_evento`, `metrica_diaria`.
+- Resto de ER-03 (dinero): `tarifa`, `pago`, `evento_webhook`, `reembolso`,
+  `comprobante`.
+- Operación: `config_notificacion`, `notificacion_programada`,
+  `evento_auditoria` (`PARTITION BY RANGE`) y `metrica_diaria`. `outbox_evento`
+  ya existe desde `0010`.
 - Decidir si `clave_idempotencia` en `reserva` se queda. Es un añadido respecto
   a ER-01: el modelo tenía idempotencia en el webhook, el reembolso y la
   notificación, pero no en la creación, y un agente que reintenta un `POST`

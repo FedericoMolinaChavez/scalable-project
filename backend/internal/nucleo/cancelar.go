@@ -192,13 +192,19 @@ func actorDeCancelacion(a dominio.Alcance, agente string) (tipo, id, motivo stri
 	switch {
 	case agente != "":
 		return "agente", agente, "cancelada por un agente en nombre de la cuenta (RF-04)"
-	case a.TenantCompleto:
+	case a.TenantCompleto && a.Cuenta != "":
 		return "administrador", a.Cuenta, "cancelada por el negocio desde su agenda (RF-32)"
+	case a.TenantCompleto:
+		// Alcance de tenant sin cuenta detrás: no lo produce ningún token —el de
+		// un administrador siempre lleva la suya— pero el tipo lo admite, y
+		// transicion_actor_coherente exige que solo el sistema tenga actor_id
+		// nulo. Se registra como sistema y el motivo dice de dónde vino: una
+		// traza que no puede nombrar al actor tiene que decirlo, no inventarlo.
+		return "sistema", "", "cancelada desde la agenda del negocio, sin actor identificado (RF-32)"
 	case a.Cuenta != "":
 		return "usuario", a.Cuenta, "cancelada por su titular (RF-06)"
 	default:
-		// Invitado: no hay cuenta que poner, y transicion_actor_coherente exige
-		// que solo el sistema tenga actor_id nulo.
+		// Invitado: no hay cuenta que poner.
 		return "sistema", "", "cancelada por quien reservó, identificado con un código (RF-06)"
 	}
 }
