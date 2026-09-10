@@ -6,6 +6,7 @@ Un módulo Go, un binario por componente síncrono de ARQ-01.
 task back:run -- consulta       # :8081
 task back:run -- nucleo         # :8080
 task back:run -- identidad      # :8082
+task back:run -- configuracion  # :8084
 task back:run -- trabajadores   # :8083
 task back:test                  # necesita `task infra:up`
 task back:lint
@@ -20,7 +21,8 @@ token no rechaza nada, sirve los datos igual.
 | Binario | Puerto | Rutas | Por qué ahí |
 |---|---|---|---|
 | `nucleo` | 8080 | `POST /v1/reservas`, `POST /v1/reservas/{id}/cancelacion` | Único que escribe en `negocio.reserva` por la ruta síncrona |
-| `consulta` | 8081 | `GET /v1/sedes`, `/v1/servicios`, `/v1/disponibilidad`, `/v1/reservas`, `/v1/reservas/{id}` | Solo lee; en despliegue va contra las réplicas |
+| `consulta` | 8081 | `GET /v1/disponibilidad`, `/v1/reservas`, `/v1/reservas/{id}` | Solo lee; en despliegue va contra las réplicas |
+| `configuracion` | 8084 | `GET /v1/sedes`, `/v1/servicios`, todo `/v1/config` y `/v1/auditoria` | En ARQ-01 va contra el PRIMARIO (`config --> pgb`): escribe |
 | `identidad` | 8082 | Todo `/v1/sesiones`, `/v1/cuentas` y `/v1/agentes` | Manda correo: es un dominio de fallo propio, y un relé caído no puede arrastrar la ruta de reserva |
 | `trabajadores` | 8083 | ninguna de negocio (solo sondas y `/metrics`) | El paquete "Asíncrono" de ARQ-01: expirador (RF-27), transiciones automáticas (RF-28), relay del outbox y notificador (RF-10) |
 
@@ -29,10 +31,12 @@ ser atómico con la invariante y el `GET` no, que es exactamente la frontera por
 la que ARQ-01 descompone. En desarrollo eso obliga a que el proxy de Vite
 enrute por método; en producción lo hace el Gateway.
 
-El código de catálogo y disponibilidad ya vive en sus propios paquetes
-(`internal/catalogo`, `internal/disponibilidad`), que en ARQ-01 son componentes
-aparte. Los monta `consulta` porque todavía no tienen despliegue propio;
-separarlos será mover dos líneas de `cmd/consulta/main.go`.
+El catálogo salió de `consulta` y tiene binario propio, y la razón está
+dibujada en ARQ-01: `consulta --> pgr` y `disp --> pgr`, contra las réplicas,
+mientras que `config --> pgb`, contra el primario. Un administrador que publica
+una regla de disponibilidad contra una réplica no publica nada, así que la
+flecha no era decorativa. La disponibilidad sigue en `consulta` porque comparte
+con ella esa misma propiedad: solo lee.
 
 ## Paquetes
 
@@ -45,7 +49,8 @@ internal/
   dominio/              las reglas que el motor NO hace cumplir, y el alcance de RF-23
   transporte/           middleware y el formato de error RFC 9457
   rutas/                monta el HTTP sobre los componentes y traduce errores a códigos
-  catalogo/             ARQ-01: Configuración y Catálogo
+  catalogo/             ARQ-01: Configuración y Catálogo (lee y escribe)
+  auditoria/            RF-36: la traza, escrita en la transacción que audita
   disponibilidad/       ARQ-01: Servicio de Disponibilidad
   nucleo/               ARQ-01: Núcleo de Reservas (escritura)
   consulta/             ARQ-01: Consulta de Reservas (lectura)
@@ -168,6 +173,27 @@ ampliarla después. Las tres razones de rechazo —credencial que no vale, cuent
 que no lo autorizó (RNF-07), acciones fuera de su alcance— responden el mismo
 403: separarlas le diría a quien prueba credenciales qué parte ya superó.
 
+**La auditoría es una condición de éxito, no un registro.** RNF-36 dice que si
+una acción crítica no se puede auditar, la acción no ocurre, y eso decide toda
+la forma de `internal/auditoria`: `Escribir` recibe una `pgx.Tx` y no una
+`*datos.BD`, así que no puede abrir su propia transacción ni fallar en silencio.
+Por eso tampoco hay outbox ni relay aquí, al revés que con los eventos de
+negocio: un relay entrega DESPUÉS del COMMIT, y "después" y "condición de éxito"
+son incompatibles.
+
+El rechazo SÍ se audita, y en una transacción aparte, porque la primera ya está
+abortada y no admite ni un INSERT más. No rompe nada: una acción rechazada no
+ocurrió, así que no hay nada con lo que ser atómico, y el rechazo sigue siendo
+un hecho que RF-36 quiere registrado.
+
+**La auditoría se particiona por RANGE y el resto de `negocio.*` por HASH**, y
+el motivo es la retención. Sobre `HASH(tenant_id)`, borrar lo más viejo de dos
+años es un DELETE que recorre las 64 particiones; sobre `RANGE(ocurrido_en)` es
+un DROP de la partición del mes vencido. La partición por defecto, que en
+cualquier otra tabla sería discutible, aquí es obligatoria: sin ella un mes sin
+crear no dejaría un hueco en la traza, tumbaría toda acción crítica el día 1 a
+las 00:00.
+
 **Valkey hace exactamente los dos trabajos que le da ARQ-01, y ninguno más.**
 Cachea las proyecciones de disponibilidad con los 2 s que RNF-10 autoriza —el
 90% del tráfico de RNF-03, que es lo que hace sostenible ese número contra las
@@ -247,8 +273,10 @@ recuentos cambiantes que no tienen nada que ver con lo que cada uno comprueba.
   al usarlo. Registrar el primer uso exige una lectura en la ruta del agente, y
   entra con la auditoría de RF-36, que es quien la necesita.
 - **`super_admin` no tiene superficie.** Existe en el modelo, en RF-23 y en el
-  rol `reservas_soporte`, pero ninguna ruta lo distingue de un administrador.
-  Con él llegan RF-35 (alta de tenant) y la consulta global de auditoría.
+  rol `reservas_soporte`, pero ninguna ruta lo distingue de un administrador: la
+  consulta de auditoría de RF-36 responde hoy solo con el alcance del
+  administrador —su tenant, resuelto por RLS— y la global llega con él, junto al
+  alta de tenant de RF-35.
 - **Un administrador no se crea desde aquí.** RF-35 dice que serlo se deriva de
   ser dueño de un tenant, y ese alta es del `super_admin`: hoy la única forma de
   tener uno es escribir la fila.
@@ -268,9 +296,14 @@ recuentos cambiantes que no tienen nada que ver con lo que cada uno comprueba.
   comprobantes de RF-34, que dependen del pago de RF-33.
 - **Sin Stripe (RF-33).** El `201` no trae `pago_client_secret`, y la reserva se
   queda pendiente hasta que venza.
-- **Sin vouchers.** `voucher_codigo` se rechaza con un `422` explícito en vez de
-  ignorarse: aceptar un código y cobrar el precio completo sin decirlo es peor
-  que negarse.
+- **Los vouchers se crean y se eliminan (RF-17), pero no se aplican.** El
+  `voucher_codigo` de una reserva sigue rechazándose con un `422` explícito en
+  vez de ignorarse: aceptar un código y cobrar el precio completo sin decirlo es
+  peor que negarse. Aplicarlo es RF-08 y va en la transacción del núcleo.
+- **Las tarifas se publican (RF-31) y nadie las evalúa todavía.** El precio de
+  una reserva sale de `servicio.precio_monto`; interpretar la `condicion` de una
+  tarifa es el paso que falta, y va en el núcleo porque el precio se congela al
+  crear.
 - **Los límites de RNF-08 solo cubren identidad.** Envío de códigos y enlaces,
   intentos de inicio de sesión e intercambios de agente pasan por Valkey; las
   rutas de catálogo, disponibilidad y reserva declaran el `429` y nadie lo

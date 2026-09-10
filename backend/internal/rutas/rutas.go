@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/api"
+	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/auditoria"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/catalogo"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/consulta"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/disponibilidad"
@@ -35,6 +36,12 @@ type Componentes struct {
 	Nucleo         *nucleo.Servicio
 	Consulta       *consulta.Servicio
 	Identidad      *identidad.Servicio
+
+	// Auditoria es la LECTURA de RF-36. La escritura no está aquí porque no es
+	// un componente que se monte: es una función que cada operación llama
+	// dentro de su propia transacción, y por eso vive en el componente que
+	// escribe y no en el enrutado.
+	Auditoria *auditoria.Consulta
 
 	// Verificador comprueba los tokens de acceso. Es obligatorio en cuanto el
 	// proceso monte alguna ruta acotada, y Montar se niega a arrancar sin él:
@@ -109,8 +116,49 @@ func Montar(s *plataforma.Servidor, c Componentes, registro *slog.Logger, plazo 
 	}
 
 	if c.Catalogo != nil {
+		// Públicas: mirar el catálogo de un negocio no exige identificarse.
 		registrar("GET /v1/sedes", envoltura.ListarSedes)
 		registrar("GET /v1/servicios", envoltura.ListarServicios)
+
+		// Y la configuración, que es el mismo componente por el otro lado. Va
+		// bajo /v1/config y toda acotada: aquí no se mira, se cambia lo que
+		// hace posible reservar (RF-14, RF-15, RF-17, RF-30, RF-31).
+		acotada("GET /v1/config/sedes", envoltura.ListarSedesConfig)
+		acotada("POST /v1/config/sedes", envoltura.CrearSede)
+		acotada("PATCH /v1/config/sedes/{id}", envoltura.ActualizarSede)
+
+		acotada("GET /v1/config/servicios", envoltura.ListarServiciosConfig)
+		acotada("POST /v1/config/servicios", envoltura.CrearServicio)
+		acotada("PATCH /v1/config/servicios/{id}", envoltura.ActualizarServicio)
+
+		acotada("GET /v1/config/recursos", envoltura.ListarRecursos)
+		acotada("POST /v1/config/recursos", envoltura.CrearRecurso)
+		acotada("PATCH /v1/config/recursos/{id}", envoltura.ActualizarRecurso)
+
+		acotada("GET /v1/config/reglas", envoltura.ListarReglas)
+		acotada("POST /v1/config/reglas", envoltura.CrearRegla)
+		acotada("DELETE /v1/config/reglas/{id}", envoltura.EliminarRegla)
+
+		acotada("GET /v1/config/excepciones", envoltura.ListarExcepciones)
+		acotada("POST /v1/config/excepciones", envoltura.CrearExcepcion)
+		acotada("DELETE /v1/config/excepciones/{id}", envoltura.EliminarExcepcion)
+
+		// Sin PATCH ni DELETE: politica_version es append-only por disparador
+		// (RF-15). Publicar condiciones nuevas es publicar una versión nueva.
+		acotada("GET /v1/config/politicas", envoltura.ListarPoliticas)
+		acotada("POST /v1/config/politicas", envoltura.PublicarPolitica)
+
+		// Sin PATCH: RF-17 admite crear o eliminar y nada más.
+		acotada("GET /v1/config/vouchers", envoltura.ListarVouchers)
+		acotada("POST /v1/config/vouchers", envoltura.CrearVoucher)
+		acotada("DELETE /v1/config/vouchers/{id}", envoltura.EliminarVoucher)
+
+		acotada("GET /v1/config/tarifas", envoltura.ListarTarifas)
+		acotada("POST /v1/config/tarifas", envoltura.CrearTarifa)
+		acotada("DELETE /v1/config/tarifas/{id}", envoltura.EliminarTarifa)
+	}
+	if c.Auditoria != nil {
+		acotada("GET /v1/auditoria", envoltura.ConsultarAuditoria)
 	}
 	if c.Disponibilidad != nil {
 		registrar("GET /v1/disponibilidad", envoltura.ConsultarDisponibilidad)

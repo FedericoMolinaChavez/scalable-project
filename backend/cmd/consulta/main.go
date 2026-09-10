@@ -4,13 +4,14 @@
 // réplicas de PostgreSQL, nunca contra el primario, y tolera el retraso de
 // replicación que RNF-10 autoriza.
 //
-// Monta además el catálogo (RF-26) y la disponibilidad, que en ARQ-01 son dos
-// componentes propios —"Configuración y Catálogo" y "Servicio de
-// Disponibilidad"— y acabarán siendo sus propios binarios cuando tengan
-// despliegue propio. Su código ya vive separado en internal/catalogo e
-// internal/disponibilidad, así que separarlos será mover estas dos líneas. Lo
-// que NO se mezcla es la escritura: esa está en `nucleo` y ahí se queda, porque
-// es la frontera que la descomposición de ARQ-01 dice que importa.
+// Monta además la disponibilidad, que en ARQ-01 es un componente propio y
+// comparte con este la propiedad que decide dónde vive: `disp --> pgr`, contra
+// las réplicas, igual que `consulta`. Separarlos será mover una línea.
+//
+// El catálogo YA no está aquí. En ARQ-01 "Configuración y Catálogo" apunta a
+// `pgb` —al primario— porque escribe, y esa flecha es la que lo saca de este
+// binario a `cmd/configuracion`. Lo que NO se mezcla, y sigue sin mezclarse, es
+// la escritura de reservas: esa está en `nucleo` y ahí se queda.
 package main
 
 import (
@@ -18,7 +19,6 @@ import (
 	"log/slog"
 
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/cache"
-	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/catalogo"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/consulta"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/datos"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/disponibilidad"
@@ -74,7 +74,6 @@ func montar(ctx context.Context, cfg plataforma.Config, registro *slog.Logger, s
 	// esto salga de un solo módulo Go: entonces toca firma asimétrica y aquí
 	// solo viajaría la clave pública.
 	rutas.Montar(servidor, rutas.Componentes{
-		Catalogo:       catalogo.Nuevo(bd),
 		Disponibilidad: disponibilidad.Nuevo(bd, proyecciones, registro),
 		Consulta:       consulta.Nuevo(bd),
 		Verificador:    identidad.NuevoFirmante(cfg.Identidad.TokenSecreto, cfg.Identidad.TTLAcceso),

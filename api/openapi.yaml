@@ -41,6 +41,10 @@ tags:
     description: Alta, perfil, verificación, contraseña y preferencias (RF-18, RF-19, RF-21, RF-22, RF-24, RF-25)
   - name: agentes
     description: Intercambio de credencial por token de acciones (RF-13)
+  - name: configuracion
+    description: |
+      Lo que un administrador configura para que haya algo que reservar
+      (RF-14, RF-15, RF-17, RF-30, RF-31) y la traza de quién hizo qué (RF-36).
 
 components:
   securitySchemes:
@@ -127,6 +131,54 @@ paths:
 
   /v1/agentes/token:
     $ref: './rutas/agentes.yaml#/token'
+
+  /v1/config/sedes:
+    $ref: './rutas/configuracion.yaml#/sedes'
+
+  /v1/config/sedes/{id}:
+    $ref: './rutas/configuracion.yaml#/sedePorId'
+
+  /v1/config/servicios:
+    $ref: './rutas/configuracion.yaml#/servicios'
+
+  /v1/config/servicios/{id}:
+    $ref: './rutas/configuracion.yaml#/servicioPorId'
+
+  /v1/config/recursos:
+    $ref: './rutas/configuracion.yaml#/recursos'
+
+  /v1/config/recursos/{id}:
+    $ref: './rutas/configuracion.yaml#/recursoPorId'
+
+  /v1/config/reglas:
+    $ref: './rutas/configuracion.yaml#/reglas'
+
+  /v1/config/reglas/{id}:
+    $ref: './rutas/configuracion.yaml#/reglaPorId'
+
+  /v1/config/excepciones:
+    $ref: './rutas/configuracion.yaml#/excepciones'
+
+  /v1/config/excepciones/{id}:
+    $ref: './rutas/configuracion.yaml#/excepcionPorId'
+
+  /v1/config/politicas:
+    $ref: './rutas/configuracion.yaml#/politicas'
+
+  /v1/config/vouchers:
+    $ref: './rutas/configuracion.yaml#/vouchers'
+
+  /v1/config/vouchers/{id}:
+    $ref: './rutas/configuracion.yaml#/voucherPorId'
+
+  /v1/config/tarifas:
+    $ref: './rutas/configuracion.yaml#/tarifas'
+
+  /v1/config/tarifas/{id}:
+    $ref: './rutas/configuracion.yaml#/tarifaPorId'
+
+  /v1/auditoria:
+    $ref: './rutas/configuracion.yaml#/auditoria'
 
   /v1/reservas:
     $ref: './rutas/reservas.yaml#/coleccion'

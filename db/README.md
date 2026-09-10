@@ -173,13 +173,23 @@ sigue sostenido por la capa de autorización: una política de RLS
 de existir, que es que una persona sea la misma aunque reserve en veinte
 negocios.
 
+De ER-03 entraron en `0013` las dos que no dependen de Stripe: `tarifa`
+(RF-31) y `evento_auditoria` (RF-36), esta última particionada por
+`RANGE (ocurrido_en)` al revés que todo lo demás de `negocio.*`. El motivo es la
+retención: sobre `HASH(tenant_id)`, borrar lo más viejo de dos años es un DELETE
+sobre 64 particiones; sobre `RANGE`, un `DROP TABLE` del mes vencido.
+
+Lleva partición por defecto, y ahí conviene detenerse. En cualquier otra tabla
+sería discutible —adjuntar después la partición de un mes que ya tiene filas
+exige moverlas y escanear la de defecto—, pero RNF-36 hace de la auditoría una
+**condición de éxito**: sin ella, un mes sin crear no dejaría un hueco en la
+traza, tumbaría toda acción crítica el día 1 a las 00:00.
+
 ## Pendiente
 
-- Resto de ER-03 (dinero): `tarifa`, `pago`, `evento_webhook`, `reembolso`,
-  `comprobante`.
-- Operación: `config_notificacion`, `notificacion_programada`,
-  `evento_auditoria` (`PARTITION BY RANGE`) y `metrica_diaria`. `outbox_evento`
-  ya existe desde `0010`.
+- Resto de ER-03 (dinero): `pago`, `evento_webhook`, `reembolso`, `comprobante`.
+- Operación: `config_notificacion`, `notificacion_programada` y
+  `metrica_diaria`. `outbox_evento` ya existe desde `0010`.
 - Decidir si `clave_idempotencia` en `reserva` se queda. Es un añadido respecto
   a ER-01: el modelo tenía idempotencia en el webhook, el reembolso y la
   notificación, pero no en la creación, y un agente que reintenta un `POST`

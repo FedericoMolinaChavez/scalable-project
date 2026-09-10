@@ -80,16 +80,16 @@ func (e CanalNotificacion) Valid() bool {
 
 // Defines values for EstadoCatalogo.
 const (
-	Activo   EstadoCatalogo = "activo"
-	Inactivo EstadoCatalogo = "inactivo"
+	EstadoCatalogoActivo   EstadoCatalogo = "activo"
+	EstadoCatalogoInactivo EstadoCatalogo = "inactivo"
 )
 
 // Valid indicates whether the value is a known member of the EstadoCatalogo enum.
 func (e EstadoCatalogo) Valid() bool {
 	switch e {
-	case Activo:
+	case EstadoCatalogoActivo:
 		return true
-	case Inactivo:
+	case EstadoCatalogoInactivo:
 		return true
 	default:
 		return false
@@ -153,21 +153,126 @@ func (e EstadoReserva) Valid() bool {
 	}
 }
 
+// Defines values for EventoAuditoriaActorTipo.
+const (
+	EventoAuditoriaActorTipoAdministrador EventoAuditoriaActorTipo = "administrador"
+	EventoAuditoriaActorTipoAgente        EventoAuditoriaActorTipo = "agente"
+	EventoAuditoriaActorTipoSistema       EventoAuditoriaActorTipo = "sistema"
+	EventoAuditoriaActorTipoSuperAdmin    EventoAuditoriaActorTipo = "super_admin"
+	EventoAuditoriaActorTipoUsuario       EventoAuditoriaActorTipo = "usuario"
+)
+
+// Valid indicates whether the value is a known member of the EventoAuditoriaActorTipo enum.
+func (e EventoAuditoriaActorTipo) Valid() bool {
+	switch e {
+	case EventoAuditoriaActorTipoAdministrador:
+		return true
+	case EventoAuditoriaActorTipoAgente:
+		return true
+	case EventoAuditoriaActorTipoSistema:
+		return true
+	case EventoAuditoriaActorTipoSuperAdmin:
+		return true
+	case EventoAuditoriaActorTipoUsuario:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ResultadoAuditoria.
+const (
+	Exito   ResultadoAuditoria = "exito"
+	Rechazo ResultadoAuditoria = "rechazo"
+)
+
+// Valid indicates whether the value is a known member of the ResultadoAuditoria enum.
+func (e ResultadoAuditoria) Valid() bool {
+	switch e {
+	case Exito:
+		return true
+	case Rechazo:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TipoCuenta.
 const (
-	Administrador TipoCuenta = "administrador"
-	SuperAdmin    TipoCuenta = "super_admin"
-	Usuario       TipoCuenta = "usuario"
+	TipoCuentaAdministrador TipoCuenta = "administrador"
+	TipoCuentaSuperAdmin    TipoCuenta = "super_admin"
+	TipoCuentaUsuario       TipoCuenta = "usuario"
 )
 
 // Valid indicates whether the value is a known member of the TipoCuenta enum.
 func (e TipoCuenta) Valid() bool {
 	switch e {
-	case Administrador:
+	case TipoCuentaAdministrador:
 		return true
-	case SuperAdmin:
+	case TipoCuentaSuperAdmin:
 		return true
-	case Usuario:
+	case TipoCuentaUsuario:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TipoExcepcion.
+const (
+	Cierre        TipoExcepcion = "cierre"
+	Feriado       TipoExcepcion = "feriado"
+	Mantenimiento TipoExcepcion = "mantenimiento"
+)
+
+// Valid indicates whether the value is a known member of the TipoExcepcion enum.
+func (e TipoExcepcion) Valid() bool {
+	switch e {
+	case Cierre:
+		return true
+	case Feriado:
+		return true
+	case Mantenimiento:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TipoTarifa.
+const (
+	DiaSemana     TipoTarifa = "dia_semana"
+	FranjaHoraria TipoTarifa = "franja_horaria"
+	Temporada     TipoTarifa = "temporada"
+)
+
+// Valid indicates whether the value is a known member of the TipoTarifa enum.
+func (e TipoTarifa) Valid() bool {
+	switch e {
+	case DiaSemana:
+		return true
+	case FranjaHoraria:
+		return true
+	case Temporada:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for VoucherEstado.
+const (
+	VoucherEstadoActivo    VoucherEstado = "activo"
+	VoucherEstadoEliminado VoucherEstado = "eliminado"
+)
+
+// Valid indicates whether the value is a known member of the VoucherEstado enum.
+func (e VoucherEstado) Valid() bool {
+	switch e {
+	case VoucherEstadoActivo:
+		return true
+	case VoucherEstadoEliminado:
 		return true
 	default:
 		return false
@@ -189,6 +294,36 @@ type ActualizacionCuenta struct {
 	Email    *openapi_types.Email `json:"email,omitempty"`
 	Nombre   *string              `json:"nombre,omitempty"`
 	Telefono *string              `json:"telefono,omitempty"`
+}
+
+// ActualizacionRecurso defines model for ActualizacionRecurso.
+type ActualizacionRecurso struct {
+	Estado *EstadoCatalogo `json:"estado,omitempty"`
+	Nombre *string         `json:"nombre,omitempty"`
+
+	// Servicios Reemplaza la lista completa, no la amplía.
+	Servicios *[]openapi_types.UUID `json:"servicios,omitempty"`
+}
+
+// ActualizacionSede Todo opcional: se envía lo que cambia.
+//
+// Desactivar una sede NO cancela sus reservas. Deja de poder elegirse para
+// reservas nuevas y nada más: lo ya vendido sigue en pie, y cancelarlo es una
+// decisión aparte que RF-32 hace explícita.
+type ActualizacionSede struct {
+	Direccion   *string         `json:"direccion,omitempty"`
+	Estado      *EstadoCatalogo `json:"estado,omitempty"`
+	Nombre      *string         `json:"nombre,omitempty"`
+	ZonaHoraria *string         `json:"zona_horaria,omitempty"`
+}
+
+// ActualizacionServicio defines model for ActualizacionServicio.
+type ActualizacionServicio struct {
+	Descripcion *string         `json:"descripcion,omitempty"`
+	DuracionMin *int            `json:"duracion_min,omitempty"`
+	Estado      *EstadoCatalogo `json:"estado,omitempty"`
+	Nombre      *string         `json:"nombre,omitempty"`
+	PrecioMonto *string         `json:"precio_monto,omitempty"`
 }
 
 // CambioContrasena El camino de RF-18 para quien ya entró: la prueba de identidad es la
@@ -306,6 +441,53 @@ type EstadoCuenta string
 // EstadoReserva Estados de RF-28.
 type EstadoReserva string
 
+// EventoAuditoria Una acción registrada (RF-36). Append-only: los eventos no se modifican ni
+// se eliminan.
+type EventoAuditoria struct {
+	// Accion Examples: crear_sede
+	Accion    string                   `json:"accion"`
+	ActorId   *openapi_types.UUID      `json:"actor_id,omitempty"`
+	ActorTipo EventoAuditoriaActorTipo `json:"actor_tipo"`
+
+	// AgenteId Presente solo cuando la ejecutó un agente en nombre de otra cuenta.
+	AgenteId *openapi_types.UUID `json:"agente_id,omitempty"`
+
+	// AlcanceToken El alcance con el que actuó el agente (RF-13).
+	AlcanceToken        *[]string           `json:"alcance_token,omitempty"`
+	CuentaImpersonadaId *openapi_types.UUID `json:"cuenta_impersonada_id,omitempty"`
+	Dispositivo         *string             `json:"dispositivo,omitempty"`
+	Id                  openapi_types.UUID  `json:"id"`
+	Ip                  *string             `json:"ip,omitempty"`
+	OcurridoEn          time.Time           `json:"ocurrido_en"`
+	RecursoId           *openapi_types.UUID `json:"recurso_id,omitempty"`
+
+	// RecursoTipo Examples: sede
+	RecursoTipo string             `json:"recurso_tipo"`
+	Resultado   ResultadoAuditoria `json:"resultado"`
+}
+
+// EventoAuditoriaActorTipo defines model for EventoAuditoria.ActorTipo.
+type EventoAuditoriaActorTipo string
+
+// ExcepcionCalendario Un hueco que tapa la disponibilidad (RF-14). Es de una sede o de un recurso,
+// nunca de los dos ni de ninguno.
+type ExcepcionCalendario struct {
+	Id     openapi_types.UUID `json:"id"`
+	Motivo *string            `json:"motivo,omitempty"`
+
+	// Periodo Intervalo semiabierto `[inicio, fin)`. El límite inferior entra, el superior
+	// no.
+	//
+	// No es un detalle de estilo: con ambos límites cerrados, 10:00–11:00 y
+	// 11:00–12:00 comparten un instante, el operador `&&` de PostgreSQL las declara
+	// solapadas y la restricción EXCLUDE rechazaría dos citas consecutivas
+	// perfectamente válidas.
+	Periodo   Periodo             `json:"periodo"`
+	RecursoId *openapi_types.UUID `json:"recurso_id,omitempty"`
+	SedeId    *openapi_types.UUID `json:"sede_id,omitempty"`
+	Tipo      TipoExcepcion       `json:"tipo"`
+}
+
 // Franja defines model for Franja.
 type Franja struct {
 	// Periodo Intervalo semiabierto `[inicio, fin)`. El límite inferior entra, el superior
@@ -335,9 +517,37 @@ type IntercambioAgente struct {
 	CuentaId openapi_types.UUID `json:"cuenta_id"`
 }
 
+// ListaAuditoria defines model for ListaAuditoria.
+type ListaAuditoria struct {
+	Datos []EventoAuditoria `json:"datos"`
+
+	// SiguienteCursor Ausente cuando no hay más páginas.
+	SiguienteCursor *string `json:"siguiente_cursor,omitempty"`
+}
+
+// ListaExcepciones defines model for ListaExcepciones.
+type ListaExcepciones struct {
+	Datos []ExcepcionCalendario `json:"datos"`
+}
+
+// ListaPoliticas defines model for ListaPoliticas.
+type ListaPoliticas struct {
+	Datos []Politica `json:"datos"`
+}
+
 // ListaPreferencias defines model for ListaPreferencias.
 type ListaPreferencias struct {
 	Datos []Preferencia `json:"datos"`
+}
+
+// ListaRecursos defines model for ListaRecursos.
+type ListaRecursos struct {
+	Datos []Recurso `json:"datos"`
+}
+
+// ListaReglas defines model for ListaReglas.
+type ListaReglas struct {
+	Datos []ReglaDisponibilidad `json:"datos"`
 }
 
 // ListaReservas defines model for ListaReservas.
@@ -363,6 +573,16 @@ type ListaSesiones struct {
 	Datos []Sesion `json:"datos"`
 }
 
+// ListaTarifas defines model for ListaTarifas.
+type ListaTarifas struct {
+	Datos []Tarifa `json:"datos"`
+}
+
+// ListaVouchers defines model for ListaVouchers.
+type ListaVouchers struct {
+	Datos []Voucher `json:"datos"`
+}
+
 // NuevaCuenta Registro de RF-24.
 //
 // Responde `202` exista o no ya ese correo, y nunca dice cuál de los dos casos
@@ -384,6 +604,52 @@ type NuevaCuenta struct {
 	Telefono *string `json:"telefono,omitempty"`
 }
 
+// NuevaExcepcion Exactamente uno de `sede_id` o `recurso_id`. Ninguno de los dos deja una
+// excepción que no tapa nada; los dos a la vez, una que no se sabe si tapa la
+// sede entera o solo ese recurso.
+type NuevaExcepcion struct {
+	Motivo *string `json:"motivo,omitempty"`
+
+	// Periodo Intervalo semiabierto `[inicio, fin)`. El límite inferior entra, el superior
+	// no.
+	//
+	// No es un detalle de estilo: con ambos límites cerrados, 10:00–11:00 y
+	// 11:00–12:00 comparten un instante, el operador `&&` de PostgreSQL las declara
+	// solapadas y la restricción EXCLUDE rechazaría dos citas consecutivas
+	// perfectamente válidas.
+	Periodo   Periodo             `json:"periodo"`
+	RecursoId *openapi_types.UUID `json:"recurso_id,omitempty"`
+	SedeId    *openapi_types.UUID `json:"sede_id,omitempty"`
+	Tipo      TipoExcepcion       `json:"tipo"`
+}
+
+// NuevaPolitica El número de versión NO se envía: lo asigna el servidor como el siguiente
+// del mismo ámbito. Dejarlo al cliente permitiría publicar una versión 3
+// después de una 7 y romper el orden del que depende "cuál está vigente".
+type NuevaPolitica struct {
+	PenalidadPct           *string             `json:"penalidad_pct,omitempty"`
+	RangoCancelacionHoras  int                 `json:"rango_cancelacion_horas"`
+	RangoModificacionHoras int                 `json:"rango_modificacion_horas"`
+	ServicioId             *openapi_types.UUID `json:"servicio_id,omitempty"`
+
+	// VigenteDesde Ausente = ahora. Sirve para publicar con antelación.
+	VigenteDesde *time.Time `json:"vigente_desde,omitempty"`
+}
+
+// NuevaRegla defines model for NuevaRegla.
+type NuevaRegla struct {
+	DiaSemana int `json:"dia_semana"`
+
+	// HoraFin Examples: 17:00
+	HoraFin string `json:"hora_fin"`
+
+	// HoraInicio Examples: 09:00
+	HoraInicio   string              `json:"hora_inicio"`
+	RecursoId    openapi_types.UUID  `json:"recurso_id"`
+	VigenteDesde *openapi_types.Date `json:"vigente_desde,omitempty"`
+	VigenteHasta *openapi_types.Date `json:"vigente_hasta,omitempty"`
+}
+
 // NuevaReserva defines model for NuevaReserva.
 type NuevaReserva struct {
 	Contacto Contacto `json:"contacto"`
@@ -401,6 +667,73 @@ type NuevaReserva struct {
 
 	// VoucherCodigo Código de descuento, si aplica (RF-08).
 	VoucherCodigo *string `json:"voucher_codigo,omitempty"`
+}
+
+// NuevaSede defines model for NuevaSede.
+type NuevaSede struct {
+	Direccion *string `json:"direccion,omitempty"`
+	Nombre    string  `json:"nombre"`
+
+	// ZonaHoraria Identificador IANA. El motor lo valida contra su propia base de zonas:
+	// un `America/Bogata` mal escrito no falla al guardarse, falla semanas
+	// más tarde dentro del cálculo de disponibilidad, que es el peor sitio
+	// posible para enterarse.
+	//
+	//
+	// Examples: America/Bogota
+	ZonaHoraria string `json:"zona_horaria"`
+}
+
+// NuevaTarifa defines model for NuevaTarifa.
+type NuevaTarifa struct {
+	Condicion  map[string]interface{} `json:"condicion"`
+	Monto      string                 `json:"monto"`
+	Prioridad  *int                   `json:"prioridad,omitempty"`
+	ServicioId openapi_types.UUID     `json:"servicio_id"`
+	Tipo       TipoTarifa             `json:"tipo"`
+}
+
+// NuevoRecurso defines model for NuevoRecurso.
+type NuevoRecurso struct {
+	Nombre string             `json:"nombre"`
+	SedeId openapi_types.UUID `json:"sede_id"`
+
+	// Servicios Qué servicios presta. Sin al menos uno, el recurso existe pero no es
+	// reservable: el núcleo comprueba que el par servicio/recurso esté
+	// declarado antes de insertar.
+	Servicios *[]openapi_types.UUID `json:"servicios,omitempty"`
+}
+
+// NuevoServicio defines model for NuevoServicio.
+type NuevoServicio struct {
+	Descripcion *string `json:"descripcion,omitempty"`
+
+	// DuracionMin Es también la duración exacta de cada reserva: el núcleo rechaza un
+	// período que no coincida. Cambiarla no altera las reservas ya hechas.
+	DuracionMin int    `json:"duracion_min"`
+	Nombre      string `json:"nombre"`
+
+	// PrecioMonto Cadena decimal, no número: en JSON los números son de coma flotante y
+	// 80000.10 no se representa exactamente. La moneda no se envía —es del
+	// tenant (RF-38)— y la reserva congela ambas al crearse (RF-31).
+	PrecioMonto string             `json:"precio_monto"`
+	SedeId      openapi_types.UUID `json:"sede_id"`
+}
+
+// NuevoVoucher Hace falta un límite de usos o una caducidad, al menos uno. Un voucher del
+// 50% sin ninguno de los dos es una fuga de ingresos abierta para siempre, y
+// el motor lo rechaza.
+//
+// No hay operación de edición, y no es un olvido: RF-17 permite crear o
+// eliminar y nada más. Cambiarle las condiciones a un voucher que ya está
+// circulando es cambiárselas a quien ya lo recibió.
+type NuevoVoucher struct {
+	CaducaEn   *time.Time `json:"caduca_en,omitempty"`
+	Codigo     string     `json:"codigo"`
+	LimiteUsos *int       `json:"limite_usos,omitempty"`
+
+	// Porcentaje Mayor que 0 y hasta 100.
+	Porcentaje string `json:"porcentaje"`
 }
 
 // ParTokens Lo que entrega un inicio de sesión de cuenta: los dos tokens de RF-12.
@@ -433,6 +766,25 @@ type ParTokens struct {
 type Periodo struct {
 	Fin    time.Time `json:"fin"`
 	Inicio time.Time `json:"inicio"`
+}
+
+// Politica Una versión publicada de la política de cancelación y modificación (RF-15).
+//
+// Es INMUTABLE: no se edita ni se borra. Publicar condiciones nuevas es
+// publicar una versión nueva, y las reservas existentes siguen apuntando a la
+// que congelaron al crearse. Es lo que impide que un negocio endurezca su
+// política el martes y se la aplique a quien reservó el lunes.
+type Politica struct {
+	CreadaEn               *time.Time         `json:"creada_en,omitempty"`
+	Id                     openapi_types.UUID `json:"id"`
+	PenalidadPct           *string            `json:"penalidad_pct,omitempty"`
+	RangoCancelacionHoras  int                `json:"rango_cancelacion_horas"`
+	RangoModificacionHoras int                `json:"rango_modificacion_horas"`
+
+	// ServicioId Ausente = política por defecto del tenant.
+	ServicioId   *openapi_types.UUID `json:"servicio_id,omitempty"`
+	Version      int                 `json:"version"`
+	VigenteDesde time.Time           `json:"vigente_desde"`
 }
 
 // Preferencia Una fila de RF-21: este canal, para este tipo de aviso, habilitado o no.
@@ -478,6 +830,44 @@ type Problema struct {
 	//
 	// Examples: https://api.reservas/errores/horario-ocupado
 	Type string `json:"type"`
+}
+
+// Recurso Lo que de verdad se reserva: la sala, la silla, el equipo, la persona. La
+// invariante de no solapamiento es sobre un RECURSO, no sobre un servicio.
+type Recurso struct {
+	Estado EstadoCatalogo     `json:"estado"`
+	Id     openapi_types.UUID `json:"id"`
+	Nombre string             `json:"nombre"`
+	SedeId openapi_types.UUID `json:"sede_id"`
+
+	// Servicios Servicios que este recurso presta (RF-30).
+	Servicios *[]openapi_types.UUID `json:"servicios,omitempty"`
+}
+
+// ReglaDisponibilidad Un tramo semanal recurrente de un recurso (RF-14).
+//
+// Las horas van SIN zona porque hablan del reloj de pared del negocio: "los
+// lunes de 9 a 17" significa las 9 de la sede, no las 9 UTC. La zona la pone
+// la sede, y por eso la regla no cambia cuando cambia el horario de verano.
+type ReglaDisponibilidad struct {
+	// DiaSemana 0 = domingo, como `extract(dow)` de PostgreSQL.
+	DiaSemana int `json:"dia_semana"`
+
+	// HoraFin Tiene que ser mayor que `hora_inicio`: una regla no cruza medianoche.
+	// Un turno de noche son DOS reglas, una por cada día que toca, y esa es la
+	// única forma en que el cálculo de disponibilidad puede resolverlo sin
+	// ambigüedad.
+	//
+	//
+	// Examples: 17:00
+	HoraFin string `json:"hora_fin"`
+
+	// HoraInicio Examples: 09:00
+	HoraInicio   string              `json:"hora_inicio"`
+	Id           openapi_types.UUID  `json:"id"`
+	RecursoId    openapi_types.UUID  `json:"recurso_id"`
+	VigenteDesde *openapi_types.Date `json:"vigente_desde,omitempty"`
+	VigenteHasta *openapi_types.Date `json:"vigente_hasta,omitempty"`
 }
 
 // Reserva defines model for Reserva.
@@ -533,6 +923,9 @@ type Restablecimiento struct {
 	// Token El valor que viaja en el enlace de recuperación.
 	Token string `json:"token"`
 }
+
+// ResultadoAuditoria defines model for ResultadoAuditoria.
+type ResultadoAuditoria string
 
 // Sede defines model for Sede.
 type Sede struct {
@@ -619,10 +1012,35 @@ type SolicitudVerificacion struct {
 	Canal CanalContacto `json:"canal"`
 }
 
+// Tarifa Sobrescribe el precio del servicio cuando su condición aplica (RF-31). El
+// precio base sigue viviendo en el servicio; esto existe aparte porque sí es
+// uno a muchos.
+type Tarifa struct {
+	// Condicion Su forma depende del tipo: una franja lleva horas, un día de semana un
+	// número, una temporada dos fechas. Sin esquema fijo porque el motor no la
+	// evalúa, la interpreta quien calcula el precio.
+	Condicion map[string]interface{} `json:"condicion"`
+	Id        openapi_types.UUID     `json:"id"`
+	Monto     string                 `json:"monto"`
+
+	// Prioridad Con dos tarifas que aplican a la vez gana la de prioridad más alta. Sin
+	// este campo el resultado dependería del orden de las filas, que no es un
+	// orden.
+	Prioridad  int                `json:"prioridad"`
+	ServicioId openapi_types.UUID `json:"servicio_id"`
+	Tipo       TipoTarifa         `json:"tipo"`
+}
+
 // TipoCuenta Los tres de RF-23. NO se asigna: `administrador` se deriva de ser dueño de
 // un tenant (RF-35) y `super_admin` es el operador de la plataforma. Una
 // cuenta que se registra por la vía normal es siempre `usuario`.
 type TipoCuenta string
+
+// TipoExcepcion defines model for TipoExcepcion.
+type TipoExcepcion string
+
+// TipoTarifa defines model for TipoTarifa.
+type TipoTarifa string
 
 // TokenAcceso Lo que se entrega al acertar el código.
 //
@@ -649,6 +1067,26 @@ type TokenAgente struct {
 	ExpiraEn            time.Time           `json:"expira_en"`
 	Token               string              `json:"token"`
 }
+
+// Voucher Un descuento porcentual (RF-17). Solo porcentaje, nunca monto fijo: es una
+// restricción de alcance del producto y vive en un CHECK para que no se filtre
+// por accidente.
+type Voucher struct {
+	CaducaEn     *time.Time         `json:"caduca_en,omitempty"`
+	Codigo       string             `json:"codigo"`
+	CreadoEn     time.Time          `json:"creado_en"`
+	Estado       VoucherEstado      `json:"estado"`
+	Id           openapi_types.UUID `json:"id"`
+	LimiteUsos   *int               `json:"limite_usos,omitempty"`
+	Porcentaje   string             `json:"porcentaje"`
+	UsosActuales int                `json:"usos_actuales"`
+}
+
+// VoucherEstado defines model for Voucher.Estado.
+type VoucherEstado string
+
+// IdEnRuta defines model for IdEnRuta.
+type IdEnRuta = openapi_types.UUID
 
 // Tenant defines model for Tenant.
 type Tenant = openapi_types.UUID
@@ -694,6 +1132,27 @@ type NoProcesable = Problema
 // errores de forma uniforme y para que una respuesta de error sea
 // indistinguible venga del componente de ARQ-01 que venga.
 type PeticionInvalida = Problema
+
+// ConsultarAuditoriaParams defines parameters for ConsultarAuditoria.
+type ConsultarAuditoriaParams struct {
+	Desde       *time.Time          `form:"desde,omitempty" json:"desde,omitempty"`
+	Hasta       *time.Time          `form:"hasta,omitempty" json:"hasta,omitempty"`
+	ActorId     *openapi_types.UUID `form:"actor_id,omitempty" json:"actor_id,omitempty"`
+	RecursoTipo *string             `form:"recurso_tipo,omitempty" json:"recurso_tipo,omitempty"`
+	Accion      *string             `form:"accion,omitempty" json:"accion,omitempty"`
+	Limite      *int                `form:"limite,omitempty" json:"limite,omitempty"`
+	Cursor      *string             `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// ListarReglasParams defines parameters for ListarReglas.
+type ListarReglasParams struct {
+	RecursoId *openapi_types.UUID `form:"recurso_id,omitempty" json:"recurso_id,omitempty"`
+}
+
+// ListarTarifasParams defines parameters for ListarTarifas.
+type ListarTarifasParams struct {
+	ServicioId *openapi_types.UUID `form:"servicio_id,omitempty" json:"servicio_id,omitempty"`
+}
 
 // ConsultarDisponibilidadParams defines parameters for ConsultarDisponibilidad.
 type ConsultarDisponibilidadParams struct {
@@ -811,6 +1270,39 @@ type CanjearCodigoParams struct {
 // IntercambiarTokenAgenteJSONRequestBody defines body for IntercambiarTokenAgente for application/json ContentType.
 type IntercambiarTokenAgenteJSONRequestBody = IntercambioAgente
 
+// CrearExcepcionJSONRequestBody defines body for CrearExcepcion for application/json ContentType.
+type CrearExcepcionJSONRequestBody = NuevaExcepcion
+
+// PublicarPoliticaJSONRequestBody defines body for PublicarPolitica for application/json ContentType.
+type PublicarPoliticaJSONRequestBody = NuevaPolitica
+
+// CrearRecursoJSONRequestBody defines body for CrearRecurso for application/json ContentType.
+type CrearRecursoJSONRequestBody = NuevoRecurso
+
+// ActualizarRecursoJSONRequestBody defines body for ActualizarRecurso for application/json ContentType.
+type ActualizarRecursoJSONRequestBody = ActualizacionRecurso
+
+// CrearReglaJSONRequestBody defines body for CrearRegla for application/json ContentType.
+type CrearReglaJSONRequestBody = NuevaRegla
+
+// CrearSedeJSONRequestBody defines body for CrearSede for application/json ContentType.
+type CrearSedeJSONRequestBody = NuevaSede
+
+// ActualizarSedeJSONRequestBody defines body for ActualizarSede for application/json ContentType.
+type ActualizarSedeJSONRequestBody = ActualizacionSede
+
+// CrearServicioJSONRequestBody defines body for CrearServicio for application/json ContentType.
+type CrearServicioJSONRequestBody = NuevoServicio
+
+// ActualizarServicioJSONRequestBody defines body for ActualizarServicio for application/json ContentType.
+type ActualizarServicioJSONRequestBody = ActualizacionServicio
+
+// CrearTarifaJSONRequestBody defines body for CrearTarifa for application/json ContentType.
+type CrearTarifaJSONRequestBody = NuevaTarifa
+
+// CrearVoucherJSONRequestBody defines body for CrearVoucher for application/json ContentType.
+type CrearVoucherJSONRequestBody = NuevoVoucher
+
 // RegistrarCuentaJSONRequestBody defines body for RegistrarCuenta for application/json ContentType.
 type RegistrarCuentaJSONRequestBody = NuevaCuenta
 
@@ -861,6 +1353,78 @@ type ServerInterface interface {
 	// IntercambiarTokenAgente Intercambiar la credencial por un token de acciones (RF-13)
 	// (POST /v1/agentes/token)
 	IntercambiarTokenAgente(w http.ResponseWriter, r *http.Request)
+	// ConsultarAuditoria Consultar la auditoría (RF-36)
+	// (GET /v1/auditoria)
+	ConsultarAuditoria(w http.ResponseWriter, r *http.Request, params ConsultarAuditoriaParams)
+	// ListarExcepciones Excepciones de calendario (RF-14)
+	// (GET /v1/config/excepciones)
+	ListarExcepciones(w http.ResponseWriter, r *http.Request)
+	// CrearExcepcion Tapar un período (RF-14)
+	// (POST /v1/config/excepciones)
+	CrearExcepcion(w http.ResponseWriter, r *http.Request)
+	// EliminarExcepcion Levantar una excepción de calendario (RF-14)
+	// (DELETE /v1/config/excepciones/{id})
+	EliminarExcepcion(w http.ResponseWriter, r *http.Request, id IdEnRuta)
+	// ListarPoliticas Versiones de política publicadas (RF-15)
+	// (GET /v1/config/politicas)
+	ListarPoliticas(w http.ResponseWriter, r *http.Request)
+	// PublicarPolitica Publicar una versión de política (RF-15)
+	// (POST /v1/config/politicas)
+	PublicarPolitica(w http.ResponseWriter, r *http.Request)
+	// ListarRecursos Los recursos del tenant y qué servicios prestan (RF-30)
+	// (GET /v1/config/recursos)
+	ListarRecursos(w http.ResponseWriter, r *http.Request)
+	// CrearRecurso Crear un recurso (RF-30)
+	// (POST /v1/config/recursos)
+	CrearRecurso(w http.ResponseWriter, r *http.Request)
+	// ActualizarRecurso Editar un recurso (RF-30)
+	// (PATCH /v1/config/recursos/{id})
+	ActualizarRecurso(w http.ResponseWriter, r *http.Request, id IdEnRuta)
+	// ListarReglas Reglas de disponibilidad (RF-14)
+	// (GET /v1/config/reglas)
+	ListarReglas(w http.ResponseWriter, r *http.Request, params ListarReglasParams)
+	// CrearRegla Publicar una regla de disponibilidad (RF-14)
+	// (POST /v1/config/reglas)
+	CrearRegla(w http.ResponseWriter, r *http.Request)
+	// EliminarRegla Retirar una regla de disponibilidad (RF-14)
+	// (DELETE /v1/config/reglas/{id})
+	EliminarRegla(w http.ResponseWriter, r *http.Request, id IdEnRuta)
+	// ListarSedesConfig Todas las sedes del tenant, activas e inactivas (RF-30)
+	// (GET /v1/config/sedes)
+	ListarSedesConfig(w http.ResponseWriter, r *http.Request)
+	// CrearSede Crear una sede (RF-30)
+	// (POST /v1/config/sedes)
+	CrearSede(w http.ResponseWriter, r *http.Request)
+	// ActualizarSede Editar una sede (RF-30)
+	// (PATCH /v1/config/sedes/{id})
+	ActualizarSede(w http.ResponseWriter, r *http.Request, id IdEnRuta)
+	// ListarServiciosConfig Todos los servicios del tenant (RF-30)
+	// (GET /v1/config/servicios)
+	ListarServiciosConfig(w http.ResponseWriter, r *http.Request)
+	// CrearServicio Crear un servicio (RF-30, RF-31)
+	// (POST /v1/config/servicios)
+	CrearServicio(w http.ResponseWriter, r *http.Request)
+	// ActualizarServicio Editar un servicio (RF-30, RF-31)
+	// (PATCH /v1/config/servicios/{id})
+	ActualizarServicio(w http.ResponseWriter, r *http.Request, id IdEnRuta)
+	// ListarTarifas Tarifas del tenant (RF-31)
+	// (GET /v1/config/tarifas)
+	ListarTarifas(w http.ResponseWriter, r *http.Request, params ListarTarifasParams)
+	// CrearTarifa Publicar una tarifa (RF-31)
+	// (POST /v1/config/tarifas)
+	CrearTarifa(w http.ResponseWriter, r *http.Request)
+	// EliminarTarifa Retirar una tarifa (RF-31)
+	// (DELETE /v1/config/tarifas/{id})
+	EliminarTarifa(w http.ResponseWriter, r *http.Request, id IdEnRuta)
+	// ListarVouchers Vouchers del tenant (RF-17)
+	// (GET /v1/config/vouchers)
+	ListarVouchers(w http.ResponseWriter, r *http.Request)
+	// CrearVoucher Crear un voucher (RF-17)
+	// (POST /v1/config/vouchers)
+	CrearVoucher(w http.ResponseWriter, r *http.Request)
+	// EliminarVoucher Eliminar un voucher (RF-17)
+	// (DELETE /v1/config/vouchers/{id})
+	EliminarVoucher(w http.ResponseWriter, r *http.Request, id IdEnRuta)
 	// RegistrarCuenta Registrar una cuenta (RF-24)
 	// (POST /v1/cuentas)
 	RegistrarCuenta(w http.ResponseWriter, r *http.Request)
@@ -958,6 +1522,561 @@ func (siw *ServerInterfaceWrapper) IntercambiarTokenAgente(w http.ResponseWriter
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.IntercambiarTokenAgente(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConsultarAuditoria operation middleware
+func (siw *ServerInterfaceWrapper) ConsultarAuditoria(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ConsultarAuditoriaParams
+
+	// ------------- Optional query parameter "desde" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "desde", r.URL.Query(), &params.Desde, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "desde"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "desde", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "hasta" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "hasta", r.URL.Query(), &params.Hasta, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "hasta"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hasta", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "actor_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "actor_id", r.URL.Query(), &params.ActorId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "actor_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "actor_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "recurso_tipo" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "recurso_tipo", r.URL.Query(), &params.RecursoTipo, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "recurso_tipo"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recurso_tipo", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "accion" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "accion", r.URL.Query(), &params.Accion, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "accion"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "accion", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limite" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limite", r.URL.Query(), &params.Limite, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limite"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limite", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConsultarAuditoria(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListarExcepciones operation middleware
+func (siw *ServerInterfaceWrapper) ListarExcepciones(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListarExcepciones(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CrearExcepcion operation middleware
+func (siw *ServerInterfaceWrapper) CrearExcepcion(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CrearExcepcion(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EliminarExcepcion operation middleware
+func (siw *ServerInterfaceWrapper) EliminarExcepcion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id IdEnRuta
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EliminarExcepcion(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListarPoliticas operation middleware
+func (siw *ServerInterfaceWrapper) ListarPoliticas(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListarPoliticas(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PublicarPolitica operation middleware
+func (siw *ServerInterfaceWrapper) PublicarPolitica(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PublicarPolitica(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListarRecursos operation middleware
+func (siw *ServerInterfaceWrapper) ListarRecursos(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListarRecursos(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CrearRecurso operation middleware
+func (siw *ServerInterfaceWrapper) CrearRecurso(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CrearRecurso(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ActualizarRecurso operation middleware
+func (siw *ServerInterfaceWrapper) ActualizarRecurso(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id IdEnRuta
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ActualizarRecurso(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListarReglas operation middleware
+func (siw *ServerInterfaceWrapper) ListarReglas(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListarReglasParams
+
+	// ------------- Optional query parameter "recurso_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "recurso_id", r.URL.Query(), &params.RecursoId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "recurso_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recurso_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListarReglas(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CrearRegla operation middleware
+func (siw *ServerInterfaceWrapper) CrearRegla(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CrearRegla(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EliminarRegla operation middleware
+func (siw *ServerInterfaceWrapper) EliminarRegla(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id IdEnRuta
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EliminarRegla(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListarSedesConfig operation middleware
+func (siw *ServerInterfaceWrapper) ListarSedesConfig(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListarSedesConfig(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CrearSede operation middleware
+func (siw *ServerInterfaceWrapper) CrearSede(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CrearSede(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ActualizarSede operation middleware
+func (siw *ServerInterfaceWrapper) ActualizarSede(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id IdEnRuta
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ActualizarSede(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListarServiciosConfig operation middleware
+func (siw *ServerInterfaceWrapper) ListarServiciosConfig(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListarServiciosConfig(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CrearServicio operation middleware
+func (siw *ServerInterfaceWrapper) CrearServicio(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CrearServicio(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ActualizarServicio operation middleware
+func (siw *ServerInterfaceWrapper) ActualizarServicio(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id IdEnRuta
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ActualizarServicio(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListarTarifas operation middleware
+func (siw *ServerInterfaceWrapper) ListarTarifas(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListarTarifasParams
+
+	// ------------- Optional query parameter "servicio_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "servicio_id", r.URL.Query(), &params.ServicioId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "servicio_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "servicio_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListarTarifas(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CrearTarifa operation middleware
+func (siw *ServerInterfaceWrapper) CrearTarifa(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CrearTarifa(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EliminarTarifa operation middleware
+func (siw *ServerInterfaceWrapper) EliminarTarifa(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id IdEnRuta
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EliminarTarifa(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListarVouchers operation middleware
+func (siw *ServerInterfaceWrapper) ListarVouchers(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListarVouchers(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CrearVoucher operation middleware
+func (siw *ServerInterfaceWrapper) CrearVoucher(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CrearVoucher(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EliminarVoucher operation middleware
+func (siw *ServerInterfaceWrapper) EliminarVoucher(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id IdEnRuta
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EliminarVoucher(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1964,6 +3083,30 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/cuentas/contrasena/restablecimiento", wrapper.RestablecerContrasena)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/cuentas/contrasena/recuperacion", wrapper.SolicitarRecuperacion)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/agentes/token", wrapper.IntercambiarTokenAgente)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/config/sedes", wrapper.ListarSedesConfig)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/config/sedes", wrapper.CrearSede)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/config/sedes/{id}", wrapper.ActualizarSede)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/config/servicios", wrapper.ListarServiciosConfig)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/config/servicios", wrapper.CrearServicio)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/config/servicios/{id}", wrapper.ActualizarServicio)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/config/recursos", wrapper.ListarRecursos)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/config/recursos", wrapper.CrearRecurso)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/config/recursos/{id}", wrapper.ActualizarRecurso)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/config/reglas", wrapper.ListarReglas)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/config/reglas", wrapper.CrearRegla)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/config/reglas/{id}", wrapper.EliminarRegla)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/config/excepciones", wrapper.ListarExcepciones)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/config/excepciones", wrapper.CrearExcepcion)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/config/excepciones/{id}", wrapper.EliminarExcepcion)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/config/politicas", wrapper.ListarPoliticas)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/config/politicas", wrapper.PublicarPolitica)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/config/vouchers", wrapper.ListarVouchers)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/config/vouchers", wrapper.CrearVoucher)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/config/vouchers/{id}", wrapper.EliminarVoucher)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/config/tarifas", wrapper.ListarTarifas)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/config/tarifas", wrapper.CrearTarifa)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/config/tarifas/{id}", wrapper.EliminarTarifa)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/auditoria", wrapper.ConsultarAuditoria)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/reservas", wrapper.ListarReservas)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/reservas", wrapper.CrearReserva)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/reservas/{id}", wrapper.ObtenerReserva)
@@ -2071,6 +3214,2153 @@ type IntercambiarTokenAgente500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response IntercambiarTokenAgente500ApplicationProblemPlusJSONResponse) VisitIntercambiarTokenAgenteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConsultarAuditoriaRequestObject struct {
+	Params ConsultarAuditoriaParams
+}
+
+type ConsultarAuditoriaResponseObject interface {
+	VisitConsultarAuditoriaResponse(w http.ResponseWriter) error
+}
+
+type ConsultarAuditoria200JSONResponse ListaAuditoria
+
+func (response ConsultarAuditoria200JSONResponse) VisitConsultarAuditoriaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConsultarAuditoria400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response ConsultarAuditoria400ApplicationProblemPlusJSONResponse) VisitConsultarAuditoriaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConsultarAuditoria401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response ConsultarAuditoria401ApplicationProblemPlusJSONResponse) VisitConsultarAuditoriaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConsultarAuditoria403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response ConsultarAuditoria403ApplicationProblemPlusJSONResponse) VisitConsultarAuditoriaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConsultarAuditoria500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response ConsultarAuditoria500ApplicationProblemPlusJSONResponse) VisitConsultarAuditoriaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarExcepcionesRequestObject struct {
+}
+
+type ListarExcepcionesResponseObject interface {
+	VisitListarExcepcionesResponse(w http.ResponseWriter) error
+}
+
+type ListarExcepciones200JSONResponse ListaExcepciones
+
+func (response ListarExcepciones200JSONResponse) VisitListarExcepcionesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarExcepciones401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response ListarExcepciones401ApplicationProblemPlusJSONResponse) VisitListarExcepcionesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarExcepciones403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response ListarExcepciones403ApplicationProblemPlusJSONResponse) VisitListarExcepcionesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarExcepciones500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response ListarExcepciones500ApplicationProblemPlusJSONResponse) VisitListarExcepcionesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearExcepcionRequestObject struct {
+	Body *CrearExcepcionJSONRequestBody
+}
+
+type CrearExcepcionResponseObject interface {
+	VisitCrearExcepcionResponse(w http.ResponseWriter) error
+}
+
+type CrearExcepcion201JSONResponse ExcepcionCalendario
+
+func (response CrearExcepcion201JSONResponse) VisitCrearExcepcionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearExcepcion400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response CrearExcepcion400ApplicationProblemPlusJSONResponse) VisitCrearExcepcionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearExcepcion401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response CrearExcepcion401ApplicationProblemPlusJSONResponse) VisitCrearExcepcionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearExcepcion403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response CrearExcepcion403ApplicationProblemPlusJSONResponse) VisitCrearExcepcionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearExcepcion422ApplicationProblemPlusJSONResponse struct {
+	NoProcesableApplicationProblemPlusJSONResponse
+}
+
+func (response CrearExcepcion422ApplicationProblemPlusJSONResponse) VisitCrearExcepcionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearExcepcion500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response CrearExcepcion500ApplicationProblemPlusJSONResponse) VisitCrearExcepcionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EliminarExcepcionRequestObject struct {
+	Id IdEnRuta `json:"id"`
+}
+
+type EliminarExcepcionResponseObject interface {
+	VisitEliminarExcepcionResponse(w http.ResponseWriter) error
+}
+
+type EliminarExcepcion204Response struct {
+}
+
+func (response EliminarExcepcion204Response) VisitEliminarExcepcionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type EliminarExcepcion401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response EliminarExcepcion401ApplicationProblemPlusJSONResponse) VisitEliminarExcepcionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EliminarExcepcion403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response EliminarExcepcion403ApplicationProblemPlusJSONResponse) VisitEliminarExcepcionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EliminarExcepcion404ApplicationProblemPlusJSONResponse struct {
+	NoEncontradoApplicationProblemPlusJSONResponse
+}
+
+func (response EliminarExcepcion404ApplicationProblemPlusJSONResponse) VisitEliminarExcepcionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EliminarExcepcion500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response EliminarExcepcion500ApplicationProblemPlusJSONResponse) VisitEliminarExcepcionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarPoliticasRequestObject struct {
+}
+
+type ListarPoliticasResponseObject interface {
+	VisitListarPoliticasResponse(w http.ResponseWriter) error
+}
+
+type ListarPoliticas200JSONResponse ListaPoliticas
+
+func (response ListarPoliticas200JSONResponse) VisitListarPoliticasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarPoliticas401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response ListarPoliticas401ApplicationProblemPlusJSONResponse) VisitListarPoliticasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarPoliticas403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response ListarPoliticas403ApplicationProblemPlusJSONResponse) VisitListarPoliticasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarPoliticas500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response ListarPoliticas500ApplicationProblemPlusJSONResponse) VisitListarPoliticasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublicarPoliticaRequestObject struct {
+	Body *PublicarPoliticaJSONRequestBody
+}
+
+type PublicarPoliticaResponseObject interface {
+	VisitPublicarPoliticaResponse(w http.ResponseWriter) error
+}
+
+type PublicarPolitica201JSONResponse Politica
+
+func (response PublicarPolitica201JSONResponse) VisitPublicarPoliticaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublicarPolitica400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response PublicarPolitica400ApplicationProblemPlusJSONResponse) VisitPublicarPoliticaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublicarPolitica401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response PublicarPolitica401ApplicationProblemPlusJSONResponse) VisitPublicarPoliticaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublicarPolitica403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response PublicarPolitica403ApplicationProblemPlusJSONResponse) VisitPublicarPoliticaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublicarPolitica422ApplicationProblemPlusJSONResponse struct {
+	NoProcesableApplicationProblemPlusJSONResponse
+}
+
+func (response PublicarPolitica422ApplicationProblemPlusJSONResponse) VisitPublicarPoliticaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublicarPolitica500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response PublicarPolitica500ApplicationProblemPlusJSONResponse) VisitPublicarPoliticaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarRecursosRequestObject struct {
+}
+
+type ListarRecursosResponseObject interface {
+	VisitListarRecursosResponse(w http.ResponseWriter) error
+}
+
+type ListarRecursos200JSONResponse ListaRecursos
+
+func (response ListarRecursos200JSONResponse) VisitListarRecursosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarRecursos401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response ListarRecursos401ApplicationProblemPlusJSONResponse) VisitListarRecursosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarRecursos403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response ListarRecursos403ApplicationProblemPlusJSONResponse) VisitListarRecursosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarRecursos500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response ListarRecursos500ApplicationProblemPlusJSONResponse) VisitListarRecursosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearRecursoRequestObject struct {
+	Body *CrearRecursoJSONRequestBody
+}
+
+type CrearRecursoResponseObject interface {
+	VisitCrearRecursoResponse(w http.ResponseWriter) error
+}
+
+type CrearRecurso201JSONResponse Recurso
+
+func (response CrearRecurso201JSONResponse) VisitCrearRecursoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearRecurso400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response CrearRecurso400ApplicationProblemPlusJSONResponse) VisitCrearRecursoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearRecurso401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response CrearRecurso401ApplicationProblemPlusJSONResponse) VisitCrearRecursoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearRecurso403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response CrearRecurso403ApplicationProblemPlusJSONResponse) VisitCrearRecursoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearRecurso422ApplicationProblemPlusJSONResponse struct {
+	NoProcesableApplicationProblemPlusJSONResponse
+}
+
+func (response CrearRecurso422ApplicationProblemPlusJSONResponse) VisitCrearRecursoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearRecurso500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response CrearRecurso500ApplicationProblemPlusJSONResponse) VisitCrearRecursoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarRecursoRequestObject struct {
+	Id   IdEnRuta `json:"id"`
+	Body *ActualizarRecursoJSONRequestBody
+}
+
+type ActualizarRecursoResponseObject interface {
+	VisitActualizarRecursoResponse(w http.ResponseWriter) error
+}
+
+type ActualizarRecurso200JSONResponse Recurso
+
+func (response ActualizarRecurso200JSONResponse) VisitActualizarRecursoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarRecurso400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response ActualizarRecurso400ApplicationProblemPlusJSONResponse) VisitActualizarRecursoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarRecurso401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response ActualizarRecurso401ApplicationProblemPlusJSONResponse) VisitActualizarRecursoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarRecurso403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response ActualizarRecurso403ApplicationProblemPlusJSONResponse) VisitActualizarRecursoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarRecurso404ApplicationProblemPlusJSONResponse struct {
+	NoEncontradoApplicationProblemPlusJSONResponse
+}
+
+func (response ActualizarRecurso404ApplicationProblemPlusJSONResponse) VisitActualizarRecursoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarRecurso422ApplicationProblemPlusJSONResponse struct {
+	NoProcesableApplicationProblemPlusJSONResponse
+}
+
+func (response ActualizarRecurso422ApplicationProblemPlusJSONResponse) VisitActualizarRecursoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarRecurso500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response ActualizarRecurso500ApplicationProblemPlusJSONResponse) VisitActualizarRecursoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarReglasRequestObject struct {
+	Params ListarReglasParams
+}
+
+type ListarReglasResponseObject interface {
+	VisitListarReglasResponse(w http.ResponseWriter) error
+}
+
+type ListarReglas200JSONResponse ListaReglas
+
+func (response ListarReglas200JSONResponse) VisitListarReglasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarReglas401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response ListarReglas401ApplicationProblemPlusJSONResponse) VisitListarReglasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarReglas403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response ListarReglas403ApplicationProblemPlusJSONResponse) VisitListarReglasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarReglas500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response ListarReglas500ApplicationProblemPlusJSONResponse) VisitListarReglasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearReglaRequestObject struct {
+	Body *CrearReglaJSONRequestBody
+}
+
+type CrearReglaResponseObject interface {
+	VisitCrearReglaResponse(w http.ResponseWriter) error
+}
+
+type CrearRegla201JSONResponse ReglaDisponibilidad
+
+func (response CrearRegla201JSONResponse) VisitCrearReglaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearRegla400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response CrearRegla400ApplicationProblemPlusJSONResponse) VisitCrearReglaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearRegla401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response CrearRegla401ApplicationProblemPlusJSONResponse) VisitCrearReglaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearRegla403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response CrearRegla403ApplicationProblemPlusJSONResponse) VisitCrearReglaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearRegla422ApplicationProblemPlusJSONResponse struct {
+	NoProcesableApplicationProblemPlusJSONResponse
+}
+
+func (response CrearRegla422ApplicationProblemPlusJSONResponse) VisitCrearReglaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearRegla500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response CrearRegla500ApplicationProblemPlusJSONResponse) VisitCrearReglaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EliminarReglaRequestObject struct {
+	Id IdEnRuta `json:"id"`
+}
+
+type EliminarReglaResponseObject interface {
+	VisitEliminarReglaResponse(w http.ResponseWriter) error
+}
+
+type EliminarRegla204Response struct {
+}
+
+func (response EliminarRegla204Response) VisitEliminarReglaResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type EliminarRegla401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response EliminarRegla401ApplicationProblemPlusJSONResponse) VisitEliminarReglaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EliminarRegla403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response EliminarRegla403ApplicationProblemPlusJSONResponse) VisitEliminarReglaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EliminarRegla404ApplicationProblemPlusJSONResponse struct {
+	NoEncontradoApplicationProblemPlusJSONResponse
+}
+
+func (response EliminarRegla404ApplicationProblemPlusJSONResponse) VisitEliminarReglaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EliminarRegla500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response EliminarRegla500ApplicationProblemPlusJSONResponse) VisitEliminarReglaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarSedesConfigRequestObject struct {
+}
+
+type ListarSedesConfigResponseObject interface {
+	VisitListarSedesConfigResponse(w http.ResponseWriter) error
+}
+
+type ListarSedesConfig200JSONResponse ListaSedes
+
+func (response ListarSedesConfig200JSONResponse) VisitListarSedesConfigResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarSedesConfig401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response ListarSedesConfig401ApplicationProblemPlusJSONResponse) VisitListarSedesConfigResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarSedesConfig403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response ListarSedesConfig403ApplicationProblemPlusJSONResponse) VisitListarSedesConfigResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarSedesConfig500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response ListarSedesConfig500ApplicationProblemPlusJSONResponse) VisitListarSedesConfigResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearSedeRequestObject struct {
+	Body *CrearSedeJSONRequestBody
+}
+
+type CrearSedeResponseObject interface {
+	VisitCrearSedeResponse(w http.ResponseWriter) error
+}
+
+type CrearSede201JSONResponse Sede
+
+func (response CrearSede201JSONResponse) VisitCrearSedeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearSede400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response CrearSede400ApplicationProblemPlusJSONResponse) VisitCrearSedeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearSede401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response CrearSede401ApplicationProblemPlusJSONResponse) VisitCrearSedeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearSede403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response CrearSede403ApplicationProblemPlusJSONResponse) VisitCrearSedeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearSede422ApplicationProblemPlusJSONResponse struct {
+	NoProcesableApplicationProblemPlusJSONResponse
+}
+
+func (response CrearSede422ApplicationProblemPlusJSONResponse) VisitCrearSedeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearSede500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response CrearSede500ApplicationProblemPlusJSONResponse) VisitCrearSedeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarSedeRequestObject struct {
+	Id   IdEnRuta `json:"id"`
+	Body *ActualizarSedeJSONRequestBody
+}
+
+type ActualizarSedeResponseObject interface {
+	VisitActualizarSedeResponse(w http.ResponseWriter) error
+}
+
+type ActualizarSede200JSONResponse Sede
+
+func (response ActualizarSede200JSONResponse) VisitActualizarSedeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarSede400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response ActualizarSede400ApplicationProblemPlusJSONResponse) VisitActualizarSedeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarSede401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response ActualizarSede401ApplicationProblemPlusJSONResponse) VisitActualizarSedeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarSede403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response ActualizarSede403ApplicationProblemPlusJSONResponse) VisitActualizarSedeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarSede404ApplicationProblemPlusJSONResponse struct {
+	NoEncontradoApplicationProblemPlusJSONResponse
+}
+
+func (response ActualizarSede404ApplicationProblemPlusJSONResponse) VisitActualizarSedeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarSede422ApplicationProblemPlusJSONResponse struct {
+	NoProcesableApplicationProblemPlusJSONResponse
+}
+
+func (response ActualizarSede422ApplicationProblemPlusJSONResponse) VisitActualizarSedeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarSede500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response ActualizarSede500ApplicationProblemPlusJSONResponse) VisitActualizarSedeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarServiciosConfigRequestObject struct {
+}
+
+type ListarServiciosConfigResponseObject interface {
+	VisitListarServiciosConfigResponse(w http.ResponseWriter) error
+}
+
+type ListarServiciosConfig200JSONResponse ListaServicios
+
+func (response ListarServiciosConfig200JSONResponse) VisitListarServiciosConfigResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarServiciosConfig401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response ListarServiciosConfig401ApplicationProblemPlusJSONResponse) VisitListarServiciosConfigResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarServiciosConfig403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response ListarServiciosConfig403ApplicationProblemPlusJSONResponse) VisitListarServiciosConfigResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarServiciosConfig500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response ListarServiciosConfig500ApplicationProblemPlusJSONResponse) VisitListarServiciosConfigResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearServicioRequestObject struct {
+	Body *CrearServicioJSONRequestBody
+}
+
+type CrearServicioResponseObject interface {
+	VisitCrearServicioResponse(w http.ResponseWriter) error
+}
+
+type CrearServicio201JSONResponse Servicio
+
+func (response CrearServicio201JSONResponse) VisitCrearServicioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearServicio400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response CrearServicio400ApplicationProblemPlusJSONResponse) VisitCrearServicioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearServicio401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response CrearServicio401ApplicationProblemPlusJSONResponse) VisitCrearServicioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearServicio403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response CrearServicio403ApplicationProblemPlusJSONResponse) VisitCrearServicioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearServicio422ApplicationProblemPlusJSONResponse struct {
+	NoProcesableApplicationProblemPlusJSONResponse
+}
+
+func (response CrearServicio422ApplicationProblemPlusJSONResponse) VisitCrearServicioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearServicio500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response CrearServicio500ApplicationProblemPlusJSONResponse) VisitCrearServicioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarServicioRequestObject struct {
+	Id   IdEnRuta `json:"id"`
+	Body *ActualizarServicioJSONRequestBody
+}
+
+type ActualizarServicioResponseObject interface {
+	VisitActualizarServicioResponse(w http.ResponseWriter) error
+}
+
+type ActualizarServicio200JSONResponse Servicio
+
+func (response ActualizarServicio200JSONResponse) VisitActualizarServicioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarServicio400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response ActualizarServicio400ApplicationProblemPlusJSONResponse) VisitActualizarServicioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarServicio401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response ActualizarServicio401ApplicationProblemPlusJSONResponse) VisitActualizarServicioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarServicio403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response ActualizarServicio403ApplicationProblemPlusJSONResponse) VisitActualizarServicioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarServicio404ApplicationProblemPlusJSONResponse struct {
+	NoEncontradoApplicationProblemPlusJSONResponse
+}
+
+func (response ActualizarServicio404ApplicationProblemPlusJSONResponse) VisitActualizarServicioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarServicio422ApplicationProblemPlusJSONResponse struct {
+	NoProcesableApplicationProblemPlusJSONResponse
+}
+
+func (response ActualizarServicio422ApplicationProblemPlusJSONResponse) VisitActualizarServicioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActualizarServicio500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response ActualizarServicio500ApplicationProblemPlusJSONResponse) VisitActualizarServicioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarTarifasRequestObject struct {
+	Params ListarTarifasParams
+}
+
+type ListarTarifasResponseObject interface {
+	VisitListarTarifasResponse(w http.ResponseWriter) error
+}
+
+type ListarTarifas200JSONResponse ListaTarifas
+
+func (response ListarTarifas200JSONResponse) VisitListarTarifasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarTarifas401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response ListarTarifas401ApplicationProblemPlusJSONResponse) VisitListarTarifasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarTarifas403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response ListarTarifas403ApplicationProblemPlusJSONResponse) VisitListarTarifasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarTarifas500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response ListarTarifas500ApplicationProblemPlusJSONResponse) VisitListarTarifasResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearTarifaRequestObject struct {
+	Body *CrearTarifaJSONRequestBody
+}
+
+type CrearTarifaResponseObject interface {
+	VisitCrearTarifaResponse(w http.ResponseWriter) error
+}
+
+type CrearTarifa201JSONResponse Tarifa
+
+func (response CrearTarifa201JSONResponse) VisitCrearTarifaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearTarifa400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response CrearTarifa400ApplicationProblemPlusJSONResponse) VisitCrearTarifaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearTarifa401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response CrearTarifa401ApplicationProblemPlusJSONResponse) VisitCrearTarifaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearTarifa403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response CrearTarifa403ApplicationProblemPlusJSONResponse) VisitCrearTarifaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearTarifa422ApplicationProblemPlusJSONResponse struct {
+	NoProcesableApplicationProblemPlusJSONResponse
+}
+
+func (response CrearTarifa422ApplicationProblemPlusJSONResponse) VisitCrearTarifaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearTarifa500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response CrearTarifa500ApplicationProblemPlusJSONResponse) VisitCrearTarifaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EliminarTarifaRequestObject struct {
+	Id IdEnRuta `json:"id"`
+}
+
+type EliminarTarifaResponseObject interface {
+	VisitEliminarTarifaResponse(w http.ResponseWriter) error
+}
+
+type EliminarTarifa204Response struct {
+}
+
+func (response EliminarTarifa204Response) VisitEliminarTarifaResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type EliminarTarifa401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response EliminarTarifa401ApplicationProblemPlusJSONResponse) VisitEliminarTarifaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EliminarTarifa403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response EliminarTarifa403ApplicationProblemPlusJSONResponse) VisitEliminarTarifaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EliminarTarifa404ApplicationProblemPlusJSONResponse struct {
+	NoEncontradoApplicationProblemPlusJSONResponse
+}
+
+func (response EliminarTarifa404ApplicationProblemPlusJSONResponse) VisitEliminarTarifaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EliminarTarifa500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response EliminarTarifa500ApplicationProblemPlusJSONResponse) VisitEliminarTarifaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarVouchersRequestObject struct {
+}
+
+type ListarVouchersResponseObject interface {
+	VisitListarVouchersResponse(w http.ResponseWriter) error
+}
+
+type ListarVouchers200JSONResponse ListaVouchers
+
+func (response ListarVouchers200JSONResponse) VisitListarVouchersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarVouchers401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response ListarVouchers401ApplicationProblemPlusJSONResponse) VisitListarVouchersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarVouchers403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response ListarVouchers403ApplicationProblemPlusJSONResponse) VisitListarVouchersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListarVouchers500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response ListarVouchers500ApplicationProblemPlusJSONResponse) VisitListarVouchersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearVoucherRequestObject struct {
+	Body *CrearVoucherJSONRequestBody
+}
+
+type CrearVoucherResponseObject interface {
+	VisitCrearVoucherResponse(w http.ResponseWriter) error
+}
+
+type CrearVoucher201JSONResponse Voucher
+
+func (response CrearVoucher201JSONResponse) VisitCrearVoucherResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearVoucher400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response CrearVoucher400ApplicationProblemPlusJSONResponse) VisitCrearVoucherResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearVoucher401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response CrearVoucher401ApplicationProblemPlusJSONResponse) VisitCrearVoucherResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearVoucher403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response CrearVoucher403ApplicationProblemPlusJSONResponse) VisitCrearVoucherResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearVoucher409ApplicationProblemPlusJSONResponse Problema
+
+func (response CrearVoucher409ApplicationProblemPlusJSONResponse) VisitCrearVoucherResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearVoucher422ApplicationProblemPlusJSONResponse struct {
+	NoProcesableApplicationProblemPlusJSONResponse
+}
+
+func (response CrearVoucher422ApplicationProblemPlusJSONResponse) VisitCrearVoucherResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearVoucher500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response CrearVoucher500ApplicationProblemPlusJSONResponse) VisitCrearVoucherResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EliminarVoucherRequestObject struct {
+	Id IdEnRuta `json:"id"`
+}
+
+type EliminarVoucherResponseObject interface {
+	VisitEliminarVoucherResponse(w http.ResponseWriter) error
+}
+
+type EliminarVoucher204Response struct {
+}
+
+func (response EliminarVoucher204Response) VisitEliminarVoucherResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type EliminarVoucher401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response EliminarVoucher401ApplicationProblemPlusJSONResponse) VisitEliminarVoucherResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EliminarVoucher403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response EliminarVoucher403ApplicationProblemPlusJSONResponse) VisitEliminarVoucherResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EliminarVoucher404ApplicationProblemPlusJSONResponse struct {
+	NoEncontradoApplicationProblemPlusJSONResponse
+}
+
+func (response EliminarVoucher404ApplicationProblemPlusJSONResponse) VisitEliminarVoucherResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EliminarVoucher500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response EliminarVoucher500ApplicationProblemPlusJSONResponse) VisitEliminarVoucherResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -4310,6 +7600,78 @@ type StrictServerInterface interface {
 	// IntercambiarTokenAgente Intercambiar la credencial por un token de acciones (RF-13)
 	// (POST /v1/agentes/token)
 	IntercambiarTokenAgente(ctx context.Context, request IntercambiarTokenAgenteRequestObject) (IntercambiarTokenAgenteResponseObject, error)
+	// ConsultarAuditoria Consultar la auditoría (RF-36)
+	// (GET /v1/auditoria)
+	ConsultarAuditoria(ctx context.Context, request ConsultarAuditoriaRequestObject) (ConsultarAuditoriaResponseObject, error)
+	// ListarExcepciones Excepciones de calendario (RF-14)
+	// (GET /v1/config/excepciones)
+	ListarExcepciones(ctx context.Context, request ListarExcepcionesRequestObject) (ListarExcepcionesResponseObject, error)
+	// CrearExcepcion Tapar un período (RF-14)
+	// (POST /v1/config/excepciones)
+	CrearExcepcion(ctx context.Context, request CrearExcepcionRequestObject) (CrearExcepcionResponseObject, error)
+	// EliminarExcepcion Levantar una excepción de calendario (RF-14)
+	// (DELETE /v1/config/excepciones/{id})
+	EliminarExcepcion(ctx context.Context, request EliminarExcepcionRequestObject) (EliminarExcepcionResponseObject, error)
+	// ListarPoliticas Versiones de política publicadas (RF-15)
+	// (GET /v1/config/politicas)
+	ListarPoliticas(ctx context.Context, request ListarPoliticasRequestObject) (ListarPoliticasResponseObject, error)
+	// PublicarPolitica Publicar una versión de política (RF-15)
+	// (POST /v1/config/politicas)
+	PublicarPolitica(ctx context.Context, request PublicarPoliticaRequestObject) (PublicarPoliticaResponseObject, error)
+	// ListarRecursos Los recursos del tenant y qué servicios prestan (RF-30)
+	// (GET /v1/config/recursos)
+	ListarRecursos(ctx context.Context, request ListarRecursosRequestObject) (ListarRecursosResponseObject, error)
+	// CrearRecurso Crear un recurso (RF-30)
+	// (POST /v1/config/recursos)
+	CrearRecurso(ctx context.Context, request CrearRecursoRequestObject) (CrearRecursoResponseObject, error)
+	// ActualizarRecurso Editar un recurso (RF-30)
+	// (PATCH /v1/config/recursos/{id})
+	ActualizarRecurso(ctx context.Context, request ActualizarRecursoRequestObject) (ActualizarRecursoResponseObject, error)
+	// ListarReglas Reglas de disponibilidad (RF-14)
+	// (GET /v1/config/reglas)
+	ListarReglas(ctx context.Context, request ListarReglasRequestObject) (ListarReglasResponseObject, error)
+	// CrearRegla Publicar una regla de disponibilidad (RF-14)
+	// (POST /v1/config/reglas)
+	CrearRegla(ctx context.Context, request CrearReglaRequestObject) (CrearReglaResponseObject, error)
+	// EliminarRegla Retirar una regla de disponibilidad (RF-14)
+	// (DELETE /v1/config/reglas/{id})
+	EliminarRegla(ctx context.Context, request EliminarReglaRequestObject) (EliminarReglaResponseObject, error)
+	// ListarSedesConfig Todas las sedes del tenant, activas e inactivas (RF-30)
+	// (GET /v1/config/sedes)
+	ListarSedesConfig(ctx context.Context, request ListarSedesConfigRequestObject) (ListarSedesConfigResponseObject, error)
+	// CrearSede Crear una sede (RF-30)
+	// (POST /v1/config/sedes)
+	CrearSede(ctx context.Context, request CrearSedeRequestObject) (CrearSedeResponseObject, error)
+	// ActualizarSede Editar una sede (RF-30)
+	// (PATCH /v1/config/sedes/{id})
+	ActualizarSede(ctx context.Context, request ActualizarSedeRequestObject) (ActualizarSedeResponseObject, error)
+	// ListarServiciosConfig Todos los servicios del tenant (RF-30)
+	// (GET /v1/config/servicios)
+	ListarServiciosConfig(ctx context.Context, request ListarServiciosConfigRequestObject) (ListarServiciosConfigResponseObject, error)
+	// CrearServicio Crear un servicio (RF-30, RF-31)
+	// (POST /v1/config/servicios)
+	CrearServicio(ctx context.Context, request CrearServicioRequestObject) (CrearServicioResponseObject, error)
+	// ActualizarServicio Editar un servicio (RF-30, RF-31)
+	// (PATCH /v1/config/servicios/{id})
+	ActualizarServicio(ctx context.Context, request ActualizarServicioRequestObject) (ActualizarServicioResponseObject, error)
+	// ListarTarifas Tarifas del tenant (RF-31)
+	// (GET /v1/config/tarifas)
+	ListarTarifas(ctx context.Context, request ListarTarifasRequestObject) (ListarTarifasResponseObject, error)
+	// CrearTarifa Publicar una tarifa (RF-31)
+	// (POST /v1/config/tarifas)
+	CrearTarifa(ctx context.Context, request CrearTarifaRequestObject) (CrearTarifaResponseObject, error)
+	// EliminarTarifa Retirar una tarifa (RF-31)
+	// (DELETE /v1/config/tarifas/{id})
+	EliminarTarifa(ctx context.Context, request EliminarTarifaRequestObject) (EliminarTarifaResponseObject, error)
+	// ListarVouchers Vouchers del tenant (RF-17)
+	// (GET /v1/config/vouchers)
+	ListarVouchers(ctx context.Context, request ListarVouchersRequestObject) (ListarVouchersResponseObject, error)
+	// CrearVoucher Crear un voucher (RF-17)
+	// (POST /v1/config/vouchers)
+	CrearVoucher(ctx context.Context, request CrearVoucherRequestObject) (CrearVoucherResponseObject, error)
+	// EliminarVoucher Eliminar un voucher (RF-17)
+	// (DELETE /v1/config/vouchers/{id})
+	EliminarVoucher(ctx context.Context, request EliminarVoucherRequestObject) (EliminarVoucherResponseObject, error)
 	// RegistrarCuenta Registrar una cuenta (RF-24)
 	// (POST /v1/cuentas)
 	RegistrarCuenta(ctx context.Context, request RegistrarCuentaRequestObject) (RegistrarCuentaResponseObject, error)
@@ -4456,6 +7818,679 @@ func (sh *strictHandler) IntercambiarTokenAgente(w http.ResponseWriter, r *http.
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(IntercambiarTokenAgenteResponseObject); ok {
 		if err := validResponse.VisitIntercambiarTokenAgenteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ConsultarAuditoria operation middleware
+func (sh *strictHandler) ConsultarAuditoria(w http.ResponseWriter, r *http.Request, params ConsultarAuditoriaParams) {
+	var request ConsultarAuditoriaRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ConsultarAuditoria(ctx, request.(ConsultarAuditoriaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ConsultarAuditoria")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ConsultarAuditoriaResponseObject); ok {
+		if err := validResponse.VisitConsultarAuditoriaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListarExcepciones operation middleware
+func (sh *strictHandler) ListarExcepciones(w http.ResponseWriter, r *http.Request) {
+	var request ListarExcepcionesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListarExcepciones(ctx, request.(ListarExcepcionesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListarExcepciones")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListarExcepcionesResponseObject); ok {
+		if err := validResponse.VisitListarExcepcionesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CrearExcepcion operation middleware
+func (sh *strictHandler) CrearExcepcion(w http.ResponseWriter, r *http.Request) {
+	var request CrearExcepcionRequestObject
+
+	var body CrearExcepcionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CrearExcepcion(ctx, request.(CrearExcepcionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CrearExcepcion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CrearExcepcionResponseObject); ok {
+		if err := validResponse.VisitCrearExcepcionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EliminarExcepcion operation middleware
+func (sh *strictHandler) EliminarExcepcion(w http.ResponseWriter, r *http.Request, id IdEnRuta) {
+	var request EliminarExcepcionRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EliminarExcepcion(ctx, request.(EliminarExcepcionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EliminarExcepcion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EliminarExcepcionResponseObject); ok {
+		if err := validResponse.VisitEliminarExcepcionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListarPoliticas operation middleware
+func (sh *strictHandler) ListarPoliticas(w http.ResponseWriter, r *http.Request) {
+	var request ListarPoliticasRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListarPoliticas(ctx, request.(ListarPoliticasRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListarPoliticas")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListarPoliticasResponseObject); ok {
+		if err := validResponse.VisitListarPoliticasResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PublicarPolitica operation middleware
+func (sh *strictHandler) PublicarPolitica(w http.ResponseWriter, r *http.Request) {
+	var request PublicarPoliticaRequestObject
+
+	var body PublicarPoliticaJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PublicarPolitica(ctx, request.(PublicarPoliticaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PublicarPolitica")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PublicarPoliticaResponseObject); ok {
+		if err := validResponse.VisitPublicarPoliticaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListarRecursos operation middleware
+func (sh *strictHandler) ListarRecursos(w http.ResponseWriter, r *http.Request) {
+	var request ListarRecursosRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListarRecursos(ctx, request.(ListarRecursosRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListarRecursos")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListarRecursosResponseObject); ok {
+		if err := validResponse.VisitListarRecursosResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CrearRecurso operation middleware
+func (sh *strictHandler) CrearRecurso(w http.ResponseWriter, r *http.Request) {
+	var request CrearRecursoRequestObject
+
+	var body CrearRecursoJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CrearRecurso(ctx, request.(CrearRecursoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CrearRecurso")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CrearRecursoResponseObject); ok {
+		if err := validResponse.VisitCrearRecursoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ActualizarRecurso operation middleware
+func (sh *strictHandler) ActualizarRecurso(w http.ResponseWriter, r *http.Request, id IdEnRuta) {
+	var request ActualizarRecursoRequestObject
+
+	request.Id = id
+
+	var body ActualizarRecursoJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ActualizarRecurso(ctx, request.(ActualizarRecursoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ActualizarRecurso")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ActualizarRecursoResponseObject); ok {
+		if err := validResponse.VisitActualizarRecursoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListarReglas operation middleware
+func (sh *strictHandler) ListarReglas(w http.ResponseWriter, r *http.Request, params ListarReglasParams) {
+	var request ListarReglasRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListarReglas(ctx, request.(ListarReglasRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListarReglas")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListarReglasResponseObject); ok {
+		if err := validResponse.VisitListarReglasResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CrearRegla operation middleware
+func (sh *strictHandler) CrearRegla(w http.ResponseWriter, r *http.Request) {
+	var request CrearReglaRequestObject
+
+	var body CrearReglaJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CrearRegla(ctx, request.(CrearReglaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CrearRegla")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CrearReglaResponseObject); ok {
+		if err := validResponse.VisitCrearReglaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EliminarRegla operation middleware
+func (sh *strictHandler) EliminarRegla(w http.ResponseWriter, r *http.Request, id IdEnRuta) {
+	var request EliminarReglaRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EliminarRegla(ctx, request.(EliminarReglaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EliminarRegla")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EliminarReglaResponseObject); ok {
+		if err := validResponse.VisitEliminarReglaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListarSedesConfig operation middleware
+func (sh *strictHandler) ListarSedesConfig(w http.ResponseWriter, r *http.Request) {
+	var request ListarSedesConfigRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListarSedesConfig(ctx, request.(ListarSedesConfigRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListarSedesConfig")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListarSedesConfigResponseObject); ok {
+		if err := validResponse.VisitListarSedesConfigResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CrearSede operation middleware
+func (sh *strictHandler) CrearSede(w http.ResponseWriter, r *http.Request) {
+	var request CrearSedeRequestObject
+
+	var body CrearSedeJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CrearSede(ctx, request.(CrearSedeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CrearSede")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CrearSedeResponseObject); ok {
+		if err := validResponse.VisitCrearSedeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ActualizarSede operation middleware
+func (sh *strictHandler) ActualizarSede(w http.ResponseWriter, r *http.Request, id IdEnRuta) {
+	var request ActualizarSedeRequestObject
+
+	request.Id = id
+
+	var body ActualizarSedeJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ActualizarSede(ctx, request.(ActualizarSedeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ActualizarSede")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ActualizarSedeResponseObject); ok {
+		if err := validResponse.VisitActualizarSedeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListarServiciosConfig operation middleware
+func (sh *strictHandler) ListarServiciosConfig(w http.ResponseWriter, r *http.Request) {
+	var request ListarServiciosConfigRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListarServiciosConfig(ctx, request.(ListarServiciosConfigRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListarServiciosConfig")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListarServiciosConfigResponseObject); ok {
+		if err := validResponse.VisitListarServiciosConfigResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CrearServicio operation middleware
+func (sh *strictHandler) CrearServicio(w http.ResponseWriter, r *http.Request) {
+	var request CrearServicioRequestObject
+
+	var body CrearServicioJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CrearServicio(ctx, request.(CrearServicioRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CrearServicio")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CrearServicioResponseObject); ok {
+		if err := validResponse.VisitCrearServicioResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ActualizarServicio operation middleware
+func (sh *strictHandler) ActualizarServicio(w http.ResponseWriter, r *http.Request, id IdEnRuta) {
+	var request ActualizarServicioRequestObject
+
+	request.Id = id
+
+	var body ActualizarServicioJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ActualizarServicio(ctx, request.(ActualizarServicioRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ActualizarServicio")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ActualizarServicioResponseObject); ok {
+		if err := validResponse.VisitActualizarServicioResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListarTarifas operation middleware
+func (sh *strictHandler) ListarTarifas(w http.ResponseWriter, r *http.Request, params ListarTarifasParams) {
+	var request ListarTarifasRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListarTarifas(ctx, request.(ListarTarifasRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListarTarifas")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListarTarifasResponseObject); ok {
+		if err := validResponse.VisitListarTarifasResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CrearTarifa operation middleware
+func (sh *strictHandler) CrearTarifa(w http.ResponseWriter, r *http.Request) {
+	var request CrearTarifaRequestObject
+
+	var body CrearTarifaJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CrearTarifa(ctx, request.(CrearTarifaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CrearTarifa")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CrearTarifaResponseObject); ok {
+		if err := validResponse.VisitCrearTarifaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EliminarTarifa operation middleware
+func (sh *strictHandler) EliminarTarifa(w http.ResponseWriter, r *http.Request, id IdEnRuta) {
+	var request EliminarTarifaRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EliminarTarifa(ctx, request.(EliminarTarifaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EliminarTarifa")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EliminarTarifaResponseObject); ok {
+		if err := validResponse.VisitEliminarTarifaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListarVouchers operation middleware
+func (sh *strictHandler) ListarVouchers(w http.ResponseWriter, r *http.Request) {
+	var request ListarVouchersRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListarVouchers(ctx, request.(ListarVouchersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListarVouchers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListarVouchersResponseObject); ok {
+		if err := validResponse.VisitListarVouchersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CrearVoucher operation middleware
+func (sh *strictHandler) CrearVoucher(w http.ResponseWriter, r *http.Request) {
+	var request CrearVoucherRequestObject
+
+	var body CrearVoucherJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CrearVoucher(ctx, request.(CrearVoucherRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CrearVoucher")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CrearVoucherResponseObject); ok {
+		if err := validResponse.VisitCrearVoucherResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EliminarVoucher operation middleware
+func (sh *strictHandler) EliminarVoucher(w http.ResponseWriter, r *http.Request, id IdEnRuta) {
+	var request EliminarVoucherRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EliminarVoucher(ctx, request.(EliminarVoucherRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EliminarVoucher")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EliminarVoucherResponseObject); ok {
+		if err := validResponse.VisitEliminarVoucherResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

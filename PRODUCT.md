@@ -165,10 +165,10 @@ Constraints y decisiones abiertas:
   —catálogo, disponibilidad, crear reserva— sigue siendo lo correcto: no hay
   token del que derivar el negocio. Para un administrador ya no manda: su tenant
   va dentro del token.
-- **El contrato cubre catálogo, disponibilidad, reservas y cuentas.** Lo que
-  todavía no existe es el dinero (RF-33, RF-29, RF-34), la configuración del
-  negocio (RF-14, RF-15, RF-16, RF-17, RF-30, RF-31), las métricas (RF-11) y la
-  auditoría consultable (RF-36).
+- **El contrato cubre catálogo, disponibilidad, reservas, cuentas y la
+  configuración del negocio**, incluida la auditoría de quién la cambió. Lo que
+  todavía no existe es el dinero (RF-33, RF-29, RF-34), las notificaciones
+  configurables (RF-16), las métricas (RF-11) y la lista de espera (RF-37).
 - **El pago es Stripe**, confirmado por webhook asíncrono. El diseño del paso de
   pago en el frontend no está resuelto.
 - **Sin sistema de diseño.** `index.css` solo importa Tailwind; no hay tokens,
@@ -209,6 +209,10 @@ Lo que existe de verdad y se puede usar:
   rotatorio, sesiones listables y revocables, perfil, recuperación de
   contraseña, preferencias de aviso y tokens de agente. Todo con el alcance de
   RF-23 aplicado en la consulta, no después de traerla.
+- **La configuración del negocio, en el backend**: sedes, servicios y recursos
+  (RF-30), reglas de disponibilidad y excepciones de calendario (RF-14),
+  políticas versionadas (RF-15), vouchers (RF-17) y tarifas (RF-31), cada
+  cambio con su evento de auditoría escrito en la misma transacción (RF-36).
 - **Semilla de desarrollo** (`db/semillas/dev.sql`): un tenant "Estudio Demo",
   una "Sede Centro", un servicio "Sesión de una hora" a 80.000 COP, una "Sala 1".
 

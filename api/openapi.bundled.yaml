@@ -31,6 +31,10 @@ tags:
     description: Alta, perfil, verificación, contraseña y preferencias (RF-18, RF-19, RF-21, RF-22, RF-24, RF-25)
   - name: agentes
     description: Intercambio de credencial por token de acciones (RF-13)
+  - name: configuracion
+    description: |
+      Lo que un administrador configura para que haya algo que reservar
+      (RF-14, RF-15, RF-17, RF-30, RF-31) y la traza de quién hizo qué (RF-36).
 paths:
   /v1/sedes:
     get:
@@ -785,6 +789,722 @@ paths:
           $ref: '#/components/responses/DemasiadasPeticiones'
         '500':
           $ref: '#/components/responses/ErrorInterno'
+  /v1/config/sedes:
+    get:
+      operationId: listarSedesConfig
+      summary: Todas las sedes del tenant, activas e inactivas (RF-30)
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      responses:
+        '200':
+          description: Las sedes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListaSedes'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+    post:
+      operationId: crearSede
+      summary: Crear una sede (RF-30)
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NuevaSede'
+      responses:
+        '201':
+          description: La sede creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sede'
+        '400':
+          $ref: '#/components/responses/PeticionInvalida'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '422':
+          $ref: '#/components/responses/NoProcesable'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /v1/config/sedes/{id}:
+    patch:
+      operationId: actualizarSede
+      summary: Editar una sede (RF-30)
+      description: |
+        Desactivarla no cancela sus reservas: deja de poder elegirse para reservas
+        nuevas y nada más. Cancelar lo ya vendido es una decisión aparte, y RF-32
+        la hace explícita.
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      parameters:
+        - $ref: '#/components/parameters/IdEnRuta'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActualizacionSede'
+      responses:
+        '200':
+          description: La sede actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sede'
+        '400':
+          $ref: '#/components/responses/PeticionInvalida'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '422':
+          $ref: '#/components/responses/NoProcesable'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /v1/config/servicios:
+    get:
+      operationId: listarServiciosConfig
+      summary: Todos los servicios del tenant (RF-30)
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      responses:
+        '200':
+          description: Los servicios
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListaServicios'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+    post:
+      operationId: crearServicio
+      summary: Crear un servicio (RF-30, RF-31)
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NuevoServicio'
+      responses:
+        '201':
+          description: El servicio creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Servicio'
+        '400':
+          $ref: '#/components/responses/PeticionInvalida'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '422':
+          $ref: '#/components/responses/NoProcesable'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /v1/config/servicios/{id}:
+    patch:
+      operationId: actualizarServicio
+      summary: Editar un servicio (RF-30, RF-31)
+      description: |
+        Cambiar el precio o la duración NO altera ninguna reserva existente: la
+        reserva congela ambos al crearse (RF-31). Es lo que permite editar el
+        catálogo sin revisar la agenda.
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      parameters:
+        - $ref: '#/components/parameters/IdEnRuta'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActualizacionServicio'
+      responses:
+        '200':
+          description: El servicio actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Servicio'
+        '400':
+          $ref: '#/components/responses/PeticionInvalida'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '422':
+          $ref: '#/components/responses/NoProcesable'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /v1/config/recursos:
+    get:
+      operationId: listarRecursos
+      summary: Los recursos del tenant y qué servicios prestan (RF-30)
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      responses:
+        '200':
+          description: Los recursos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListaRecursos'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+    post:
+      operationId: crearRecurso
+      summary: Crear un recurso (RF-30)
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NuevoRecurso'
+      responses:
+        '201':
+          description: El recurso creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recurso'
+        '400':
+          $ref: '#/components/responses/PeticionInvalida'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '422':
+          $ref: '#/components/responses/NoProcesable'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /v1/config/recursos/{id}:
+    patch:
+      operationId: actualizarRecurso
+      summary: Editar un recurso (RF-30)
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      parameters:
+        - $ref: '#/components/parameters/IdEnRuta'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActualizacionRecurso'
+      responses:
+        '200':
+          description: El recurso actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recurso'
+        '400':
+          $ref: '#/components/responses/PeticionInvalida'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '422':
+          $ref: '#/components/responses/NoProcesable'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /v1/config/reglas:
+    get:
+      operationId: listarReglas
+      summary: Reglas de disponibilidad (RF-14)
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      parameters:
+        - name: recurso_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Las reglas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListaReglas'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+    post:
+      operationId: crearRegla
+      summary: Publicar una regla de disponibilidad (RF-14)
+      description: |
+        Una regla no puede cruzar medianoche: el motor exige `hora_fin >
+        hora_inicio`. Un turno de noche son DOS reglas, una por cada día que toca,
+        y es la única forma en que el cálculo de disponibilidad puede resolverlo
+        sin ambigüedad.
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NuevaRegla'
+      responses:
+        '201':
+          description: La regla creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReglaDisponibilidad'
+        '400':
+          $ref: '#/components/responses/PeticionInvalida'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '422':
+          $ref: '#/components/responses/NoProcesable'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /v1/config/reglas/{id}:
+    delete:
+      operationId: eliminarRegla
+      summary: Retirar una regla de disponibilidad (RF-14)
+      description: |
+        Retirarla no toca las reservas que ya se hicieron dentro de ella. Una
+        reserva confirmada es un compromiso; que el horario deje de publicarse no
+        lo deshace.
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      parameters:
+        - $ref: '#/components/parameters/IdEnRuta'
+      responses:
+        '204':
+          description: Regla retirada.
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /v1/config/excepciones:
+    get:
+      operationId: listarExcepciones
+      summary: Excepciones de calendario (RF-14)
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      responses:
+        '200':
+          description: Las excepciones
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListaExcepciones'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+    post:
+      operationId: crearExcepcion
+      summary: Tapar un período (RF-14)
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NuevaExcepcion'
+      responses:
+        '201':
+          description: La excepción creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExcepcionCalendario'
+        '400':
+          $ref: '#/components/responses/PeticionInvalida'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '422':
+          $ref: '#/components/responses/NoProcesable'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /v1/config/excepciones/{id}:
+    delete:
+      operationId: eliminarExcepcion
+      summary: Levantar una excepción de calendario (RF-14)
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      parameters:
+        - $ref: '#/components/parameters/IdEnRuta'
+      responses:
+        '204':
+          description: Excepción levantada.
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /v1/config/politicas:
+    get:
+      operationId: listarPoliticas
+      summary: Versiones de política publicadas (RF-15)
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      responses:
+        '200':
+          description: Las versiones, de la más reciente a la más antigua
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListaPoliticas'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+    post:
+      operationId: publicarPolitica
+      summary: Publicar una versión de política (RF-15)
+      description: |
+        No hay PATCH ni DELETE, y no es un olvido: `politica_version` es
+        inmutable por disparador. Publicar condiciones nuevas es publicar una
+        versión nueva; las reservas existentes siguen apuntando a la que
+        congelaron al crearse.
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NuevaPolitica'
+      responses:
+        '201':
+          description: La versión publicada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Politica'
+        '400':
+          $ref: '#/components/responses/PeticionInvalida'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '422':
+          $ref: '#/components/responses/NoProcesable'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /v1/config/vouchers:
+    get:
+      operationId: listarVouchers
+      summary: Vouchers del tenant (RF-17)
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      responses:
+        '200':
+          description: Los vouchers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListaVouchers'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+    post:
+      operationId: crearVoucher
+      summary: Crear un voucher (RF-17)
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NuevoVoucher'
+      responses:
+        '201':
+          description: El voucher creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Voucher'
+        '400':
+          $ref: '#/components/responses/PeticionInvalida'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '409':
+          description: Ya existe un voucher con ese código en este tenant.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problema'
+        '422':
+          $ref: '#/components/responses/NoProcesable'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /v1/config/vouchers/{id}:
+    delete:
+      operationId: eliminarVoucher
+      summary: Eliminar un voucher (RF-17)
+      description: |
+        Borrado lógico: la fila permanece porque `uso_voucher` la referencia, y el
+        código NO se libera. Reutilizarlo dejaría dos promociones distintas con el
+        mismo código en el historial, y la traza de RNF-36 no podría distinguirlas.
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      parameters:
+        - $ref: '#/components/parameters/IdEnRuta'
+      responses:
+        '204':
+          description: Voucher eliminado.
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /v1/config/tarifas:
+    get:
+      operationId: listarTarifas
+      summary: Tarifas del tenant (RF-31)
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      parameters:
+        - name: servicio_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Las tarifas, de mayor a menor prioridad
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListaTarifas'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+    post:
+      operationId: crearTarifa
+      summary: Publicar una tarifa (RF-31)
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NuevaTarifa'
+      responses:
+        '201':
+          description: La tarifa creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tarifa'
+        '400':
+          $ref: '#/components/responses/PeticionInvalida'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '422':
+          $ref: '#/components/responses/NoProcesable'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /v1/config/tarifas/{id}:
+    delete:
+      operationId: eliminarTarifa
+      summary: Retirar una tarifa (RF-31)
+      description: |
+        Retirarla no cambia ningún precio ya cobrado: la reserva congeló el suyo
+        al crearse.
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      parameters:
+        - $ref: '#/components/parameters/IdEnRuta'
+      responses:
+        '204':
+          description: Tarifa retirada.
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /v1/auditoria:
+    get:
+      operationId: consultarAuditoria
+      summary: Consultar la auditoría (RF-36)
+      description: |
+        Devuelve los eventos dentro del alcance de quien pregunta: solo su tenant
+        para un administrador (RF-23). Append-only: no hay forma de modificar ni
+        de borrar nada desde aquí, y tampoco desde ninguna otra parte, porque un
+        disparador lo impide en el motor.
+      tags:
+        - configuracion
+      security:
+        - TokenCliente: []
+      parameters:
+        - name: desde
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: hasta
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: actor_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: recurso_tipo
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: accion
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limite
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Página de eventos, del más reciente al más antiguo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListaAuditoria'
+        '400':
+          $ref: '#/components/responses/PeticionInvalida'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '403':
+          $ref: '#/components/responses/FueraDeAlcance'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
   /v1/reservas:
     get:
       operationId: listarReservas
@@ -1055,6 +1775,14 @@ components:
         (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
         de un cliente en producción permitiría leer los datos de cualquier otro
         tenant.
+      schema:
+        type: string
+        format: uuid
+    IdEnRuta:
+      name: id
+      in: path
+      required: true
+      description: Identificador del recurso sobre el que se opera.
       schema:
         type: string
         format: uuid
@@ -1717,6 +2445,622 @@ components:
         cuenta_impersonada_id:
           type: string
           format: uuid
+    NuevaSede:
+      type: object
+      required:
+        - nombre
+        - zona_horaria
+      properties:
+        nombre:
+          type: string
+          minLength: 1
+          maxLength: 200
+        zona_horaria:
+          type: string
+          description: |
+            Identificador IANA. El motor lo valida contra su propia base de zonas:
+            un `America/Bogata` mal escrito no falla al guardarse, falla semanas
+            más tarde dentro del cálculo de disponibilidad, que es el peor sitio
+            posible para enterarse.
+          examples:
+            - America/Bogota
+        direccion:
+          type: string
+          maxLength: 500
+    ActualizacionSede:
+      type: object
+      description: |
+        Todo opcional: se envía lo que cambia.
+
+        Desactivar una sede NO cancela sus reservas. Deja de poder elegirse para
+        reservas nuevas y nada más: lo ya vendido sigue en pie, y cancelarlo es una
+        decisión aparte que RF-32 hace explícita.
+      properties:
+        nombre:
+          type: string
+          minLength: 1
+          maxLength: 200
+        zona_horaria:
+          type: string
+        direccion:
+          type: string
+          maxLength: 500
+        estado:
+          $ref: '#/components/schemas/EstadoCatalogo'
+    NuevoServicio:
+      type: object
+      required:
+        - sede_id
+        - nombre
+        - duracion_min
+        - precio_monto
+      properties:
+        sede_id:
+          type: string
+          format: uuid
+        nombre:
+          type: string
+          minLength: 1
+          maxLength: 200
+        descripcion:
+          type: string
+          maxLength: 2000
+        duracion_min:
+          type: integer
+          minimum: 1
+          maximum: 1440
+          description: |
+            Es también la duración exacta de cada reserva: el núcleo rechaza un
+            período que no coincida. Cambiarla no altera las reservas ya hechas.
+        precio_monto:
+          type: string
+          pattern: ^\d+(\.\d{1,2})?$
+          description: |
+            Cadena decimal, no número: en JSON los números son de coma flotante y
+            80000.10 no se representa exactamente. La moneda no se envía —es del
+            tenant (RF-38)— y la reserva congela ambas al crearse (RF-31).
+    ActualizacionServicio:
+      type: object
+      properties:
+        nombre:
+          type: string
+          minLength: 1
+          maxLength: 200
+        descripcion:
+          type: string
+          maxLength: 2000
+        duracion_min:
+          type: integer
+          minimum: 1
+          maximum: 1440
+        precio_monto:
+          type: string
+          pattern: ^\d+(\.\d{1,2})?$
+        estado:
+          $ref: '#/components/schemas/EstadoCatalogo'
+    Recurso:
+      type: object
+      description: |
+        Lo que de verdad se reserva: la sala, la silla, el equipo, la persona. La
+        invariante de no solapamiento es sobre un RECURSO, no sobre un servicio.
+      required:
+        - id
+        - sede_id
+        - nombre
+        - estado
+      properties:
+        id:
+          type: string
+          format: uuid
+        sede_id:
+          type: string
+          format: uuid
+        nombre:
+          type: string
+        estado:
+          $ref: '#/components/schemas/EstadoCatalogo'
+        servicios:
+          type: array
+          description: Servicios que este recurso presta (RF-30).
+          items:
+            type: string
+            format: uuid
+    ListaRecursos:
+      type: object
+      required:
+        - datos
+      properties:
+        datos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Recurso'
+    NuevoRecurso:
+      type: object
+      required:
+        - sede_id
+        - nombre
+      properties:
+        sede_id:
+          type: string
+          format: uuid
+        nombre:
+          type: string
+          minLength: 1
+          maxLength: 200
+        servicios:
+          type: array
+          description: |
+            Qué servicios presta. Sin al menos uno, el recurso existe pero no es
+            reservable: el núcleo comprueba que el par servicio/recurso esté
+            declarado antes de insertar.
+          items:
+            type: string
+            format: uuid
+    ActualizacionRecurso:
+      type: object
+      properties:
+        nombre:
+          type: string
+          minLength: 1
+          maxLength: 200
+        estado:
+          $ref: '#/components/schemas/EstadoCatalogo'
+        servicios:
+          type: array
+          description: Reemplaza la lista completa, no la amplía.
+          items:
+            type: string
+            format: uuid
+    ReglaDisponibilidad:
+      type: object
+      description: |
+        Un tramo semanal recurrente de un recurso (RF-14).
+
+        Las horas van SIN zona porque hablan del reloj de pared del negocio: "los
+        lunes de 9 a 17" significa las 9 de la sede, no las 9 UTC. La zona la pone
+        la sede, y por eso la regla no cambia cuando cambia el horario de verano.
+      required:
+        - id
+        - recurso_id
+        - dia_semana
+        - hora_inicio
+        - hora_fin
+      properties:
+        id:
+          type: string
+          format: uuid
+        recurso_id:
+          type: string
+          format: uuid
+        dia_semana:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: 0 = domingo, como `extract(dow)` de PostgreSQL.
+        hora_inicio:
+          type: string
+          examples:
+            - '09:00'
+        hora_fin:
+          type: string
+          examples:
+            - '17:00'
+          description: |
+            Tiene que ser mayor que `hora_inicio`: una regla no cruza medianoche.
+            Un turno de noche son DOS reglas, una por cada día que toca, y esa es la
+            única forma en que el cálculo de disponibilidad puede resolverlo sin
+            ambigüedad.
+        vigente_desde:
+          type: string
+          format: date
+        vigente_hasta:
+          type: string
+          format: date
+    ListaReglas:
+      type: object
+      required:
+        - datos
+      properties:
+        datos:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReglaDisponibilidad'
+    NuevaRegla:
+      type: object
+      required:
+        - recurso_id
+        - dia_semana
+        - hora_inicio
+        - hora_fin
+      properties:
+        recurso_id:
+          type: string
+          format: uuid
+        dia_semana:
+          type: integer
+          minimum: 0
+          maximum: 6
+        hora_inicio:
+          type: string
+          examples:
+            - '09:00'
+        hora_fin:
+          type: string
+          examples:
+            - '17:00'
+        vigente_desde:
+          type: string
+          format: date
+        vigente_hasta:
+          type: string
+          format: date
+    TipoExcepcion:
+      type: string
+      enum:
+        - feriado
+        - mantenimiento
+        - cierre
+    ExcepcionCalendario:
+      type: object
+      description: |
+        Un hueco que tapa la disponibilidad (RF-14). Es de una sede o de un recurso,
+        nunca de los dos ni de ninguno.
+      required:
+        - id
+        - periodo
+        - tipo
+      properties:
+        id:
+          type: string
+          format: uuid
+        sede_id:
+          type: string
+          format: uuid
+        recurso_id:
+          type: string
+          format: uuid
+        periodo:
+          $ref: '#/components/schemas/Periodo'
+        tipo:
+          $ref: '#/components/schemas/TipoExcepcion'
+        motivo:
+          type: string
+    ListaExcepciones:
+      type: object
+      required:
+        - datos
+      properties:
+        datos:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExcepcionCalendario'
+    NuevaExcepcion:
+      type: object
+      description: |
+        Exactamente uno de `sede_id` o `recurso_id`. Ninguno de los dos deja una
+        excepción que no tapa nada; los dos a la vez, una que no se sabe si tapa la
+        sede entera o solo ese recurso.
+      required:
+        - periodo
+        - tipo
+      properties:
+        sede_id:
+          type: string
+          format: uuid
+        recurso_id:
+          type: string
+          format: uuid
+        periodo:
+          $ref: '#/components/schemas/Periodo'
+        tipo:
+          $ref: '#/components/schemas/TipoExcepcion'
+        motivo:
+          type: string
+          maxLength: 500
+    Politica:
+      type: object
+      description: |
+        Una versión publicada de la política de cancelación y modificación (RF-15).
+
+        Es INMUTABLE: no se edita ni se borra. Publicar condiciones nuevas es
+        publicar una versión nueva, y las reservas existentes siguen apuntando a la
+        que congelaron al crearse. Es lo que impide que un negocio endurezca su
+        política el martes y se la aplique a quien reservó el lunes.
+      required:
+        - id
+        - version
+        - rango_cancelacion_horas
+        - rango_modificacion_horas
+        - vigente_desde
+      properties:
+        id:
+          type: string
+          format: uuid
+        servicio_id:
+          type: string
+          format: uuid
+          description: Ausente = política por defecto del tenant.
+        version:
+          type: integer
+          minimum: 1
+        rango_cancelacion_horas:
+          type: integer
+          minimum: 0
+        rango_modificacion_horas:
+          type: integer
+          minimum: 0
+        penalidad_pct:
+          type: string
+          pattern: ^\d+(\.\d{1,2})?$
+        vigente_desde:
+          type: string
+          format: date-time
+        creada_en:
+          type: string
+          format: date-time
+    ListaPoliticas:
+      type: object
+      required:
+        - datos
+      properties:
+        datos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Politica'
+    NuevaPolitica:
+      type: object
+      description: |
+        El número de versión NO se envía: lo asigna el servidor como el siguiente
+        del mismo ámbito. Dejarlo al cliente permitiría publicar una versión 3
+        después de una 7 y romper el orden del que depende "cuál está vigente".
+      required:
+        - rango_cancelacion_horas
+        - rango_modificacion_horas
+      properties:
+        servicio_id:
+          type: string
+          format: uuid
+        rango_cancelacion_horas:
+          type: integer
+          minimum: 0
+          maximum: 8760
+        rango_modificacion_horas:
+          type: integer
+          minimum: 0
+          maximum: 8760
+        penalidad_pct:
+          type: string
+          pattern: ^\d+(\.\d{1,2})?$
+        vigente_desde:
+          type: string
+          format: date-time
+          description: Ausente = ahora. Sirve para publicar con antelación.
+    Voucher:
+      type: object
+      description: |
+        Un descuento porcentual (RF-17). Solo porcentaje, nunca monto fijo: es una
+        restricción de alcance del producto y vive en un CHECK para que no se filtre
+        por accidente.
+      required:
+        - id
+        - codigo
+        - porcentaje
+        - usos_actuales
+        - estado
+        - creado_en
+      properties:
+        id:
+          type: string
+          format: uuid
+        codigo:
+          type: string
+        porcentaje:
+          type: string
+          pattern: ^\d+(\.\d{1,2})?$
+        limite_usos:
+          type: integer
+          minimum: 1
+        usos_actuales:
+          type: integer
+        caduca_en:
+          type: string
+          format: date-time
+        estado:
+          type: string
+          enum:
+            - activo
+            - eliminado
+        creado_en:
+          type: string
+          format: date-time
+    ListaVouchers:
+      type: object
+      required:
+        - datos
+      properties:
+        datos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Voucher'
+    NuevoVoucher:
+      type: object
+      description: |
+        Hace falta un límite de usos o una caducidad, al menos uno. Un voucher del
+        50% sin ninguno de los dos es una fuga de ingresos abierta para siempre, y
+        el motor lo rechaza.
+
+        No hay operación de edición, y no es un olvido: RF-17 permite crear o
+        eliminar y nada más. Cambiarle las condiciones a un voucher que ya está
+        circulando es cambiárselas a quien ya lo recibió.
+      required:
+        - codigo
+        - porcentaje
+      properties:
+        codigo:
+          type: string
+          minLength: 3
+          maxLength: 64
+        porcentaje:
+          type: string
+          pattern: ^\d+(\.\d{1,2})?$
+          description: Mayor que 0 y hasta 100.
+        limite_usos:
+          type: integer
+          minimum: 1
+        caduca_en:
+          type: string
+          format: date-time
+    TipoTarifa:
+      type: string
+      enum:
+        - franja_horaria
+        - dia_semana
+        - temporada
+    Tarifa:
+      type: object
+      description: |
+        Sobrescribe el precio del servicio cuando su condición aplica (RF-31). El
+        precio base sigue viviendo en el servicio; esto existe aparte porque sí es
+        uno a muchos.
+      required:
+        - id
+        - servicio_id
+        - tipo
+        - condicion
+        - monto
+        - prioridad
+      properties:
+        id:
+          type: string
+          format: uuid
+        servicio_id:
+          type: string
+          format: uuid
+        tipo:
+          $ref: '#/components/schemas/TipoTarifa'
+        condicion:
+          type: object
+          description: |
+            Su forma depende del tipo: una franja lleva horas, un día de semana un
+            número, una temporada dos fechas. Sin esquema fijo porque el motor no la
+            evalúa, la interpreta quien calcula el precio.
+          additionalProperties: true
+        monto:
+          type: string
+          pattern: ^\d+(\.\d{1,2})?$
+        prioridad:
+          type: integer
+          description: |
+            Con dos tarifas que aplican a la vez gana la de prioridad más alta. Sin
+            este campo el resultado dependería del orden de las filas, que no es un
+            orden.
+    ListaTarifas:
+      type: object
+      required:
+        - datos
+      properties:
+        datos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tarifa'
+    NuevaTarifa:
+      type: object
+      required:
+        - servicio_id
+        - tipo
+        - condicion
+        - monto
+      properties:
+        servicio_id:
+          type: string
+          format: uuid
+        tipo:
+          $ref: '#/components/schemas/TipoTarifa'
+        condicion:
+          type: object
+          additionalProperties: true
+        monto:
+          type: string
+          pattern: ^\d+(\.\d{1,2})?$
+        prioridad:
+          type: integer
+          default: 0
+    ResultadoAuditoria:
+      type: string
+      enum:
+        - exito
+        - rechazo
+    EventoAuditoria:
+      type: object
+      description: |
+        Una acción registrada (RF-36). Append-only: los eventos no se modifican ni
+        se eliminan.
+      required:
+        - id
+        - ocurrido_en
+        - actor_tipo
+        - accion
+        - recurso_tipo
+        - resultado
+      properties:
+        id:
+          type: string
+          format: uuid
+        ocurrido_en:
+          type: string
+          format: date-time
+        actor_tipo:
+          type: string
+          enum:
+            - usuario
+            - administrador
+            - agente
+            - sistema
+            - super_admin
+        actor_id:
+          type: string
+          format: uuid
+        agente_id:
+          type: string
+          format: uuid
+          description: Presente solo cuando la ejecutó un agente en nombre de otra cuenta.
+        cuenta_impersonada_id:
+          type: string
+          format: uuid
+        alcance_token:
+          type: array
+          description: El alcance con el que actuó el agente (RF-13).
+          items:
+            type: string
+        accion:
+          type: string
+          examples:
+            - crear_sede
+        recurso_tipo:
+          type: string
+          examples:
+            - sede
+        recurso_id:
+          type: string
+          format: uuid
+        resultado:
+          $ref: '#/components/schemas/ResultadoAuditoria'
+        ip:
+          type: string
+        dispositivo:
+          type: string
+    ListaAuditoria:
+      type: object
+      required:
+        - datos
+      properties:
+        datos:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventoAuditoria'
+        siguiente_cursor:
+          type: string
+          description: Ausente cuando no hay más páginas.
     EstadoReserva:
       type: string
       description: Estados de RF-28.

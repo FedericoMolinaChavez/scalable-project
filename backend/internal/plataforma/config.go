@@ -156,10 +156,11 @@ type Identidad struct {
 // se peleen por el puerto. Sin ello, arrancar el segundo falla con un
 // "address already in use" que no dice cuál de los dos era.
 var direccionesPorDefecto = map[string]string{
-	"nucleo":       ":8080",
-	"consulta":     ":8081",
-	"identidad":    ":8082",
-	"trabajadores": ":8083",
+	"nucleo":        ":8080",
+	"consulta":      ":8081",
+	"identidad":     ":8082",
+	"trabajadores":  ":8083",
+	"configuracion": ":8084",
 }
 
 // CargarConfig lee la configuración del entorno. Falla si falta algo sin
@@ -250,9 +251,10 @@ func CargarConfig(servicio string) (Config, error) {
 }
 
 var usaTokens = map[string]bool{
-	"identidad": true, // los firma
-	"consulta":  true, // los verifica para acotar RF-02
-	"nucleo":    true, // los verifica para cancelar (RF-06)
+	"identidad":     true, // los firma
+	"consulta":      true, // los verifica para acotar RF-02
+	"nucleo":        true, // los verifica para cancelar (RF-06)
+	"configuracion": true, // los verifica para saber quién administra (RF-23)
 }
 
 // EnDesarrollo distingue el entorno local del desplegado. Se usa para decidir

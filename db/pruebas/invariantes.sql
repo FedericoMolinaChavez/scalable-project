@@ -520,6 +520,110 @@ SELECT pg_temp.debe_fallar($sql$
 $sql$, '23514', 'token que nace caducado');
 
 
+-- =============================================================================
+-- 8. Auditoria y tarifas (RF-31, RF-36 / RNF-36)
+-- =============================================================================
+
+-- La auditoria es append-only en el motor, no en la convencion. Las dos capas:
+-- el disparador cubre a cualquier rol, y la falta de privilegio actua sobre el
+-- que si lo tendria. Aqui se corre como app_dev, asi que lo que responde es la
+-- segunda.
+SELECT pg_temp.debe_pasar($sql$
+  INSERT INTO negocio.evento_auditoria
+    (tenant_id, actor_tipo, actor_id, accion, recurso_tipo, recurso_id, resultado)
+  VALUES ('11111111-1111-1111-1111-111111111111', 'administrador',
+          '99999999-9999-9999-9999-999999999901',
+          'crear_sede', 'sede', '22222222-2222-2222-2222-222222222222', 'exito')
+$sql$, 'registrar un evento de auditoria');
+
+SELECT pg_temp.debe_fallar($sql$
+  UPDATE negocio.evento_auditoria SET accion = 'otra_cosa'
+$sql$, '42501', 'reescribir un evento de auditoria');
+
+SELECT pg_temp.debe_fallar($sql$
+  DELETE FROM negocio.evento_auditoria
+$sql$, '42501', 'borrar un evento de auditoria');
+
+-- El sistema no tiene identidad; una persona o un agente si. Es el mismo
+-- criterio que transicion_estado, y por el mismo motivo: fingir un actor seria
+-- peor que admitir que no lo hay.
+SELECT pg_temp.debe_fallar($sql$
+  INSERT INTO negocio.evento_auditoria
+    (tenant_id, actor_tipo, accion, recurso_tipo, resultado)
+  VALUES ('11111111-1111-1111-1111-111111111111', 'administrador',
+          'crear_sede', 'sede', 'exito')
+$sql$, '23514', 'administrador sin actor_id en la auditoria');
+
+SELECT pg_temp.debe_fallar($sql$
+  INSERT INTO negocio.evento_auditoria
+    (tenant_id, actor_tipo, actor_id, accion, recurso_tipo, resultado)
+  VALUES ('11111111-1111-1111-1111-111111111111', 'sistema',
+          '99999999-9999-9999-9999-999999999901', 'expirar', 'reserva', 'exito')
+$sql$, '23514', 'sistema con actor_id en la auditoria');
+
+-- Los tres campos del agente van o no van juntos: un agente_id sin cuenta
+-- impersonada deja una fila que no responde "en nombre de quien" (RF-36).
+SELECT pg_temp.debe_fallar($sql$
+  INSERT INTO negocio.evento_auditoria
+    (tenant_id, actor_tipo, actor_id, agente_id, accion, recurso_tipo, resultado)
+  VALUES ('11111111-1111-1111-1111-111111111111', 'agente',
+          '99999999-9999-9999-9999-999999999901',
+          '99999999-9999-9999-9999-999999999921',
+          'reservar', 'reserva', 'exito')
+$sql$, '23514', 'agente sin cuenta impersonada en la auditoria');
+
+-- Una accion sin nombre no se puede consultar despues por accion, que es
+-- exactamente uno de los filtros que RF-36 pide.
+SELECT pg_temp.debe_fallar($sql$
+  INSERT INTO negocio.evento_auditoria
+    (tenant_id, actor_tipo, accion, recurso_tipo, resultado)
+  VALUES ('11111111-1111-1111-1111-111111111111', 'sistema', '  ', 'sede', 'exito')
+$sql$, '23514', 'evento de auditoria sin accion');
+
+-- La particion por defecto es lo que impide que un mes sin crear tumbe toda
+-- accion critica: con la auditoria como condicion de exito, un INSERT que no
+-- encuentra particion no deja un hueco en la traza, revierte la operacion.
+SELECT pg_temp.debe_pasar($sql$
+  INSERT INTO negocio.evento_auditoria
+    (tenant_id, ocurrido_en, actor_tipo, accion, recurso_tipo, resultado)
+  VALUES ('11111111-1111-1111-1111-111111111111',
+          '2099-01-01 00:00:00+00', 'sistema', 'lejano', 'sede', 'exito')
+$sql$, 'evento fuera de las particiones creadas (cae en la de defecto)');
+
+-- -----------------------------------------------------------------------------
+-- tarifa (RF-31)
+-- -----------------------------------------------------------------------------
+
+SELECT pg_temp.debe_pasar($sql$
+  INSERT INTO negocio.tarifa (tenant_id, servicio_id, tipo, condicion, monto, prioridad)
+  VALUES ('11111111-1111-1111-1111-111111111111',
+          '33333333-3333-3333-3333-333333333333',
+          'franja_horaria', '{"desde": "18:00"}'::jsonb, 90000, 10)
+$sql$, 'publicar una tarifa');
+
+SELECT pg_temp.debe_fallar($sql$
+  INSERT INTO negocio.tarifa (tenant_id, servicio_id, tipo, condicion, monto)
+  VALUES ('11111111-1111-1111-1111-111111111111',
+          '33333333-3333-3333-3333-333333333333',
+          'dia_semana', '[1,2]'::jsonb, 50000)
+$sql$, '23514', 'tarifa cuya condicion no es un objeto');
+
+SELECT pg_temp.debe_fallar($sql$
+  INSERT INTO negocio.tarifa (tenant_id, servicio_id, tipo, condicion, monto)
+  VALUES ('11111111-1111-1111-1111-111111111111',
+          '33333333-3333-3333-3333-333333333333',
+          'temporada', '{}'::jsonb, -1)
+$sql$, '23514', 'tarifa con monto negativo');
+
+-- Aislamiento: una tarifa del tenant de al lado no se ve ni se puede escribir.
+SELECT pg_temp.debe_fallar($sql$
+  INSERT INTO negocio.tarifa (tenant_id, servicio_id, tipo, condicion, monto)
+  VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+          '33333333-3333-3333-3333-333333333333',
+          'temporada', '{}'::jsonb, 1000)
+$sql$, '42501', 'tarifa escrita en el tenant de otro');
+
+
 ROLLBACK;
 
 \o

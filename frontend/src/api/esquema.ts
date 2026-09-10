@@ -484,6 +484,328 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/config/sedes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Todas las sedes del tenant, activas e inactivas (RF-30) */
+        get: operations["listarSedesConfig"];
+        put?: never;
+        /** Crear una sede (RF-30) */
+        post: operations["crearSede"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/sedes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Editar una sede (RF-30)
+         * @description Desactivarla no cancela sus reservas: deja de poder elegirse para reservas
+         *     nuevas y nada más. Cancelar lo ya vendido es una decisión aparte, y RF-32
+         *     la hace explícita.
+         */
+        patch: operations["actualizarSede"];
+        trace?: never;
+    };
+    "/v1/config/servicios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Todos los servicios del tenant (RF-30) */
+        get: operations["listarServiciosConfig"];
+        put?: never;
+        /** Crear un servicio (RF-30, RF-31) */
+        post: operations["crearServicio"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/servicios/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Editar un servicio (RF-30, RF-31)
+         * @description Cambiar el precio o la duración NO altera ninguna reserva existente: la
+         *     reserva congela ambos al crearse (RF-31). Es lo que permite editar el
+         *     catálogo sin revisar la agenda.
+         */
+        patch: operations["actualizarServicio"];
+        trace?: never;
+    };
+    "/v1/config/recursos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Los recursos del tenant y qué servicios prestan (RF-30) */
+        get: operations["listarRecursos"];
+        put?: never;
+        /** Crear un recurso (RF-30) */
+        post: operations["crearRecurso"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/recursos/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Editar un recurso (RF-30) */
+        patch: operations["actualizarRecurso"];
+        trace?: never;
+    };
+    "/v1/config/reglas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reglas de disponibilidad (RF-14) */
+        get: operations["listarReglas"];
+        put?: never;
+        /**
+         * Publicar una regla de disponibilidad (RF-14)
+         * @description Una regla no puede cruzar medianoche: el motor exige `hora_fin >
+         *     hora_inicio`. Un turno de noche son DOS reglas, una por cada día que toca,
+         *     y es la única forma en que el cálculo de disponibilidad puede resolverlo
+         *     sin ambigüedad.
+         */
+        post: operations["crearRegla"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/reglas/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Retirar una regla de disponibilidad (RF-14)
+         * @description Retirarla no toca las reservas que ya se hicieron dentro de ella. Una
+         *     reserva confirmada es un compromiso; que el horario deje de publicarse no
+         *     lo deshace.
+         */
+        delete: operations["eliminarRegla"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/excepciones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Excepciones de calendario (RF-14) */
+        get: operations["listarExcepciones"];
+        put?: never;
+        /** Tapar un período (RF-14) */
+        post: operations["crearExcepcion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/excepciones/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Levantar una excepción de calendario (RF-14) */
+        delete: operations["eliminarExcepcion"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/politicas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Versiones de política publicadas (RF-15) */
+        get: operations["listarPoliticas"];
+        put?: never;
+        /**
+         * Publicar una versión de política (RF-15)
+         * @description No hay PATCH ni DELETE, y no es un olvido: `politica_version` es
+         *     inmutable por disparador. Publicar condiciones nuevas es publicar una
+         *     versión nueva; las reservas existentes siguen apuntando a la que
+         *     congelaron al crearse.
+         */
+        post: operations["publicarPolitica"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/vouchers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Vouchers del tenant (RF-17) */
+        get: operations["listarVouchers"];
+        put?: never;
+        /** Crear un voucher (RF-17) */
+        post: operations["crearVoucher"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/vouchers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Eliminar un voucher (RF-17)
+         * @description Borrado lógico: la fila permanece porque `uso_voucher` la referencia, y el
+         *     código NO se libera. Reutilizarlo dejaría dos promociones distintas con el
+         *     mismo código en el historial, y la traza de RNF-36 no podría distinguirlas.
+         */
+        delete: operations["eliminarVoucher"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/tarifas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tarifas del tenant (RF-31) */
+        get: operations["listarTarifas"];
+        put?: never;
+        /** Publicar una tarifa (RF-31) */
+        post: operations["crearTarifa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/tarifas/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Retirar una tarifa (RF-31)
+         * @description Retirarla no cambia ningún precio ya cobrado: la reserva congeló el suyo
+         *     al crearse.
+         */
+        delete: operations["eliminarTarifa"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auditoria": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Consultar la auditoría (RF-36)
+         * @description Devuelve los eventos dentro del alcance de quien pregunta: solo su tenant
+         *     para un administrador (RF-23). Append-only: no hay forma de modificar ni
+         *     de borrar nada desde aquí, y tampoco desde ninguna otra parte, porque un
+         *     disparador lo impide en el motor.
+         */
+        get: operations["consultarAuditoria"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/reservas": {
         parameters: {
             query?: never;
@@ -982,6 +1304,334 @@ export interface components {
             /** Format: uuid */
             cuenta_impersonada_id?: string;
         };
+        NuevaSede: {
+            nombre: string;
+            /**
+             * @description Identificador IANA. El motor lo valida contra su propia base de zonas:
+             *     un `America/Bogata` mal escrito no falla al guardarse, falla semanas
+             *     más tarde dentro del cálculo de disponibilidad, que es el peor sitio
+             *     posible para enterarse.
+             * @example America/Bogota
+             */
+            zona_horaria: string;
+            direccion?: string;
+        };
+        /**
+         * @description Todo opcional: se envía lo que cambia.
+         *
+         *     Desactivar una sede NO cancela sus reservas. Deja de poder elegirse para
+         *     reservas nuevas y nada más: lo ya vendido sigue en pie, y cancelarlo es una
+         *     decisión aparte que RF-32 hace explícita.
+         */
+        ActualizacionSede: {
+            nombre?: string;
+            zona_horaria?: string;
+            direccion?: string;
+            estado?: components["schemas"]["EstadoCatalogo"];
+        };
+        NuevoServicio: {
+            /** Format: uuid */
+            sede_id: string;
+            nombre: string;
+            descripcion?: string;
+            /**
+             * @description Es también la duración exacta de cada reserva: el núcleo rechaza un
+             *     período que no coincida. Cambiarla no altera las reservas ya hechas.
+             */
+            duracion_min: number;
+            /**
+             * @description Cadena decimal, no número: en JSON los números son de coma flotante y
+             *     80000.10 no se representa exactamente. La moneda no se envía —es del
+             *     tenant (RF-38)— y la reserva congela ambas al crearse (RF-31).
+             */
+            precio_monto: string;
+        };
+        ActualizacionServicio: {
+            nombre?: string;
+            descripcion?: string;
+            duracion_min?: number;
+            precio_monto?: string;
+            estado?: components["schemas"]["EstadoCatalogo"];
+        };
+        /**
+         * @description Lo que de verdad se reserva: la sala, la silla, el equipo, la persona. La
+         *     invariante de no solapamiento es sobre un RECURSO, no sobre un servicio.
+         */
+        Recurso: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            sede_id: string;
+            nombre: string;
+            estado: components["schemas"]["EstadoCatalogo"];
+            /** @description Servicios que este recurso presta (RF-30). */
+            servicios?: string[];
+        };
+        ListaRecursos: {
+            datos: components["schemas"]["Recurso"][];
+        };
+        NuevoRecurso: {
+            /** Format: uuid */
+            sede_id: string;
+            nombre: string;
+            /**
+             * @description Qué servicios presta. Sin al menos uno, el recurso existe pero no es
+             *     reservable: el núcleo comprueba que el par servicio/recurso esté
+             *     declarado antes de insertar.
+             */
+            servicios?: string[];
+        };
+        ActualizacionRecurso: {
+            nombre?: string;
+            estado?: components["schemas"]["EstadoCatalogo"];
+            /** @description Reemplaza la lista completa, no la amplía. */
+            servicios?: string[];
+        };
+        /**
+         * @description Un tramo semanal recurrente de un recurso (RF-14).
+         *
+         *     Las horas van SIN zona porque hablan del reloj de pared del negocio: "los
+         *     lunes de 9 a 17" significa las 9 de la sede, no las 9 UTC. La zona la pone
+         *     la sede, y por eso la regla no cambia cuando cambia el horario de verano.
+         */
+        ReglaDisponibilidad: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            recurso_id: string;
+            /** @description 0 = domingo, como `extract(dow)` de PostgreSQL. */
+            dia_semana: number;
+            /** @example 09:00 */
+            hora_inicio: string;
+            /**
+             * @description Tiene que ser mayor que `hora_inicio`: una regla no cruza medianoche.
+             *     Un turno de noche son DOS reglas, una por cada día que toca, y esa es la
+             *     única forma en que el cálculo de disponibilidad puede resolverlo sin
+             *     ambigüedad.
+             * @example 17:00
+             */
+            hora_fin: string;
+            /** Format: date */
+            vigente_desde?: string;
+            /** Format: date */
+            vigente_hasta?: string;
+        };
+        ListaReglas: {
+            datos: components["schemas"]["ReglaDisponibilidad"][];
+        };
+        NuevaRegla: {
+            /** Format: uuid */
+            recurso_id: string;
+            dia_semana: number;
+            /** @example 09:00 */
+            hora_inicio: string;
+            /** @example 17:00 */
+            hora_fin: string;
+            /** Format: date */
+            vigente_desde?: string;
+            /** Format: date */
+            vigente_hasta?: string;
+        };
+        /** @enum {string} */
+        TipoExcepcion: "feriado" | "mantenimiento" | "cierre";
+        /**
+         * @description Un hueco que tapa la disponibilidad (RF-14). Es de una sede o de un recurso,
+         *     nunca de los dos ni de ninguno.
+         */
+        ExcepcionCalendario: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            sede_id?: string;
+            /** Format: uuid */
+            recurso_id?: string;
+            periodo: components["schemas"]["Periodo"];
+            tipo: components["schemas"]["TipoExcepcion"];
+            motivo?: string;
+        };
+        ListaExcepciones: {
+            datos: components["schemas"]["ExcepcionCalendario"][];
+        };
+        /**
+         * @description Exactamente uno de `sede_id` o `recurso_id`. Ninguno de los dos deja una
+         *     excepción que no tapa nada; los dos a la vez, una que no se sabe si tapa la
+         *     sede entera o solo ese recurso.
+         */
+        NuevaExcepcion: {
+            /** Format: uuid */
+            sede_id?: string;
+            /** Format: uuid */
+            recurso_id?: string;
+            periodo: components["schemas"]["Periodo"];
+            tipo: components["schemas"]["TipoExcepcion"];
+            motivo?: string;
+        };
+        /**
+         * @description Una versión publicada de la política de cancelación y modificación (RF-15).
+         *
+         *     Es INMUTABLE: no se edita ni se borra. Publicar condiciones nuevas es
+         *     publicar una versión nueva, y las reservas existentes siguen apuntando a la
+         *     que congelaron al crearse. Es lo que impide que un negocio endurezca su
+         *     política el martes y se la aplique a quien reservó el lunes.
+         */
+        Politica: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: uuid
+             * @description Ausente = política por defecto del tenant.
+             */
+            servicio_id?: string;
+            version: number;
+            rango_cancelacion_horas: number;
+            rango_modificacion_horas: number;
+            penalidad_pct?: string;
+            /** Format: date-time */
+            vigente_desde: string;
+            /** Format: date-time */
+            creada_en?: string;
+        };
+        ListaPoliticas: {
+            datos: components["schemas"]["Politica"][];
+        };
+        /**
+         * @description El número de versión NO se envía: lo asigna el servidor como el siguiente
+         *     del mismo ámbito. Dejarlo al cliente permitiría publicar una versión 3
+         *     después de una 7 y romper el orden del que depende "cuál está vigente".
+         */
+        NuevaPolitica: {
+            /** Format: uuid */
+            servicio_id?: string;
+            rango_cancelacion_horas: number;
+            rango_modificacion_horas: number;
+            penalidad_pct?: string;
+            /**
+             * Format: date-time
+             * @description Ausente = ahora. Sirve para publicar con antelación.
+             */
+            vigente_desde?: string;
+        };
+        /**
+         * @description Un descuento porcentual (RF-17). Solo porcentaje, nunca monto fijo: es una
+         *     restricción de alcance del producto y vive en un CHECK para que no se filtre
+         *     por accidente.
+         */
+        Voucher: {
+            /** Format: uuid */
+            id: string;
+            codigo: string;
+            porcentaje: string;
+            limite_usos?: number;
+            usos_actuales: number;
+            /** Format: date-time */
+            caduca_en?: string;
+            /** @enum {string} */
+            estado: "activo" | "eliminado";
+            /** Format: date-time */
+            creado_en: string;
+        };
+        ListaVouchers: {
+            datos: components["schemas"]["Voucher"][];
+        };
+        /**
+         * @description Hace falta un límite de usos o una caducidad, al menos uno. Un voucher del
+         *     50% sin ninguno de los dos es una fuga de ingresos abierta para siempre, y
+         *     el motor lo rechaza.
+         *
+         *     No hay operación de edición, y no es un olvido: RF-17 permite crear o
+         *     eliminar y nada más. Cambiarle las condiciones a un voucher que ya está
+         *     circulando es cambiárselas a quien ya lo recibió.
+         */
+        NuevoVoucher: {
+            codigo: string;
+            /** @description Mayor que 0 y hasta 100. */
+            porcentaje: string;
+            limite_usos?: number;
+            /** Format: date-time */
+            caduca_en?: string;
+        };
+        /** @enum {string} */
+        TipoTarifa: "franja_horaria" | "dia_semana" | "temporada";
+        /**
+         * @description Sobrescribe el precio del servicio cuando su condición aplica (RF-31). El
+         *     precio base sigue viviendo en el servicio; esto existe aparte porque sí es
+         *     uno a muchos.
+         */
+        Tarifa: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            servicio_id: string;
+            tipo: components["schemas"]["TipoTarifa"];
+            /**
+             * @description Su forma depende del tipo: una franja lleva horas, un día de semana un
+             *     número, una temporada dos fechas. Sin esquema fijo porque el motor no la
+             *     evalúa, la interpreta quien calcula el precio.
+             */
+            condicion: {
+                [key: string]: unknown;
+            };
+            monto: string;
+            /**
+             * @description Con dos tarifas que aplican a la vez gana la de prioridad más alta. Sin
+             *     este campo el resultado dependería del orden de las filas, que no es un
+             *     orden.
+             */
+            prioridad: number;
+        };
+        ListaTarifas: {
+            datos: components["schemas"]["Tarifa"][];
+        };
+        NuevaTarifa: {
+            /** Format: uuid */
+            servicio_id: string;
+            tipo: components["schemas"]["TipoTarifa"];
+            condicion: {
+                [key: string]: unknown;
+            };
+            monto: string;
+            /** @default 0 */
+            prioridad: number;
+        };
+        /** @enum {string} */
+        ResultadoAuditoria: "exito" | "rechazo";
+        /**
+         * @description Una acción registrada (RF-36). Append-only: los eventos no se modifican ni
+         *     se eliminan.
+         */
+        EventoAuditoria: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            ocurrido_en: string;
+            /** @enum {string} */
+            actor_tipo: "usuario" | "administrador" | "agente" | "sistema" | "super_admin";
+            /** Format: uuid */
+            actor_id?: string;
+            /**
+             * Format: uuid
+             * @description Presente solo cuando la ejecutó un agente en nombre de otra cuenta.
+             */
+            agente_id?: string;
+            /** Format: uuid */
+            cuenta_impersonada_id?: string;
+            /** @description El alcance con el que actuó el agente (RF-13). */
+            alcance_token?: string[];
+            /** @example crear_sede */
+            accion: string;
+            /** @example sede */
+            recurso_tipo: string;
+            /** Format: uuid */
+            recurso_id?: string;
+            resultado: components["schemas"]["ResultadoAuditoria"];
+            ip?: string;
+            dispositivo?: string;
+        };
+        ListaAuditoria: {
+            datos: components["schemas"]["EventoAuditoria"][];
+            /** @description Ausente cuando no hay más páginas. */
+            siguiente_cursor?: string;
+        };
         /**
          * @description Estados de RF-28.
          * @enum {string}
@@ -1136,6 +1786,8 @@ export interface components {
          *     tenant.
          */
         Tenant: string;
+        /** @description Identificador del recurso sobre el que se opera. */
+        IdEnRuta: string;
     };
     requestBodies: never;
     headers: never;
@@ -1830,6 +2482,666 @@ export interface operations {
             400: components["responses"]["PeticionInvalida"];
             403: components["responses"]["FueraDeAlcance"];
             429: components["responses"]["DemasiadasPeticiones"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    listarSedesConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Las sedes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaSedes"];
+                };
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    crearSede: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NuevaSede"];
+            };
+        };
+        responses: {
+            /** @description La sede creada */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sede"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    actualizarSede: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del recurso sobre el que se opera. */
+                id: components["parameters"]["IdEnRuta"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActualizacionSede"];
+            };
+        };
+        responses: {
+            /** @description La sede actualizada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sede"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            404: components["responses"]["NoEncontrado"];
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    listarServiciosConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los servicios */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaServicios"];
+                };
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    crearServicio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NuevoServicio"];
+            };
+        };
+        responses: {
+            /** @description El servicio creado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Servicio"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    actualizarServicio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del recurso sobre el que se opera. */
+                id: components["parameters"]["IdEnRuta"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActualizacionServicio"];
+            };
+        };
+        responses: {
+            /** @description El servicio actualizado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Servicio"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            404: components["responses"]["NoEncontrado"];
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    listarRecursos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los recursos */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaRecursos"];
+                };
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    crearRecurso: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NuevoRecurso"];
+            };
+        };
+        responses: {
+            /** @description El recurso creado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recurso"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    actualizarRecurso: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del recurso sobre el que se opera. */
+                id: components["parameters"]["IdEnRuta"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActualizacionRecurso"];
+            };
+        };
+        responses: {
+            /** @description El recurso actualizado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recurso"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            404: components["responses"]["NoEncontrado"];
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    listarReglas: {
+        parameters: {
+            query?: {
+                recurso_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Las reglas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaReglas"];
+                };
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    crearRegla: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NuevaRegla"];
+            };
+        };
+        responses: {
+            /** @description La regla creada */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReglaDisponibilidad"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    eliminarRegla: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del recurso sobre el que se opera. */
+                id: components["parameters"]["IdEnRuta"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Regla retirada. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            404: components["responses"]["NoEncontrado"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    listarExcepciones: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Las excepciones */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaExcepciones"];
+                };
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    crearExcepcion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NuevaExcepcion"];
+            };
+        };
+        responses: {
+            /** @description La excepción creada */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExcepcionCalendario"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    eliminarExcepcion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del recurso sobre el que se opera. */
+                id: components["parameters"]["IdEnRuta"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Excepción levantada. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            404: components["responses"]["NoEncontrado"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    listarPoliticas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Las versiones, de la más reciente a la más antigua */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaPoliticas"];
+                };
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    publicarPolitica: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NuevaPolitica"];
+            };
+        };
+        responses: {
+            /** @description La versión publicada */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Politica"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    listarVouchers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los vouchers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaVouchers"];
+                };
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    crearVoucher: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NuevoVoucher"];
+            };
+        };
+        responses: {
+            /** @description El voucher creado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Voucher"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            /** @description Ya existe un voucher con ese código en este tenant. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    eliminarVoucher: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del recurso sobre el que se opera. */
+                id: components["parameters"]["IdEnRuta"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Voucher eliminado. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            404: components["responses"]["NoEncontrado"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    listarTarifas: {
+        parameters: {
+            query?: {
+                servicio_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Las tarifas, de mayor a menor prioridad */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaTarifas"];
+                };
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    crearTarifa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NuevaTarifa"];
+            };
+        };
+        responses: {
+            /** @description La tarifa creada */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tarifa"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    eliminarTarifa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del recurso sobre el que se opera. */
+                id: components["parameters"]["IdEnRuta"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tarifa retirada. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            404: components["responses"]["NoEncontrado"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    consultarAuditoria: {
+        parameters: {
+            query?: {
+                desde?: string;
+                hasta?: string;
+                actor_id?: string;
+                recurso_tipo?: string;
+                accion?: string;
+                limite?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Página de eventos, del más reciente al más antiguo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaAuditoria"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
             500: components["responses"]["ErrorInterno"];
         };
     };

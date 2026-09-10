@@ -145,7 +145,7 @@ func TestElAltaDejaLaCuentaPendienteHastaVerificar(t *testing.T) {
 	if !cuenta.EmailVerificado || cuenta.Estado != api.Activa {
 		t.Fatalf("tras verificar: verificado=%v estado=%q", cuenta.EmailVerificado, cuenta.Estado)
 	}
-	if cuenta.Tipo != api.Usuario {
+	if cuenta.Tipo != api.TipoCuentaUsuario {
 		t.Fatalf("una cuenta registrada por la vía normal debe ser usuario, y es %q", cuenta.Tipo)
 	}
 
