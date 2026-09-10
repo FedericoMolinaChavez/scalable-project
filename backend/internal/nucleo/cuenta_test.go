@@ -229,3 +229,55 @@ func reservaSinHorario(t *testing.T, bd *datos.BD, inicio, fin time.Time) uuid.U
 
 	return id
 }
+
+// La reserva que un administrador registra desde su agenda es del CLIENTE, no
+// suya (RF-32). Con cuenta_id apuntando a quien la teclea, esa reserva
+// aparecería en el listado del administrador y no en el de la persona que va a
+// venir, que es justo lo contrario de lo que hace falta en un mostrador.
+func TestLaReservaQueRegistraUnAdministradorEsDelCliente(t *testing.T) {
+	bd := pruebas.AbrirBD(t)
+	svc := nucleo.Nuevo(bd, 15*time.Minute)
+
+	inicio, fin := pruebas.Lunes(10), pruebas.Lunes(11)
+	pruebas.LimpiarFranja(t, bd, pruebas.Tenant, pruebas.Recurso, inicio, fin)
+
+	admin := cuentaDePrueba(t, bd)
+
+	pet := peticion(clave(t), inicio, fin)
+	pet.Administrador = admin
+
+	reserva, err := svc.Crear(t.Context(), pet)
+	if err != nil {
+		t.Fatalf("Crear devolvió error: %v", err)
+	}
+
+	var cuentaID *string
+	if err := bd.EnTenant(t.Context(), pruebas.Tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(t.Context(),
+			"SELECT cuenta_id::text FROM negocio.reserva WHERE id = $1",
+			reserva.Id).Scan(&cuentaID)
+	}); err != nil {
+		t.Fatalf("no se pudo releer la reserva: %v", err)
+	}
+	if cuentaID != nil {
+		t.Fatalf("la reserva quedó a nombre de %s, y debía quedar como de invitado", *cuentaID)
+	}
+
+	// Pero la traza sí dice quién la registró: RF-36 pregunta quién hizo qué, y
+	// "sistema" para todo no puede responderlo.
+	var actorTipo string
+	var actorID *string
+	if err := bd.EnTenant(t.Context(), pruebas.Tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(t.Context(), `
+			SELECT actor_tipo::text, actor_id::text
+			FROM negocio.transicion_estado
+			WHERE reserva_id = $1 AND estado_anterior IS NULL`,
+			reserva.Id).Scan(&actorTipo, &actorID)
+	}); err != nil {
+		t.Fatalf("no se pudo leer la transición inicial: %v", err)
+	}
+	if actorTipo != "administrador" || actorID == nil || *actorID != admin {
+		t.Fatalf("la transición dice %q/%v y debería decir administrador/%s",
+			actorTipo, actorID, admin)
+	}
+}

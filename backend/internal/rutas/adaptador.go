@@ -165,13 +165,24 @@ func (a *adaptador) CrearReserva(
 		}, nil
 	}
 
-	reserva, err := a.c.Nucleo.Crear(ctx, nucleo.Peticion{
+	peticion := nucleo.Peticion{
 		Tenant:            tenantDe(ctx, pet.Params.XTenantId),
 		ClaveIdempotencia: pet.Params.IdempotencyKey,
 		Nueva:             *pet.Body,
 		Cuenta:            acceso.Cuenta,
 		Agente:            acceso.Agente,
-	})
+	}
+
+	// La reserva que un administrador registra desde su agenda es del CLIENTE,
+	// no suya (RF-32). Con cuenta_id apuntando a quien la teclea, esa reserva
+	// aparecería en el listado del administrador y no en el de la persona que
+	// va a venir; se guarda como de invitado, con el contacto que él anotó.
+	if acceso.Tipo == identidad.TipoAdmin && !acceso.PorAgente() {
+		peticion.Cuenta = ""
+		peticion.Administrador = acceso.Cuenta
+	}
+
+	reserva, err := a.c.Nucleo.Crear(ctx, peticion)
 	if err != nil {
 		clase, cuerpo := problema(ctx, err)
 		switch clase.Estado {

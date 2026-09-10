@@ -93,6 +93,17 @@ type Peticion struct {
 	// alcance ya vino recortado en el token de RF-13. Lo que cambia es la
 	// traza, que tiene que poder decir que fue un agente y no la persona.
 	Agente string
+
+	// Administrador es quien la registra desde la agenda del negocio (RF-32):
+	// la reserva presencial o telefónica que alguien pide en el mostrador.
+	//
+	// NO va junto con Cuenta, y esa es la diferencia que importa: la reserva es
+	// del CLIENTE, no del administrador que la teclea. Con cuenta_id apuntando
+	// a quien la registró, esa reserva aparecería en el listado del
+	// administrador y no en el de la persona que va a venir. Se guarda como de
+	// invitado, con los datos de contacto que el administrador anotó, que es
+	// exactamente lo que RF-32 describe.
+	Administrador string
 }
 
 // Crear inserta la reserva pendiente con el cupo ya garantizado.
@@ -502,6 +513,8 @@ func actorDe(pet Peticion) (string, string) {
 	switch {
 	case pet.Agente != "":
 		return "agente", pet.Agente
+	case pet.Administrador != "":
+		return "administrador", pet.Administrador
 	case pet.Cuenta != "":
 		return "usuario", pet.Cuenta
 	default:
