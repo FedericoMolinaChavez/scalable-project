@@ -12,7 +12,7 @@ arrancar.
 | `db/` | Migraciones SQL, semillas y pruebas de invariantes del motor |
 | `api/` | `openapi.yaml` — contrato único entre backend y frontend |
 | `backend/` | Módulo Go: un binario por componente de ARQ-01 |
-| `frontend/` | Aplicación React + TypeScript (Vite) |
+| `frontend/` | Aplicación React + TypeScript (Vite). Su sistema visual está en [DESIGN.md](DESIGN.md) |
 | `deploy/` | Composición de la infraestructura local |
 | `scripts/` | Utilidades (renderizado de UML) |
 
@@ -44,22 +44,50 @@ task infra:up
 task back:run -- consulta       # :8081 — lecturas
 task back:run -- nucleo         # :8080 — escrituras
 task back:run -- identidad      # :8082 — códigos y tokens
-task back:run -- trabajadores   # :8083 — expirador, transiciones, relay
+task back:run -- pagos          # :8084 — Stripe, en las dos direcciones
+task back:run -- trabajadores   # :8083 — los ocho bucles asíncronos
 task front:dev
 ```
 
-Cada servicio va en su terminal, y son tres y no uno por la razón de ARQ-01: se
+Cada servicio va en su terminal, y son cinco y no uno por la razón de ARQ-01: se
 separa por **frontera transaccional y dominio de fallo**. La escritura de una
-reserva debe ser atómica; la lectura no; y la identidad manda correo, así que un
-relé caído no puede arrastrar consigo la ruta de reserva.
+reserva debe ser atómica; la lectura no; la identidad manda correo, así que un
+relé caído no puede arrastrar consigo la ruta de reserva; y los pagos dependen
+de Stripe, cuya disponibilidad no controlamos.
+
+`pagos` y `trabajadores` se niegan a arrancar sin las claves de Stripe. Es
+deliberado: un servicio que no comprueba la firma de un webhook confirma
+reservas que nadie pagó. Para trabajar sin ellas, no los levantes — el resto del
+sistema funciona igual, que es justamente lo que la separación compra.
 
 La consecuencia es que `/v1/reservas` lo sirven dos procesos —el `POST` el
 núcleo, el `GET` el de consulta— y el proxy de Vite enruta por método y por
 prefijo. Está explicado en [backend/README.md](backend/README.md) y en
 `frontend/vite.config.ts`.
 
-El correo de desarrollo lo captura Mailpit en <http://localhost:8025>: ahí se lee
-el código de RF-02 sin que salga nada fuera.
+## Pagos (RF-01, RF-33)
+
+Hacen falta tres claves de prueba en el `.env` (ver `.env.example`). Las dos
+primeras salen del panel de Stripe en modo prueba; la tercera la imprime la CLI:
+
+```bash
+task stripe:escuchar   # stripe listen --forward-to localhost:8084/v1/webhooks/stripe
+```
+
+Ese comando imprime un `whsec_...` al arrancar: ese es el `STRIPE_WEBHOOK_SECRET`
+mientras la sesión de escucha dure. Es **distinto** del secreto del endpoint
+configurado en el panel, y se regenera en cada sesión.
+
+Con eso, el flujo completo se puede recorrer con las tarjetas de prueba de
+Stripe: reservar (el núcleo aparta el cupo y arranca el reloj de RF-27), pagar
+en la página, y ver cómo la reserva pasa a `confirmada` cuando llega el webhook.
+Si el webhook no llega, el conciliador acaba preguntándole a Stripe por su
+cuenta —esa es la razón de que exista— y la reserva se confirma igual.
+
+El correo de desarrollo lo captura Mailpit en <http://localhost:8025>: ahí se
+leen el código de RF-02 y los avisos de RF-10 sin que salga nada fuera. Los
+comprobantes de RF-34 van a MinIO, cuya consola está en
+<http://localhost:9001>.
 
 `task` sin argumentos lista todo lo disponible. Los detalles de la
 infraestructura local están en [deploy/README.md](deploy/README.md).

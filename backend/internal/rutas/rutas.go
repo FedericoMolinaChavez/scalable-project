@@ -23,6 +23,7 @@ import (
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/disponibilidad"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/identidad"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/nucleo"
+	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/pagos"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/plataforma"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/transporte"
 )
@@ -35,6 +36,16 @@ type Componentes struct {
 	Nucleo         *nucleo.Servicio
 	Consulta       *consulta.Servicio
 	Identidad      *identidad.Servicio
+
+	// Pagos es la mitad que escribe y habla con Stripe: la intención, el
+	// seguimiento de la confirmación y el webhook de RF-33.
+	Pagos *pagos.Servicio
+
+	// Comprobantes es la mitad que solo lee (RF-34), y va aparte porque la
+	// sirve OTRO binario. Leer un comprobante ya emitido es una lectura contra
+	// las réplicas y no necesita la clave de Stripe; separarlas evita que el
+	// servicio de lectura cargue una credencial que nunca usa.
+	Comprobantes *pagos.Servicio
 
 	// Verificador comprueba los tokens de acceso. Es obligatorio en cuanto el
 	// proceso monte alguna ruta acotada, y Montar se niega a arrancar sin él:
@@ -121,10 +132,44 @@ func Montar(s *plataforma.Servidor, c Componentes, registro *slog.Logger, plazo 
 		acotada("GET /v1/reservas", envoltura.ListarReservas)
 		acotada("GET /v1/reservas/{id}", envoltura.ObtenerReserva)
 	}
+	if c.Comprobantes != nil {
+		// Acotada, a diferencia de las dos rutas de pago. Un comprobante lleva
+		// nombre, correo e importe: es el documento con más datos personales
+		// de todo el flujo, y no se entrega por conocer un uuid.
+		acotada("GET /v1/reservas/{id}/comprobante", envoltura.ObtenerComprobante)
+	}
 	if c.Nucleo != nil {
 		// Crear es pública: RF-01 admite reservar como invitado, y es
 		// justamente eso lo que hace falta que exista RF-02 después.
 		registrar("POST /v1/reservas", envoltura.CrearReserva)
 		acotada("POST /v1/reservas/{id}/cancelacion", envoltura.CancelarReserva)
 	}
+	if c.Pagos != nil {
+		// Las dos primeras son públicas por la misma razón que crear la
+		// reserva: quien reservó como invitado tiene que poder pagar, y un
+		// invitado no tiene token. Lo que las protege es el identificador de
+		// la reserva, que solo conoce quien acaba de crearla.
+		registrar("POST /v1/pagos/intencion", envoltura.CrearIntencionPago)
+		registrar("GET /v1/pagos/{reserva_id}/estado", envoltura.ConsultarConfirmacion)
+
+		// El webhook va por fuera del router generado y por fuera de la cadena
+		// de medios que exige identificación: lo llama Stripe, se autentica con
+		// una firma sobre los bytes del cuerpo, y decodificar ese cuerpo antes
+		// de verificarla rompería la verificación. Ver internal/pagos/webhook.go.
+		//
+		// Sí conserva el resto de la cadena —identificador de petición,
+		// recuperación de pánico, registro y métricas— porque un webhook que
+		// falla hay que poder encontrarlo en los registros igual que cualquier
+		// otra petición.
+		s.Registrar(RutaWebhookStripe,
+			transporte.Encadenar(c.Pagos.Manejador(), medios...))
+	}
 }
+
+// RutaWebhookStripe es donde Stripe entrega los eventos de RF-33.
+//
+// Constante y no un literal suelto porque la escriben tres sitios que no se
+// leen entre sí: este archivo, el README que explica cómo apuntar la CLI de
+// Stripe, y quien configure el endpoint en el panel. Un carácter de diferencia
+// entre ellos se manifiesta como reservas que nunca se confirman.
+const RutaWebhookStripe = "POST /v1/webhooks/stripe"

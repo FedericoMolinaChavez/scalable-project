@@ -1,0 +1,141 @@
+# Pagos: intención, seguimiento de la confirmación asíncrona y comprobante
+# (RF-01, RF-33, RF-34).
+#
+# El webhook de Stripe NO está aquí, y no es un olvido. El contrato describe lo
+# que un cliente de la API puede llamar; el webhook lo llama Stripe, con su
+# propia firma sobre el cuerpo EXACTO que envió. Generar un manejador desde el
+# contrato lo decodificaría a una estructura antes de que nadie lo verifique, y
+# la firma solo se puede comprobar sobre los bytes originales. Vive fuera del
+# router generado, en internal/pagos.
+
+intencion:
+  post:
+    operationId: crearIntencionPago
+    # Pública, igual que crear la reserva: RF-01 admite reservar como invitado,
+    # y un invitado que no puede pagar no ha reservado nada. Lo que protege esta
+    # ruta es el identificador de la reserva, que es un uuid que solo conoce
+    # quien acaba de crearla.
+    security: []
+    summary: Preparar el cobro de una reserva pendiente (RF-01)
+    description: |
+      Devuelve el `client_secret` con el que el navegador confirma el pago
+      directamente contra Stripe. El número de la tarjeta no pasa por este
+      backend en ningún momento (RNF-05).
+
+      Es idempotente por construcción: llamarla dos veces sobre la misma reserva
+      devuelve la misma intención, porque el motor solo admite un pago
+      `iniciado` por reserva.
+
+      **Está fuera del presupuesto de RNF-01.** Crear un PaymentIntent es una
+      llamada a Stripe, y por eso no ocurre dentro de `POST /v1/reservas`: la
+      transacción que sostiene la invariante de RNF-10 no puede esperar a un
+      tercero. Es la misma regla por la que ARQ-01 saca el pago del núcleo.
+    tags: [pagos]
+    parameters:
+      - $ref: '../componentes/parametros.yaml#/Tenant'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../componentes/esquemas/pagos.yaml#/SolicitudIntencion'
+    responses:
+      '200':
+        description: La intención de pago, nueva o la que ya existía
+        content:
+          application/json:
+            schema:
+              $ref: '../componentes/esquemas/pagos.yaml#/IntencionPago'
+      '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '404': { $ref: '../componentes/respuestas.yaml#/NoEncontrado' }
+      '409':
+        description: |
+          La reserva ya no admite pago: venció su bloqueo, ya está confirmada, o
+          se canceló. No es un fallo de la petición, es que llegó tarde.
+        content:
+          application/problem+json:
+            schema:
+              $ref: '../componentes/esquemas/comunes.yaml#/Problema'
+      '429': { $ref: '../componentes/respuestas.yaml#/DemasiadasPeticiones' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+      '502':
+        description: |
+          El proveedor de pago no respondió o respondió con un error. Es un 502 y
+          no un 500 porque la distinción importa para operar: el fallo está
+          aguas arriba, en Stripe, no en este sistema, y la reserva sigue
+          apartada hasta que venza.
+        content:
+          application/problem+json:
+            schema:
+              $ref: '../componentes/esquemas/comunes.yaml#/Problema'
+
+estado:
+  get:
+    operationId: consultarConfirmacion
+    security: []
+    summary: Si la confirmación asíncrona ya llegó (RF-33)
+    description: |
+      Para consultar después de que Stripe.js diga "succeeded" en el navegador.
+      Ese "succeeded" es de Stripe, no de este sistema: la reserva pasa a
+      `confirmada` cuando el webhook llega, y eso ocurre unos cientos de
+      milisegundos más tarde.
+
+      La interfaz consulta esta ruta hasta que el estado cambie, con un límite:
+      si el webhook se retrasa mucho, el conciliador de RF-33 acaba
+      preguntándole a Stripe por su cuenta, así que insistir aquí no acelera
+      nada.
+    tags: [pagos]
+    parameters:
+      - $ref: '../componentes/parametros.yaml#/Tenant'
+      - name: reserva_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    responses:
+      '200':
+        description: Dónde está la confirmación
+        content:
+          application/json:
+            schema:
+              $ref: '../componentes/esquemas/pagos.yaml#/EstadoConfirmacion'
+      '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '404': { $ref: '../componentes/respuestas.yaml#/NoEncontrado' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+comprobante:
+  get:
+    operationId: obtenerComprobante
+    summary: Comprobante de pago de una reserva (RF-34)
+    description: |
+      Esta SÍ exige identificación, a diferencia de las dos anteriores. Un
+      comprobante lleva nombre, correo e importe: es el documento con más datos
+      personales de todo el flujo, y no se entrega por conocer un identificador.
+
+      Una reserva ajena responde `404`, igual que una inexistente.
+    tags: [pagos]
+    security:
+      - TokenCliente: []
+    parameters:
+      - $ref: '../componentes/parametros.yaml#/Tenant'
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    responses:
+      '200':
+        description: El comprobante, con un enlace firmado al documento
+        content:
+          application/json:
+            schema:
+              $ref: '../componentes/esquemas/pagos.yaml#/Comprobante'
+      '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
+      '404':
+        description: |
+          No hay comprobante. Puede ser que la reserva no exista, que no sea de
+          quien pregunta, o que todavía no se haya emitido porque el pago no se
+          confirmó. Los tres responden igual por la misma razón de siempre.
+        content:
+          application/problem+json:
+            schema:
+              $ref: '../componentes/esquemas/comunes.yaml#/Problema'
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }

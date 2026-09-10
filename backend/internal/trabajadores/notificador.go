@@ -151,6 +151,25 @@ func (n *Notificador) mensajePara(asunto string, e eventoReserva) (string, strin
 				"vuelve a quedar libre para otra persona.\n",
 			e.ContactoNombre, cuando), true
 
+	case "reservas." + tipoConfirmada:
+		return "Tu reserva está confirmada", fmt.Sprintf(
+			"Hola %s:\n\n"+
+				"Recibimos tu pago y tu reserva del %s queda CONFIRMADA.\n\n"+
+				"El horario es ya tuyo: no hace falta hacer nada más. En unos minutos\n"+
+				"tendrás también el comprobante disponible en «Mis reservas».\n",
+			e.ContactoNombre, cuando), true
+
+	case "reservas." + tipoCupoLibre:
+		// El aviso de RF-37. No reserva nada, y el texto tiene que decirlo: se
+		// avisa de que hay hueco, no se aparta. Prometer un cupo que otro puede
+		// tomar mientras se lee el correo es peor que no avisar.
+		return "Se liberó un horario que estabas esperando", fmt.Sprintf(
+			"Hola %s:\n\n"+
+				"El horario del %s que estabas esperando ha quedado libre.\n\n"+
+				"No está apartado: quien reserve primero se lo lleva, así que si\n"+
+				"todavía lo quieres, entra a reservarlo ahora.\n",
+			e.ContactoNombre, cuando), true
+
 	case "reservas." + tipoCancelada:
 		return "Tu reserva se canceló", fmt.Sprintf(
 			"Hola %s:\n\n"+
@@ -176,7 +195,11 @@ func (n *Notificador) mensajePara(asunto string, e eventoReserva) (string, strin
 // mañana serán también el webhook de pagos y el administrador, y ninguno de
 // ellos debería tener que importar a los otros para nombrar un evento.
 const (
-	tipoCreada    = "reserva.creada"
-	tipoCancelada = "reserva.cancelada"
-	tipoExpirada  = "reserva.expirada"
+	tipoCreada     = "reserva.creada"
+	tipoConfirmada = "reserva.confirmada"
+	tipoCancelada  = "reserva.cancelada"
+	tipoExpirada   = "reserva.expirada"
+
+	// El de RF-37. No es una reserva: es un aviso de que hay hueco.
+	tipoCupoLibre = "espera.cupo_libre"
 )

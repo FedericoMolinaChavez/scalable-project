@@ -196,6 +196,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/reservas/{id}/comprobante": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Comprobante de pago de una reserva (RF-34)
+         * @description Esta SÍ exige identificación, a diferencia de las dos anteriores. Un
+         *     comprobante lleva nombre, correo e importe: es el documento con más datos
+         *     personales de todo el flujo, y no se entrega por conocer un identificador.
+         *
+         *     Una reserva ajena responde `404`, igual que una inexistente.
+         */
+        get: operations["obtenerComprobante"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pagos/intencion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preparar el cobro de una reserva pendiente (RF-01)
+         * @description Devuelve el `client_secret` con el que el navegador confirma el pago
+         *     directamente contra Stripe. El número de la tarjeta no pasa por este
+         *     backend en ningún momento (RNF-05).
+         *
+         *     Es idempotente por construcción: llamarla dos veces sobre la misma reserva
+         *     devuelve la misma intención, porque el motor solo admite un pago
+         *     `iniciado` por reserva.
+         *
+         *     **Está fuera del presupuesto de RNF-01.** Crear un PaymentIntent es una
+         *     llamada a Stripe, y por eso no ocurre dentro de `POST /v1/reservas`: la
+         *     transacción que sostiene la invariante de RNF-10 no puede esperar a un
+         *     tercero. Es la misma regla por la que ARQ-01 saca el pago del núcleo.
+         */
+        post: operations["crearIntencionPago"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pagos/{reserva_id}/estado": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Si la confirmación asíncrona ya llegó (RF-33)
+         * @description Para consultar después de que Stripe.js diga "succeeded" en el navegador.
+         *     Ese "succeeded" es de Stripe, no de este sistema: la reserva pasa a
+         *     `confirmada` cuando el webhook llega, y eso ocurre unos cientos de
+         *     milisegundos más tarde.
+         *
+         *     La interfaz consulta esta ruta hasta que el estado cambie, con un límite:
+         *     si el webhook se retrasa mucho, el conciliador de RF-33 acaba
+         *     preguntándole a Stripe por su cuenta, así que insistir aquí no acelera
+         *     nada.
+         */
+        get: operations["consultarConfirmacion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -403,6 +486,110 @@ export interface components {
             reserva: components["schemas"]["Reserva"];
             /** @description `client_secret` del PaymentIntent de Stripe. */
             pago_client_secret?: string;
+        };
+        /**
+         * @description Comprobante de pago (RF-34). El documento vive en el almacén de objetos, no
+         *     en esta respuesta: lo que se entrega es un enlace firmado y de vida corta.
+         */
+        Comprobante: {
+            /**
+             * @description Correlativo por negocio y año.
+             * @example 2026-000042
+             */
+            numero: string;
+            /** @enum {string} */
+            tipo: "pago" | "nota_credito";
+            /** Format: date-time */
+            emitido_en: string;
+            /**
+             * Format: uri
+             * @description Enlace firmado al documento. Ausente mientras el documento todavía no se
+             *     haya subido: la fila del comprobante se emite dentro de la transacción y
+             *     el objeto se sube después, así que hay una ventana —de segundos— en la
+             *     que el comprobante existe y el PDF no.
+             */
+            url?: string;
+            /**
+             * Format: date-time
+             * @description Cuándo caduca el enlace. Corto a propósito: un enlace firmado es una
+             *     credencial, y una credencial que no caduca es una credencial que se
+             *     reenvía por chat y sigue sirviendo un año después.
+             */
+            url_expira_en?: string;
+        };
+        /**
+         * @description Pedir la intención de pago de una reserva ya creada. Nada más: el importe
+         *     NO viaja aquí. Lo calcula el servidor desde el precio que la reserva congeló
+         *     al crearse (RF-31), porque un importe que llega del cliente es un importe
+         *     que el cliente elige.
+         */
+        SolicitudIntencion: {
+            /** Format: uuid */
+            reserva_id: string;
+        };
+        /**
+         * @description Estado del intento de cobro (ER-03).
+         * @enum {string}
+         */
+        EstadoPago: "iniciado" | "confirmado" | "fallido";
+        /**
+         * @description Lo que el navegador necesita para cobrar contra Stripe sin que la tarjeta
+         *     pase por este backend (RNF-05).
+         *
+         *     Pedirla dos veces para la misma reserva devuelve la MISMA intención, no una
+         *     nueva: el índice `pago_un_intento_vivo_por_reserva` lo garantiza en el
+         *     motor. Sin eso, dos pestañas abiertas crearían dos PaymentIntent y se
+         *     podrían pagar los dos.
+         */
+        IntencionPago: {
+            /**
+             * @description `client_secret` del PaymentIntent. Es una credencial de un solo
+             *     propósito y de una sola reserva: solo sirve para confirmar ESE cobro, y
+             *     no permite leer ni mover nada más en la cuenta de Stripe.
+             */
+            client_secret: string;
+            /**
+             * @description Clave publicable de Stripe (`pk_...`), la que inicializa Stripe.js.
+             *
+             *     Viaja en la respuesta y no en una variable de compilación del frontend a
+             *     propósito: la clave es del entorno, no del artefacto. Empotrarla al
+             *     construir obliga a un build distinto por entorno y a redesplegar el
+             *     frontend para rotarla. Es publicable —está pensada para vivir en el
+             *     navegador— así que no hay nada que proteger al enviarla.
+             */
+            clave_publicable: string;
+            monto: components["schemas"]["Dinero"];
+            estado: components["schemas"]["EstadoPago"];
+            /**
+             * Format: date-time
+             * @description Cuándo vence el bloqueo de la reserva (RF-27). Se repite aquí porque es
+             *     lo que decide si vale la pena empezar a pagar: el reloj es parte del
+             *     producto, no un detalle del flujo.
+             */
+            expira_en?: string;
+        };
+        /**
+         * @description Dónde está la confirmación asíncrona de RF-33.
+         *
+         *     Existe porque el pago se confirma por webhook, fuera del presupuesto de
+         *     latencia del núcleo: cuando Stripe.js devuelve "succeeded" al navegador, la
+         *     reserva todavía puede estar `pendiente` durante unos cientos de
+         *     milisegundos. Sin esta ruta, la interfaz no tiene forma de saber cuándo
+         *     dejar de esperar.
+         *
+         *     Es pública, igual que crear la reserva: quien pregunta ya tiene el
+         *     identificador de una reserva que acaba de crear, y la respuesta no dice nada
+         *     que no sea suyo. No devuelve el contacto ni el importe.
+         */
+        EstadoConfirmacion: {
+            reserva_estado: components["schemas"]["EstadoReserva"];
+            pago_estado?: components["schemas"]["EstadoPago"];
+            /**
+             * @description Lo que dijo el proveedor cuando el cobro no salió. Presente solo con
+             *     `pago_estado = fallido`, y con el texto de Stripe tal cual: reescribirlo
+             *     aquí produciría dos vocabularios para el mismo rechazo.
+             */
+            motivo_fallo?: string;
         };
     };
     responses: {
@@ -851,6 +1038,146 @@ export interface operations {
                 };
             };
             422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    obtenerComprobante: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+                 *     (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+                 *     de un cliente en producción permitiría leer los datos de cualquier otro
+                 *     tenant.
+                 */
+                "X-Tenant-Id": components["parameters"]["Tenant"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El comprobante, con un enlace firmado al documento */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Comprobante"];
+                };
+            };
+            401: components["responses"]["NoAutorizado"];
+            /**
+             * @description No hay comprobante. Puede ser que la reserva no exista, que no sea de
+             *     quien pregunta, o que todavía no se haya emitido porque el pago no se
+             *     confirmó. Los tres responden igual por la misma razón de siempre.
+             */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    crearIntencionPago: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+                 *     (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+                 *     de un cliente en producción permitiría leer los datos de cualquier otro
+                 *     tenant.
+                 */
+                "X-Tenant-Id": components["parameters"]["Tenant"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SolicitudIntencion"];
+            };
+        };
+        responses: {
+            /** @description La intención de pago, nueva o la que ya existía */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntencionPago"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            404: components["responses"]["NoEncontrado"];
+            /**
+             * @description La reserva ya no admite pago: venció su bloqueo, ya está confirmada, o
+             *     se canceló. No es un fallo de la petición, es que llegó tarde.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            429: components["responses"]["DemasiadasPeticiones"];
+            500: components["responses"]["ErrorInterno"];
+            /**
+             * @description El proveedor de pago no respondió o respondió con un error. Es un 502 y
+             *     no un 500 porque la distinción importa para operar: el fallo está
+             *     aguas arriba, en Stripe, no en este sistema, y la reserva sigue
+             *     apartada hasta que venza.
+             */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+        };
+    };
+    consultarConfirmacion: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+                 *     (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+                 *     de un cliente en producción permitiría leer los datos de cualquier otro
+                 *     tenant.
+                 */
+                "X-Tenant-Id": components["parameters"]["Tenant"];
+            };
+            path: {
+                reserva_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dónde está la confirmación */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstadoConfirmacion"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            404: components["responses"]["NoEncontrado"];
             500: components["responses"]["ErrorInterno"];
         };
     };

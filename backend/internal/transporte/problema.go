@@ -109,6 +109,17 @@ var (
 		Titulo: "Error no previsto",
 		Estado: http.StatusInternalServerError,
 	}
+
+	// ProveedorCaido es un 502 y no un 500, y la distinción no es cosmética:
+	// dice de qué lado está el problema. Con ella una alerta puede separar
+	// "nuestro sistema falla" de "Stripe está caído", que son dos incidentes
+	// con dos respuestas distintas, y la interfaz puede decir "vuelve a
+	// intentarlo" en vez de "algo salió mal", porque la reserva sigue apartada.
+	ProveedorCaido = Clase{
+		Tipo:   "https://api.reservas/errores/proveedor-de-pago",
+		Titulo: "El proveedor de pago no respondió",
+		Estado: http.StatusBadGateway,
+	}
 )
 
 // campoProblema es un alias del struct anónimo que el generador produce para

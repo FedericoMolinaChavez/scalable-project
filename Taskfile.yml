@@ -32,6 +32,19 @@ tasks:
     dir: "{{.BACKEND}}"
     cmd: go run ./cmd/{{.CLI_ARGS}}
 
+  # ---------------------------------------------------------------- pagos --
+  stripe:escuchar:
+    desc: >-
+      Reenvia los webhooks de Stripe al binario `pagos` (RF-33). Imprime un
+      whsec_... al arrancar: ese es el STRIPE_WEBHOOK_SECRET del .env mientras
+      la sesion de escucha dure. Es distinto del secreto del endpoint del panel,
+      y se regenera en cada sesion.
+    cmd: stripe listen --forward-to localhost:8084/v1/webhooks/stripe
+
+  stripe:disparar:
+    desc: "Dispara un evento de prueba: task stripe:disparar -- payment_intent.succeeded"
+    cmd: stripe trigger {{.CLI_ARGS}}
+
   back:test:
     desc: Pruebas de Go
     dir: "{{.BACKEND}}"

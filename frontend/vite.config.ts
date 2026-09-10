@@ -9,10 +9,12 @@ import { defineConfig, type Plugin } from 'vitest/config'
 const NUCLEO = 'http://localhost:8080' // escritura de reservas
 const CONSULTA = 'http://localhost:8081' // lectura, catálogo y disponibilidad
 const IDENTIDAD = 'http://localhost:8082' // códigos y tokens (RF-02)
+const PAGOS = 'http://localhost:8084' // intención, webhook y estado (RF-33)
 
 // Prefijos internos. No salen al backend: el proxy los quita antes de reenviar.
 const ESCRITURA = '/__escritura'
 const SESION = '/__sesion'
+const PAGO = '/__pago'
 
 /**
  * Manda las escrituras al núcleo y todo lo demás al de consulta.
@@ -43,14 +45,29 @@ function enrutarEscrituras(): Plugin {
           return
         }
 
-        // Las escrituras no van todas al mismo sitio: pedir un código es del
-        // servicio de identidad, que en ARQ-01 vive en el borde y tiene su
-        // propio dominio de fallo —manda correo—, no del núcleo de reservas.
-        peticion.url = (peticion.url.startsWith('/v1/sesiones/') ? SESION : ESCRITURA) + peticion.url
+        // Las escrituras no van todas al mismo sitio, y cada excepción
+        // corresponde a un componente distinto de ARQ-01:
+        //
+        //   /v1/sesiones/  →  Servicio de Identidad. Vive en el borde y tiene
+        //                     su propio dominio de fallo: manda correo.
+        //   /v1/pagos/     →  Webhook de Pagos. Depende de Stripe, así que su
+        //                     disponibilidad la acota un tercero y no puede
+        //                     estar dentro del presupuesto del núcleo.
+        //
+        // El resto es del Núcleo de Reservas, que es el único que escribe en
+        // negocio.reserva por la ruta síncrona.
+        peticion.url = prefijoDe(peticion.url) + peticion.url
         siguiente()
       })
     },
   }
+}
+
+/** A qué proceso le toca una escritura, por su ruta. */
+function prefijoDe(ruta: string): string {
+  if (ruta.startsWith('/v1/sesiones/')) return SESION
+  if (ruta.startsWith('/v1/pagos/')) return PAGO
+  return ESCRITURA
 }
 
 export default defineConfig({
@@ -71,11 +88,27 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (ruta) => ruta.replace(SESION, ''),
       },
+      [`${PAGO}/v1`]: {
+        target: PAGOS,
+        changeOrigin: true,
+        rewrite: (ruta) => ruta.replace(PAGO, ''),
+      },
       [`${ESCRITURA}/v1`]: {
         target: NUCLEO,
         changeOrigin: true,
         rewrite: (ruta) => ruta.replace(ESCRITURA, ''),
       },
+
+      // Las lecturas de /v1/pagos SÍ van al componente de pagos, no al de
+      // consulta: el estado de la confirmación (RF-33) lo sabe quien recibió el
+      // webhook. No hace falta reescribir nada porque la ruta ya es distinta.
+      '/v1/pagos': {
+        target: PAGOS,
+        changeOrigin: true,
+      },
+
+      // Y todo lo demás al de consulta, incluido GET /v1/reservas/{id}/comprobante:
+      // leer un comprobante ya emitido es una lectura y va contra las réplicas.
       '/v1': {
         target: CONSULTA,
         changeOrigin: true,
