@@ -1,8 +1,11 @@
 // Package catalogo es el componente "Configuración y Catálogo" de ARQ-01: qué
 // ofrece un tenant y dónde (RF-26).
 //
-// Solo lee. La escritura del catálogo —alta de sedes, servicios y recursos por
-// parte de un administrador— es RF-30 y RF-31, y no entra en esta rebanada.
+// Este archivo es la mitad de LECTURA, la que consume el cliente final (RF-26):
+// devuelve solo lo activo, porque una sede inactiva no es una que se muestra en
+// gris, es una que no debe poder elegirse. La mitad de escritura —RF-14, RF-15,
+// RF-17, RF-30 y RF-31— está en configuracion.go, calendario.go y comercial.go,
+// y devuelve todo, porque un administrador necesita ver lo que ha apagado.
 package catalogo
 
 import (
@@ -31,45 +34,7 @@ func Nuevo(bd *datos.BD) *Servicio {
 // día que exista la pantalla del administrador necesitará verlas todas, y eso
 // será un parámetro nuevo en el contrato, no un cambio silencioso aquí.
 func (s *Servicio) Sedes(ctx context.Context, tenant uuid.UUID) ([]api.Sede, error) {
-	sedes := make([]api.Sede, 0)
-
-	err := s.bd.EnTenant(ctx, tenant.String(), func(tx pgx.Tx) error {
-		filas, err := tx.Query(ctx, `
-			SELECT id::text, nombre, zona_horaria, direccion, estado::text
-			FROM negocio.sede
-			WHERE estado = 'activo'
-			ORDER BY nombre`)
-		if err != nil {
-			return err
-		}
-		defer filas.Close()
-
-		for filas.Next() {
-			var (
-				id     string
-				sede   api.Sede
-				estado string
-			)
-			if err := filas.Scan(&id, &sede.Nombre, &sede.ZonaHoraria, &sede.Direccion, &estado); err != nil {
-				return err
-			}
-
-			sede.Id, err = uuid.Parse(id)
-			if err != nil {
-				return err
-			}
-			sede.Estado = api.EstadoCatalogo(estado)
-
-			sedes = append(sedes, sede)
-		}
-
-		return filas.Err()
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return sedes, nil
+	return s.leerSedes(ctx, tenant, true)
 }
 
 // Servicios devuelve los servicios activos del tenant, opcionalmente los de una

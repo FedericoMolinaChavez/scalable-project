@@ -108,6 +108,704 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sesiones/contrasena": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Iniciar sesión con contraseña (RF-12)
+         * @description Credenciales incorrectas, cuenta inexistente y contraseña sin definir
+         *     responden lo mismo: `401` con el mismo cuerpo. La tercera importa más de
+         *     lo que parece —una cuenta creada por magic link no tiene contraseña— y
+         *     distinguirla revelaría qué direcciones están registradas.
+         *
+         *     Una cuenta suspendida o pendiente de verificación SÍ se distingue
+         *     (RF-12 A8), y no contradice lo anterior: quien llega hasta ahí ya
+         *     demostró saber la contraseña, así que no se le está diciendo nada que no
+         *     supiera.
+         *
+         *     Los intentos fallidos consecutivos se cuentan por cuenta y bloquean el
+         *     acceso durante un rato (RF-12 A3/A4). El bloqueo responde `429`, no
+         *     `401`: no es que las credenciales estén mal, es que hay que esperar.
+         */
+        post: operations["iniciarSesion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sesiones/enlace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pedir un magic link para entrar (RF-12)
+         * @description Enlace de un solo uso, quince minutos de vigencia. **Responde igual exista
+         *     o no la cuenta** (RF-12 A12).
+         */
+        post: operations["solicitarEnlace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sesiones/enlace/canje": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Canjear el magic link por una sesión (RF-12) */
+        post: operations["canjearEnlace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sesiones/refresco": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Renovar el par de tokens (RF-12)
+         * @description El token de refresco ROTA: el que se presenta deja de valer y se entrega
+         *     otro. Es lo que hace que un refresco copiado se note —el primero de los
+         *     dos en canjearlo deja al otro fuera— en vez de quedar utilizable en
+         *     paralelo hasta que caduque la sesión.
+         *
+         *     Un refresco revocado, vencido o desconocido responde `401` sin
+         *     distinguirlos.
+         */
+        post: operations["refrescarSesion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sesiones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sesiones activas (RF-25) */
+        get: operations["listarSesiones"];
+        put?: never;
+        post?: never;
+        /**
+         * Cerrar todas las sesiones (RF-25)
+         * @description Incluye la propia. Es lo que se pulsa cuando se sospecha que alguien más
+         *     entró, y dejar viva justo la sesión desde la que se pulsa obligaría a
+         *     confiar en que la comprometida no es esa.
+         */
+        delete: operations["revocarTodasLasSesiones"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sesiones/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revocar una sesión concreta (RF-25)
+         * @description Una sesión de otra cuenta responde `404`, no `403`: un 403 confirmaría que
+         *     ese identificador existe.
+         */
+        delete: operations["revocarSesion"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cuentas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Registrar una cuenta (RF-24)
+         * @description Crea la cuenta en estado `pendiente_verificacion` y dispara la
+         *     verificación del contacto (RF-19). No devuelve tokens: hasta que el
+         *     correo esté verificado no hay cuenta activa con la que iniciar sesión.
+         *
+         *     **Responde `202` exista o no ya ese correo.** Cuando ya existe no se crea
+         *     nada y se avisa al titular del intento, que es lo que RF-24 pide: quien
+         *     prueba direcciones recibe siempre la misma respuesta, y el dueño de la
+         *     dirección se entera.
+         */
+        post: operations["registrarCuenta"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cuentas/yo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** El perfil propio (RF-22) */
+        get: operations["obtenerCuentaPropia"];
+        put?: never;
+        post?: never;
+        /**
+         * Eliminar la cuenta (RF-25)
+         * @description Anonimiza los datos personales, revoca todas las sesiones y cancela las
+         *     reservas futuras todavía activas.
+         *
+         *     No borra la fila. Los comprobantes de RF-34 la referencian y hay
+         *     obligaciones fiscales detrás; lo que desaparece es lo que identifica a una
+         *     persona, no la contabilidad. El correo queda libre para volver a
+         *     registrarse, porque los índices de unicidad excluyen las cuentas
+         *     eliminadas.
+         */
+        delete: operations["eliminarCuentaPropia"];
+        options?: never;
+        head?: never;
+        /**
+         * Editar el perfil (RF-22)
+         * @description Cambiar el correo o el teléfono lo marca como NO verificado y dispara la
+         *     verificación de RF-19. El dato nuevo no sirve para recuperar la cuenta ni
+         *     para recibir avisos hasta que se verifique: si bastara con escribirlo,
+         *     apuntar la cuenta a una dirección propia sería suficiente para
+         *     interceptar los avisos de otra persona.
+         *
+         *     Un correo o teléfono que ya está en otra cuenta responde `409`, no `422`:
+         *     la petición es válida y la regla no se viola, lo que ocurre es que ese
+         *     valor ya está tomado.
+         */
+        patch: operations["actualizarCuentaPropia"];
+        trace?: never;
+    };
+    "/v1/cuentas/yo/preferencias": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preferencias de notificación (RF-21)
+         * @description Devuelve solo lo que se ha guardado explícitamente. Lo que no aparece está
+         *     en el valor por defecto del producto, que NO es lo mismo que
+         *     deshabilitado.
+         */
+        get: operations["listarPreferencias"];
+        /**
+         * Guardar preferencias de notificación (RF-21)
+         * @description Reemplaza el conjunto completo. Un PUT y no un PATCH porque la pantalla de
+         *     RF-21 se guarda entera: con PATCH, quitar una preferencia exigiría un
+         *     verbo aparte para decir "vuelve al valor por defecto", y esa distinción es
+         *     justo la que se pierde entre lo que se envía y lo que se omite.
+         */
+        put: operations["guardarPreferencias"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cuentas/verificacion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pedir la verificación del contacto (RF-19) */
+        post: operations["solicitarVerificacion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cuentas/verificacion/canje": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Canjear el enlace o el código de verificación (RF-19)
+         * @description Marca el contacto como verificado y, si la cuenta estaba
+         *     `pendiente_verificacion`, la activa. A partir de ahí ya puede iniciar
+         *     sesión (RF-12).
+         *
+         *     Un valor caducado, ya usado o inexistente responde igual: `401`, sin
+         *     decir cuál de los tres fue.
+         */
+        post: operations["canjearVerificacion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cuentas/yo/contrasena": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cambiar la propia contraseña (RF-18, y destino de RF-12 A9)
+         * @description Exige la contraseña actual aunque ya haya sesión: un token robado no debe
+         *     bastar para quedarse con la cuenta.
+         *
+         *     Revoca las DEMÁS sesiones y conserva la que hace el cambio.
+         */
+        post: operations["cambiarContrasena"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cuentas/contrasena/restablecimiento": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restablecer la contraseña con el enlace recibido (RF-18)
+         * @description Un token caducado, ya usado o inexistente responde `401` sin
+         *     distinguirlos.
+         *
+         *     Revoca TODAS las sesiones, incluida cualquiera que estuviera abierta.
+         */
+        post: operations["restablecerContrasena"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cuentas/contrasena/recuperacion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pedir el enlace de recuperación de contraseña (RF-18)
+         * @description **Responde `202` exista o no la cuenta**, y no envía nada cuando no
+         *     existe. Es el mismo criterio anti-enumeración de RF-12 A12.
+         */
+        post: operations["solicitarRecuperacion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agentes/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Intercambiar la credencial por un token de acciones (RF-13)
+         * @description Emite un token de vigencia corta acotado a `acciones ∩ alcance de la
+         *     cuenta impersonada` (RF-23). El alcance concedido puede ser menor que el
+         *     pedido y viaja en la respuesta.
+         *
+         *     Las tres razones de rechazo —credencial que no vale, cuenta que no
+         *     autorizó a este agente (RNF-07), acciones fuera del alcance de esa
+         *     cuenta— responden el mismo `403`. Separarlas le diría a quien prueba
+         *     credenciales cuál de los tres pasos ya superó.
+         *
+         *     El límite de acciones repetidas de RF-13 se aplica aquí como un `429`
+         *     sobre el par agente/cuenta, no como un `403`: pedir demasiado seguido no
+         *     es una falta de permiso, es el sistema pidiendo que espere.
+         */
+        post: operations["intercambiarTokenAgente"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/sedes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Todas las sedes del tenant, activas e inactivas (RF-30) */
+        get: operations["listarSedesConfig"];
+        put?: never;
+        /** Crear una sede (RF-30) */
+        post: operations["crearSede"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/sedes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Editar una sede (RF-30)
+         * @description Desactivarla no cancela sus reservas: deja de poder elegirse para reservas
+         *     nuevas y nada más. Cancelar lo ya vendido es una decisión aparte, y RF-32
+         *     la hace explícita.
+         */
+        patch: operations["actualizarSede"];
+        trace?: never;
+    };
+    "/v1/config/servicios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Todos los servicios del tenant (RF-30) */
+        get: operations["listarServiciosConfig"];
+        put?: never;
+        /** Crear un servicio (RF-30, RF-31) */
+        post: operations["crearServicio"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/servicios/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Editar un servicio (RF-30, RF-31)
+         * @description Cambiar el precio o la duración NO altera ninguna reserva existente: la
+         *     reserva congela ambos al crearse (RF-31). Es lo que permite editar el
+         *     catálogo sin revisar la agenda.
+         */
+        patch: operations["actualizarServicio"];
+        trace?: never;
+    };
+    "/v1/config/recursos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Los recursos del tenant y qué servicios prestan (RF-30) */
+        get: operations["listarRecursos"];
+        put?: never;
+        /** Crear un recurso (RF-30) */
+        post: operations["crearRecurso"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/recursos/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Editar un recurso (RF-30) */
+        patch: operations["actualizarRecurso"];
+        trace?: never;
+    };
+    "/v1/config/reglas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reglas de disponibilidad (RF-14) */
+        get: operations["listarReglas"];
+        put?: never;
+        /**
+         * Publicar una regla de disponibilidad (RF-14)
+         * @description Una regla no puede cruzar medianoche: el motor exige `hora_fin >
+         *     hora_inicio`. Un turno de noche son DOS reglas, una por cada día que toca,
+         *     y es la única forma en que el cálculo de disponibilidad puede resolverlo
+         *     sin ambigüedad.
+         */
+        post: operations["crearRegla"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/reglas/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Retirar una regla de disponibilidad (RF-14)
+         * @description Retirarla no toca las reservas que ya se hicieron dentro de ella. Una
+         *     reserva confirmada es un compromiso; que el horario deje de publicarse no
+         *     lo deshace.
+         */
+        delete: operations["eliminarRegla"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/excepciones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Excepciones de calendario (RF-14) */
+        get: operations["listarExcepciones"];
+        put?: never;
+        /** Tapar un período (RF-14) */
+        post: operations["crearExcepcion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/excepciones/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Levantar una excepción de calendario (RF-14) */
+        delete: operations["eliminarExcepcion"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/politicas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Versiones de política publicadas (RF-15) */
+        get: operations["listarPoliticas"];
+        put?: never;
+        /**
+         * Publicar una versión de política (RF-15)
+         * @description No hay PATCH ni DELETE, y no es un olvido: `politica_version` es
+         *     inmutable por disparador. Publicar condiciones nuevas es publicar una
+         *     versión nueva; las reservas existentes siguen apuntando a la que
+         *     congelaron al crearse.
+         */
+        post: operations["publicarPolitica"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/vouchers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Vouchers del tenant (RF-17) */
+        get: operations["listarVouchers"];
+        put?: never;
+        /** Crear un voucher (RF-17) */
+        post: operations["crearVoucher"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/vouchers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Eliminar un voucher (RF-17)
+         * @description Borrado lógico: la fila permanece porque `uso_voucher` la referencia, y el
+         *     código NO se libera. Reutilizarlo dejaría dos promociones distintas con el
+         *     mismo código en el historial, y la traza de RNF-36 no podría distinguirlas.
+         */
+        delete: operations["eliminarVoucher"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/tarifas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tarifas del tenant (RF-31) */
+        get: operations["listarTarifas"];
+        put?: never;
+        /** Publicar una tarifa (RF-31) */
+        post: operations["crearTarifa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/tarifas/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Retirar una tarifa (RF-31)
+         * @description Retirarla no cambia ningún precio ya cobrado: la reserva congeló el suyo
+         *     al crearse.
+         */
+        delete: operations["eliminarTarifa"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auditoria": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Consultar la auditoría (RF-36)
+         * @description Devuelve los eventos dentro del alcance de quien pregunta: solo su tenant
+         *     para un administrador (RF-23). Append-only: no hay forma de modificar ni
+         *     de borrar nada desde aquí, y tampoco desde ninguna otra parte, porque un
+         *     disparador lo impide en el motor.
+         */
+        get: operations["consultarAuditoria"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/reservas": {
         parameters: {
             query?: never;
@@ -121,9 +819,15 @@ export interface paths {
          *     existe el token de invitado, así que devuelve las reservas hechas con el
          *     correo que ese token acredita.
          *
-         *     Cuando exista RF-12, la misma ruta devolverá las de la cuenta a un
-         *     `usuario` y las del tenant a un `administrador` (RF-32). Es una operación
-         *     con el alcance acotado por la cuenta, no tres rutas distintas por rol.
+         *     Con un token de cuenta el alcance sale del tipo (RF-23): un `usuario` ve
+         *     las suyas, un `administrador` ve las de su tenant (RF-32) y un agente, las
+         *     de la cuenta que representa (RF-05). Es una operación con el alcance
+         *     acotado por la cuenta, no cuatro rutas distintas por rol.
+         *
+         *     Los filtros `sede_id` y `recurso_id` solo tienen sentido en el alcance del
+         *     administrador —la agenda de RF-32 se recorre por sede y por recurso— pero
+         *     no se rechazan a un `usuario`: acotar lo propio por sede es una consulta
+         *     legítima, y prohibirla obligaría a que el filtro supiera de roles.
          */
         get: operations["listarReservas"];
         put?: never;
@@ -190,6 +894,89 @@ export interface paths {
          *     afirmar algo que este componente no puede garantizar.
          */
         post: operations["cancelarReserva"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reservas/{id}/modificacion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reprogramar una reserva (RF-07)
+         * @description Mueve la MISMA reserva a otra hora, y opcionalmente a otro recurso. El
+         *     cupo viejo se libera y el nuevo se toma en la misma transacción, así que
+         *     no hay un instante en el que la persona se quede sin nada: cancelar y
+         *     volver a reservar sí lo tendría, y en él otro cliente puede llevarse el
+         *     horario.
+         *
+         *     Aplica el `rango_modificacion_horas` de la política que la reserva congeló
+         *     al crearse (RF-15), no la vigente hoy. Fuera de ese plazo responde `422`
+         *     con lo que faltaba, no un `403`: no es una cuestión de permisos, es que la
+         *     regla del negocio no lo permite en ese momento. Un administrador sobre su
+         *     propio tenant no lo tiene, por lo mismo que en la cancelación.
+         *
+         *     El `409` es el de siempre: la restricción EXCLUDE rechazando el horario
+         *     nuevo porque otro se lo quedó.
+         */
+        post: operations["modificarReserva"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reservas/{id}/estado": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Registrar una transición manual (RF-28, RF-32)
+         * @description El check-in, la ausencia y el cierre de una cita: las tres transiciones
+         *     que la leyenda de RF-28 asigna a una persona y no al sistema.
+         *
+         *     Es del administrador del tenant. Cancelar NO entra aquí aunque sea una
+         *     transición: libera cupo y aplica una política, así que tiene su propia
+         *     ruta y su propio 422.
+         */
+        post: operations["cambiarEstadoReserva"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reservas/{id}/calificacion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Calificar una reserva completada (RF-20)
+         * @description Una por reserva, y solo sobre una completada. Las dos reglas están en
+         *     sitios distintos a propósito: la unicidad la sostiene el motor —es la que
+         *     se ataca desde fuera— y "solo completada" vive en el núcleo, porque exige
+         *     mirar el estado y no cabe en un CHECK.
+         *
+         *     Una reserva ajena responde `404`, igual que una inexistente.
+         */
+        post: operations["calificarReserva"];
         delete?: never;
         options?: never;
         head?: never;
@@ -348,6 +1135,586 @@ export interface components {
             /** Format: date-time */
             expira_en: string;
         };
+        /** @description Inicio de sesión con contraseña (RF-12). */
+        Credenciales: {
+            /** @description El correo de la cuenta. */
+            identificador: string;
+            contrasena: string;
+        };
+        /**
+         * @description Lo que entrega un inicio de sesión de cuenta: los dos tokens de RF-12.
+         *
+         *     El de acceso va firmado y se verifica sin tocar la base, que es lo que le
+         *     permite sostener la ruta de lectura; el de refresco se canjea contra
+         *     `plataforma.sesion` y ahí sí se comprueba si la sesión fue revocada (RF-25).
+         *     De esa asimetría sale una consecuencia que conviene tener presente:
+         *     revocar corta el refresco al instante y el acceso al vencer.
+         */
+        ParTokens: {
+            /** @description Se manda en la cabecera `Authorization: Bearer <token>`. */
+            acceso: string;
+            /** Format: date-time */
+            expira_en: string;
+            /**
+             * @description Se guarda y no se manda en cada petición. Rota en cada canje: el valor
+             *     entregado deja de valer en cuanto se usa, de modo que si alguien lo
+             *     copió, el primero de los dos en canjearlo deja al otro fuera y el robo
+             *     se nota.
+             */
+            refresco: string;
+            /** Format: date-time */
+            refresco_expira_en: string;
+        };
+        /**
+         * @description Magic link de RF-12: un enlace de un solo uso, quince minutos de vigencia.
+         *
+         *     Responde igual exista o no la cuenta (RF-12 A12).
+         */
+        SolicitudEnlace: {
+            /** Format: email */
+            destino: string;
+        };
+        CanjeEnlace: {
+            /** @description El valor que viaja en el enlace recibido por correo. */
+            token: string;
+        };
+        SolicitudRefresco: {
+            refresco: string;
+        };
+        /** @description Una sesión activa, tal como la lista RF-25. */
+        Sesion: {
+            /** Format: uuid */
+            id: string;
+            dispositivo?: string;
+            ip?: string;
+            /** Format: date-time */
+            ultimo_acceso: string;
+            /** Format: date-time */
+            creada_en: string;
+            /** Format: date-time */
+            expira_en: string;
+            /**
+             * @description Si es la sesión desde la que se está mirando. Sin esto, "cerrar sesión
+             *     en el otro dispositivo" obliga a adivinar cuál de las dos filas es la
+             *     propia.
+             */
+            actual: boolean;
+        };
+        ListaSesiones: {
+            datos: components["schemas"]["Sesion"][];
+        };
+        /**
+         * @description Registro de RF-24.
+         *
+         *     Responde `202` exista o no ya ese correo, y nunca dice cuál de los dos casos
+         *     fue (RF-24, y el mismo criterio de RF-12 A12). Distinguirlos convertiría el
+         *     formulario de alta en un comprobador de direcciones registradas.
+         */
+        NuevaCuenta: {
+            nombre: string;
+            /** Format: email */
+            email?: string;
+            /** @description E.164. Se guarda normalizado; el formato para mostrar es del cliente. */
+            telefono?: string;
+            /**
+             * @description La política de seguridad la comprueba el servidor y devuelve un `422`
+             *     con el motivo por campo si no se cumple. La longitud mínima está aquí
+             *     además de allí para que el cliente pueda avisar antes de enviar.
+             */
+            contrasena: string;
+            /**
+             * @description RF-24 lo exige explícitamente. Un `false` es un `422`, no un `400`: la
+             *     petición está bien formada, lo que falta es un requisito del negocio.
+             */
+            acepta_terminos: boolean;
+        };
+        /**
+         * @description Los tres de RF-23. NO se asigna: `administrador` se deriva de ser dueño de
+         *     un tenant (RF-35) y `super_admin` es el operador de la plataforma. Una
+         *     cuenta que se registra por la vía normal es siempre `usuario`.
+         * @enum {string}
+         */
+        TipoCuenta: "usuario" | "administrador" | "super_admin";
+        /** @enum {string} */
+        EstadoCuenta: "pendiente_verificacion" | "activa" | "suspendida" | "eliminada";
+        /** @description El perfil de RF-22, tal como lo ve su propio dueño. */
+        Cuenta: {
+            /** Format: uuid */
+            id: string;
+            nombre?: string;
+            /** Format: email */
+            email?: string;
+            telefono?: string;
+            email_verificado: boolean;
+            telefono_verificado: boolean;
+            tipo: components["schemas"]["TipoCuenta"];
+            /**
+             * Format: uuid
+             * @description Solo en un `administrador`, y significa "administra este negocio", NO
+             *     "reserva en él". Un `usuario` no lo lleva aunque tenga reservas en
+             *     veinte tenants distintos.
+             */
+            tenant_id?: string;
+            estado: components["schemas"]["EstadoCuenta"];
+            /** Format: date-time */
+            creada_en: string;
+        };
+        /**
+         * @description RF-22. Todo opcional: se envía lo que cambia.
+         *
+         *     Cambiar el correo o el teléfono lo marca como NO verificado y dispara la
+         *     verificación de RF-19. Es lo que impide que apuntar la cuenta a una
+         *     dirección ajena baste para recibir los avisos de otra persona.
+         */
+        ActualizacionCuenta: {
+            nombre?: string;
+            /** Format: email */
+            email?: string;
+            telefono?: string;
+        };
+        /**
+         * @description Los tres canales de RF-21. Es una lista más larga que `CanalContacto` a
+         *     propósito: un push sirve para avisar, no para transportar un código de un
+         *     solo uso.
+         * @enum {string}
+         */
+        CanalNotificacion: "email" | "sms" | "push";
+        /**
+         * @description Una fila de RF-21: este canal, para este tipo de aviso, habilitado o no.
+         *
+         *     Lo que no aparece en la lista NO está deshabilitado: está en el valor por
+         *     defecto del producto. Es la diferencia que permite que activar un tipo nuevo
+         *     alcance a quien nunca tocó esta pantalla.
+         */
+        Preferencia: {
+            canal: components["schemas"]["CanalNotificacion"];
+            /** @example recordatorio */
+            tipo: string;
+            habilitado: boolean;
+        };
+        ListaPreferencias: {
+            datos: components["schemas"]["Preferencia"][];
+        };
+        /**
+         * @description Por dónde viaja un código o un enlace de un solo uso.
+         * @enum {string}
+         */
+        CanalContacto: "email" | "sms";
+        /** @description RF-19. Reenvía la verificación del contacto indicado. */
+        SolicitudVerificacion: {
+            canal: components["schemas"]["CanalContacto"];
+        };
+        /**
+         * @description RF-19. Un solo valor para los dos canales: el enlace del correo trae un
+         *     token largo y el SMS trae seis dígitos, pero desde aquí ambos son "lo que
+         *     llegó al canal", y separarlos en dos campos obligaría a decidir cuál de los
+         *     dos se está usando en una petición que ya lo dice por el valor.
+         */
+        CanjeVerificacion: {
+            valor: string;
+        };
+        /**
+         * @description El camino de RF-18 para quien ya entró: la prueba de identidad es la
+         *     contraseña actual, y se exige aunque haya sesión. Un token robado no debe
+         *     bastar para quedarse con la cuenta cambiando su contraseña.
+         *
+         *     Se invalidan las demás sesiones, no la que hace el cambio: aquí quien lo
+         *     pide ya demostró saber la contraseña anterior, así que echarlo de su propia
+         *     sesión sería castigar el gesto correcto.
+         */
+        CambioContrasena: {
+            contrasena_actual: string;
+            contrasena_nueva: string;
+        };
+        /**
+         * @description El camino de RF-18 para quien NO puede entrar: la prueba de identidad es el
+         *     enlace que recibió por correo.
+         *
+         *     Se invalidan todas las sesiones activas (RF-18). Una contraseña se
+         *     restablece justamente cuando se sospecha que alguien más la tiene, y dejar
+         *     vivas las sesiones abiertas con la anterior vaciaría el gesto.
+         */
+        Restablecimiento: {
+            /** @description El valor que viaja en el enlace de recuperación. */
+            token: string;
+            contrasena_nueva: string;
+        };
+        /** @description RF-18. Responde igual exista o no la cuenta y no envía nada si no existe. */
+        SolicitudRecuperacion: {
+            /** Format: email */
+            destino: string;
+        };
+        /**
+         * @description Las acciones que un token de agente puede autorizar. Es un enum cerrado y no
+         *     texto libre: el alcance de RF-13 se calcula intersecando esta lista con la
+         *     de la cuenta impersonada, y una acción que nadie sabe interpretar no se
+         *     puede intersecar con nada, solo aceptar de más.
+         * @enum {string}
+         */
+        AccionAgente: "reservar" | "listar_reservas" | "cancelar_reserva";
+        /**
+         * @description El intercambio de RF-13: credencial del agente + cuenta sobre la que quiere
+         *     actuar + acciones que pide.
+         *
+         *     Las tres condiciones se comprueban por separado y las tres devuelven lo
+         *     mismo (`403`): que el agente exista y esté activo, que esa cuenta lo haya
+         *     autorizado (RNF-07) y que las acciones estén dentro del alcance de esa
+         *     cuenta (RF-23). Distinguirlas en la respuesta le diría a quien prueba
+         *     credenciales qué parte acertó.
+         */
+        IntercambioAgente: {
+            credencial: string;
+            /**
+             * Format: uuid
+             * @description La cuenta en cuyo nombre se va a actuar.
+             */
+            cuenta_id: string;
+            acciones: components["schemas"]["AccionAgente"][];
+        };
+        /**
+         * @description El token de validación de RF-13: vigencia corta y un solo propósito.
+         *
+         *     Devuelve el alcance CONCEDIDO, que puede ser menor que el pedido. Es
+         *     información que el agente necesita: sin ella, la única forma de descubrir
+         *     que una acción quedó fuera es intentarla y recibir un rechazo delante de la
+         *     persona a la que está atendiendo.
+         */
+        TokenAgente: {
+            token: string;
+            /** Format: date-time */
+            expira_en: string;
+            alcance: components["schemas"]["AccionAgente"][];
+            /** Format: uuid */
+            cuenta_impersonada_id?: string;
+        };
+        NuevaSede: {
+            nombre: string;
+            /**
+             * @description Identificador IANA. El motor lo valida contra su propia base de zonas:
+             *     un `America/Bogata` mal escrito no falla al guardarse, falla semanas
+             *     más tarde dentro del cálculo de disponibilidad, que es el peor sitio
+             *     posible para enterarse.
+             * @example America/Bogota
+             */
+            zona_horaria: string;
+            direccion?: string;
+        };
+        /**
+         * @description Todo opcional: se envía lo que cambia.
+         *
+         *     Desactivar una sede NO cancela sus reservas. Deja de poder elegirse para
+         *     reservas nuevas y nada más: lo ya vendido sigue en pie, y cancelarlo es una
+         *     decisión aparte que RF-32 hace explícita.
+         */
+        ActualizacionSede: {
+            nombre?: string;
+            zona_horaria?: string;
+            direccion?: string;
+            estado?: components["schemas"]["EstadoCatalogo"];
+        };
+        NuevoServicio: {
+            /** Format: uuid */
+            sede_id: string;
+            nombre: string;
+            descripcion?: string;
+            /**
+             * @description Es también la duración exacta de cada reserva: el núcleo rechaza un
+             *     período que no coincida. Cambiarla no altera las reservas ya hechas.
+             */
+            duracion_min: number;
+            /**
+             * @description Cadena decimal, no número: en JSON los números son de coma flotante y
+             *     80000.10 no se representa exactamente. La moneda no se envía —es del
+             *     tenant (RF-38)— y la reserva congela ambas al crearse (RF-31).
+             */
+            precio_monto: string;
+        };
+        ActualizacionServicio: {
+            nombre?: string;
+            descripcion?: string;
+            duracion_min?: number;
+            precio_monto?: string;
+            estado?: components["schemas"]["EstadoCatalogo"];
+        };
+        /**
+         * @description Lo que de verdad se reserva: la sala, la silla, el equipo, la persona. La
+         *     invariante de no solapamiento es sobre un RECURSO, no sobre un servicio.
+         */
+        Recurso: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            sede_id: string;
+            nombre: string;
+            estado: components["schemas"]["EstadoCatalogo"];
+            /** @description Servicios que este recurso presta (RF-30). */
+            servicios?: string[];
+        };
+        ListaRecursos: {
+            datos: components["schemas"]["Recurso"][];
+        };
+        NuevoRecurso: {
+            /** Format: uuid */
+            sede_id: string;
+            nombre: string;
+            /**
+             * @description Qué servicios presta. Sin al menos uno, el recurso existe pero no es
+             *     reservable: el núcleo comprueba que el par servicio/recurso esté
+             *     declarado antes de insertar.
+             */
+            servicios?: string[];
+        };
+        ActualizacionRecurso: {
+            nombre?: string;
+            estado?: components["schemas"]["EstadoCatalogo"];
+            /** @description Reemplaza la lista completa, no la amplía. */
+            servicios?: string[];
+        };
+        /**
+         * @description Un tramo semanal recurrente de un recurso (RF-14).
+         *
+         *     Las horas van SIN zona porque hablan del reloj de pared del negocio: "los
+         *     lunes de 9 a 17" significa las 9 de la sede, no las 9 UTC. La zona la pone
+         *     la sede, y por eso la regla no cambia cuando cambia el horario de verano.
+         */
+        ReglaDisponibilidad: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            recurso_id: string;
+            /** @description 0 = domingo, como `extract(dow)` de PostgreSQL. */
+            dia_semana: number;
+            /** @example 09:00 */
+            hora_inicio: string;
+            /**
+             * @description Tiene que ser mayor que `hora_inicio`: una regla no cruza medianoche.
+             *     Un turno de noche son DOS reglas, una por cada día que toca, y esa es la
+             *     única forma en que el cálculo de disponibilidad puede resolverlo sin
+             *     ambigüedad.
+             * @example 17:00
+             */
+            hora_fin: string;
+            /** Format: date */
+            vigente_desde?: string;
+            /** Format: date */
+            vigente_hasta?: string;
+        };
+        ListaReglas: {
+            datos: components["schemas"]["ReglaDisponibilidad"][];
+        };
+        NuevaRegla: {
+            /** Format: uuid */
+            recurso_id: string;
+            dia_semana: number;
+            /** @example 09:00 */
+            hora_inicio: string;
+            /** @example 17:00 */
+            hora_fin: string;
+            /** Format: date */
+            vigente_desde?: string;
+            /** Format: date */
+            vigente_hasta?: string;
+        };
+        /** @enum {string} */
+        TipoExcepcion: "feriado" | "mantenimiento" | "cierre";
+        /**
+         * @description Un hueco que tapa la disponibilidad (RF-14). Es de una sede o de un recurso,
+         *     nunca de los dos ni de ninguno.
+         */
+        ExcepcionCalendario: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            sede_id?: string;
+            /** Format: uuid */
+            recurso_id?: string;
+            periodo: components["schemas"]["Periodo"];
+            tipo: components["schemas"]["TipoExcepcion"];
+            motivo?: string;
+        };
+        ListaExcepciones: {
+            datos: components["schemas"]["ExcepcionCalendario"][];
+        };
+        /**
+         * @description Exactamente uno de `sede_id` o `recurso_id`. Ninguno de los dos deja una
+         *     excepción que no tapa nada; los dos a la vez, una que no se sabe si tapa la
+         *     sede entera o solo ese recurso.
+         */
+        NuevaExcepcion: {
+            /** Format: uuid */
+            sede_id?: string;
+            /** Format: uuid */
+            recurso_id?: string;
+            periodo: components["schemas"]["Periodo"];
+            tipo: components["schemas"]["TipoExcepcion"];
+            motivo?: string;
+        };
+        /**
+         * @description Una versión publicada de la política de cancelación y modificación (RF-15).
+         *
+         *     Es INMUTABLE: no se edita ni se borra. Publicar condiciones nuevas es
+         *     publicar una versión nueva, y las reservas existentes siguen apuntando a la
+         *     que congelaron al crearse. Es lo que impide que un negocio endurezca su
+         *     política el martes y se la aplique a quien reservó el lunes.
+         */
+        Politica: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: uuid
+             * @description Ausente = política por defecto del tenant.
+             */
+            servicio_id?: string;
+            version: number;
+            rango_cancelacion_horas: number;
+            rango_modificacion_horas: number;
+            penalidad_pct?: string;
+            /** Format: date-time */
+            vigente_desde: string;
+            /** Format: date-time */
+            creada_en?: string;
+        };
+        ListaPoliticas: {
+            datos: components["schemas"]["Politica"][];
+        };
+        /**
+         * @description El número de versión NO se envía: lo asigna el servidor como el siguiente
+         *     del mismo ámbito. Dejarlo al cliente permitiría publicar una versión 3
+         *     después de una 7 y romper el orden del que depende "cuál está vigente".
+         */
+        NuevaPolitica: {
+            /** Format: uuid */
+            servicio_id?: string;
+            rango_cancelacion_horas: number;
+            rango_modificacion_horas: number;
+            penalidad_pct?: string;
+            /**
+             * Format: date-time
+             * @description Ausente = ahora. Sirve para publicar con antelación.
+             */
+            vigente_desde?: string;
+        };
+        /**
+         * @description Un descuento porcentual (RF-17). Solo porcentaje, nunca monto fijo: es una
+         *     restricción de alcance del producto y vive en un CHECK para que no se filtre
+         *     por accidente.
+         */
+        Voucher: {
+            /** Format: uuid */
+            id: string;
+            codigo: string;
+            porcentaje: string;
+            limite_usos?: number;
+            usos_actuales: number;
+            /** Format: date-time */
+            caduca_en?: string;
+            /** @enum {string} */
+            estado: "activo" | "eliminado";
+            /** Format: date-time */
+            creado_en: string;
+        };
+        ListaVouchers: {
+            datos: components["schemas"]["Voucher"][];
+        };
+        /**
+         * @description Hace falta un límite de usos o una caducidad, al menos uno. Un voucher del
+         *     50% sin ninguno de los dos es una fuga de ingresos abierta para siempre, y
+         *     el motor lo rechaza.
+         *
+         *     No hay operación de edición, y no es un olvido: RF-17 permite crear o
+         *     eliminar y nada más. Cambiarle las condiciones a un voucher que ya está
+         *     circulando es cambiárselas a quien ya lo recibió.
+         */
+        NuevoVoucher: {
+            codigo: string;
+            /** @description Mayor que 0 y hasta 100. */
+            porcentaje: string;
+            limite_usos?: number;
+            /** Format: date-time */
+            caduca_en?: string;
+        };
+        /** @enum {string} */
+        TipoTarifa: "franja_horaria" | "dia_semana" | "temporada";
+        /**
+         * @description Sobrescribe el precio del servicio cuando su condición aplica (RF-31). El
+         *     precio base sigue viviendo en el servicio; esto existe aparte porque sí es
+         *     uno a muchos.
+         */
+        Tarifa: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            servicio_id: string;
+            tipo: components["schemas"]["TipoTarifa"];
+            /**
+             * @description Su forma depende del tipo: una franja lleva horas, un día de semana un
+             *     número, una temporada dos fechas. Sin esquema fijo porque el motor no la
+             *     evalúa, la interpreta quien calcula el precio.
+             */
+            condicion: {
+                [key: string]: unknown;
+            };
+            monto: string;
+            /**
+             * @description Con dos tarifas que aplican a la vez gana la de prioridad más alta. Sin
+             *     este campo el resultado dependería del orden de las filas, que no es un
+             *     orden.
+             */
+            prioridad: number;
+        };
+        ListaTarifas: {
+            datos: components["schemas"]["Tarifa"][];
+        };
+        NuevaTarifa: {
+            /** Format: uuid */
+            servicio_id: string;
+            tipo: components["schemas"]["TipoTarifa"];
+            condicion: {
+                [key: string]: unknown;
+            };
+            monto: string;
+            /** @default 0 */
+            prioridad: number;
+        };
+        /** @enum {string} */
+        ResultadoAuditoria: "exito" | "rechazo";
+        /**
+         * @description Una acción registrada (RF-36). Append-only: los eventos no se modifican ni
+         *     se eliminan.
+         */
+        EventoAuditoria: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            ocurrido_en: string;
+            /** @enum {string} */
+            actor_tipo: "usuario" | "administrador" | "agente" | "sistema" | "super_admin";
+            /** Format: uuid */
+            actor_id?: string;
+            /**
+             * Format: uuid
+             * @description Presente solo cuando la ejecutó un agente en nombre de otra cuenta.
+             */
+            agente_id?: string;
+            /** Format: uuid */
+            cuenta_impersonada_id?: string;
+            /** @description El alcance con el que actuó el agente (RF-13). */
+            alcance_token?: string[];
+            /** @example crear_sede */
+            accion: string;
+            /** @example sede */
+            recurso_tipo: string;
+            /** Format: uuid */
+            recurso_id?: string;
+            resultado: components["schemas"]["ResultadoAuditoria"];
+            ip?: string;
+            dispositivo?: string;
+        };
+        ListaAuditoria: {
+            datos: components["schemas"]["EventoAuditoria"][];
+            /** @description Ausente cuando no hay más páginas. */
+            siguiente_cursor?: string;
+        };
         /**
          * @description Estados de RF-28.
          * @enum {string}
@@ -403,6 +1770,63 @@ export interface components {
             reserva: components["schemas"]["Reserva"];
             /** @description `client_secret` del PaymentIntent de Stripe. */
             pago_client_secret?: string;
+        };
+        /**
+         * @description Reprogramar una reserva (RF-07): moverla de hora, y opcionalmente de
+         *     recurso.
+         *
+         *     Es la MISMA reserva, no una nueva. Cancelar y volver a reservar tiene dos
+         *     problemas que esto no tiene: entre las dos operaciones el cupo queda libre y
+         *     otro puede llevárselo, y la reserva pierde su historia, su precio congelado
+         *     y su política. Aquí el cupo viejo se libera y el nuevo se toma en la misma
+         *     transacción, así que no hay instante en el que la persona no tenga nada.
+         *
+         *     El precio NO se recalcula. Se congeló al crear (RF-31) y mover la hora no lo
+         *     descongela: cobrar más por reprogramar sería una decisión de negocio que
+         *     nadie ha tomado, y hacerlo en silencio sería peor.
+         */
+        ModificacionReserva: {
+            periodo: components["schemas"]["Periodo"];
+            /**
+             * Format: uuid
+             * @description Ausente = se queda en el mismo recurso. El nuevo tiene que prestar el
+             *     mismo servicio: cambiar de servicio cambiaría el precio y la duración,
+             *     y eso ya no es reprogramar.
+             */
+            recurso_id?: string;
+        };
+        /**
+         * @description Una transición manual de RF-28, de las que la agenda del administrador
+         *     dispara (RF-32).
+         *
+         *     Solo tres, y son las que la leyenda de RF-28 asigna a una persona:
+         *     `confirmada → en_curso` es el check-in, `confirmada → no_show` es la
+         *     ausencia registrada a mano antes de que el umbral la marque sola, y
+         *     `en_curso → completada` cierra la cita. Cancelar tiene ruta propia porque
+         *     libera cupo y aplica una política; las automáticas las hace el trabajador.
+         */
+        CambioEstado: {
+            estado: components["schemas"]["EstadoReserva"];
+            /** @description Queda en el historial de la reserva, que el cliente puede ver. */
+            motivo?: string;
+        };
+        /**
+         * @description RF-20. Una por reserva, y solo sobre una reserva completada: calificar algo
+         *     que todavía no ocurrió no es una opinión, es una expectativa.
+         */
+        NuevaCalificacion: {
+            puntaje: number;
+            comentario?: string;
+        };
+        Calificacion: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            reserva_id: string;
+            puntaje: number;
+            comentario?: string;
+            /** Format: date-time */
+            creada_en: string;
         };
     };
     responses: {
@@ -474,6 +1898,25 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problema"];
             };
         };
+        /**
+         * @description La identificación es válida pero el recurso queda fuera del alcance de esa
+         *     cuenta (RF-23).
+         *
+         *     Se distingue del 401 a propósito: un 401 dice "no sé quién eres" y la
+         *     interfaz responde pidiendo identificarse otra vez, cosa que aquí no
+         *     arreglaría nada. Y no sustituye al 404 de un recurso ajeno: cuando decir
+         *     "existe pero no es tuyo" ya filtra la existencia del recurso, la respuesta
+         *     correcta sigue siendo 404. Este 403 es para las acciones cuyo alcance no
+         *     depende de un identificador que haya que adivinar.
+         */
+        FueraDeAlcance: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problema"];
+            };
+        };
     };
     parameters: {
         /**
@@ -483,6 +1926,8 @@ export interface components {
          *     tenant.
          */
         Tenant: string;
+        /** @description Identificador del recurso sobre el que se opera. */
+        IdEnRuta: string;
     };
     requestBodies: never;
     headers: never;
@@ -675,12 +2120,1181 @@ export interface operations {
             500: components["responses"]["ErrorInterno"];
         };
     };
+    iniciarSesion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Credenciales"];
+            };
+        };
+        responses: {
+            /** @description Sesión iniciada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParTokens"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            422: components["responses"]["NoProcesable"];
+            429: components["responses"]["DemasiadasPeticiones"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    solicitarEnlace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SolicitudEnlace"];
+            };
+        };
+        responses: {
+            /** @description Si esa dirección tiene cuenta, el enlace va en camino. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["PeticionInvalida"];
+            429: components["responses"]["DemasiadasPeticiones"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    canjearEnlace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CanjeEnlace"];
+            };
+        };
+        responses: {
+            /** @description Sesión iniciada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParTokens"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            422: components["responses"]["NoProcesable"];
+            429: components["responses"]["DemasiadasPeticiones"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    refrescarSesion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SolicitudRefresco"];
+            };
+        };
+        responses: {
+            /** @description Par renovado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParTokens"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    listarSesiones: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Las sesiones vivas de la cuenta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaSesiones"];
+                };
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    revocarTodasLasSesiones: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Todas las sesiones quedaron revocadas. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    revocarSesion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sesión revocada. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            404: components["responses"]["NoEncontrado"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    registrarCuenta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NuevaCuenta"];
+            };
+        };
+        responses: {
+            /**
+             * @description Aceptado. NO significa que la cuenta se haya creado: significa que si
+             *     esa dirección estaba libre, la verificación va en camino. Es un 202 y
+             *     no un 201 precisamente porque no se puede afirmar el resultado sin
+             *     filtrarlo.
+             */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["PeticionInvalida"];
+            422: components["responses"]["NoProcesable"];
+            429: components["responses"]["DemasiadasPeticiones"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    obtenerCuentaPropia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La cuenta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cuenta"];
+                };
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    eliminarCuentaPropia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cuenta anonimizada y sesiones revocadas. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    actualizarCuentaPropia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActualizacionCuenta"];
+            };
+        };
+        responses: {
+            /** @description La cuenta ya actualizada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cuenta"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            /** @description Ese correo o teléfono ya está registrado en otra cuenta. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    listarPreferencias: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Las preferencias guardadas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaPreferencias"];
+                };
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    guardarPreferencias: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ListaPreferencias"];
+            };
+        };
+        responses: {
+            /** @description Las preferencias ya guardadas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaPreferencias"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    solicitarVerificacion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SolicitudVerificacion"];
+            };
+        };
+        responses: {
+            /** @description Si ese contacto está sin verificar, el envío va en camino. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            422: components["responses"]["NoProcesable"];
+            429: components["responses"]["DemasiadasPeticiones"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    canjearVerificacion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CanjeVerificacion"];
+            };
+        };
+        responses: {
+            /** @description Contacto verificado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cuenta"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            429: components["responses"]["DemasiadasPeticiones"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    cambiarContrasena: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CambioContrasena"];
+            };
+        };
+        responses: {
+            /** @description Contraseña cambiada y las demás sesiones revocadas. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    restablecerContrasena: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Restablecimiento"];
+            };
+        };
+        responses: {
+            /** @description Contraseña restablecida y sesiones revocadas. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            422: components["responses"]["NoProcesable"];
+            429: components["responses"]["DemasiadasPeticiones"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    solicitarRecuperacion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SolicitudRecuperacion"];
+            };
+        };
+        responses: {
+            /** @description Si esa dirección tiene cuenta, el enlace va en camino. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["PeticionInvalida"];
+            429: components["responses"]["DemasiadasPeticiones"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    intercambiarTokenAgente: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntercambioAgente"];
+            };
+        };
+        responses: {
+            /** @description Token emitido */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenAgente"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            403: components["responses"]["FueraDeAlcance"];
+            429: components["responses"]["DemasiadasPeticiones"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    listarSedesConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Las sedes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaSedes"];
+                };
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    crearSede: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NuevaSede"];
+            };
+        };
+        responses: {
+            /** @description La sede creada */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sede"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    actualizarSede: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del recurso sobre el que se opera. */
+                id: components["parameters"]["IdEnRuta"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActualizacionSede"];
+            };
+        };
+        responses: {
+            /** @description La sede actualizada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sede"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            404: components["responses"]["NoEncontrado"];
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    listarServiciosConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los servicios */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaServicios"];
+                };
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    crearServicio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NuevoServicio"];
+            };
+        };
+        responses: {
+            /** @description El servicio creado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Servicio"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    actualizarServicio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del recurso sobre el que se opera. */
+                id: components["parameters"]["IdEnRuta"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActualizacionServicio"];
+            };
+        };
+        responses: {
+            /** @description El servicio actualizado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Servicio"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            404: components["responses"]["NoEncontrado"];
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    listarRecursos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los recursos */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaRecursos"];
+                };
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    crearRecurso: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NuevoRecurso"];
+            };
+        };
+        responses: {
+            /** @description El recurso creado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recurso"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    actualizarRecurso: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del recurso sobre el que se opera. */
+                id: components["parameters"]["IdEnRuta"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActualizacionRecurso"];
+            };
+        };
+        responses: {
+            /** @description El recurso actualizado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recurso"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            404: components["responses"]["NoEncontrado"];
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    listarReglas: {
+        parameters: {
+            query?: {
+                recurso_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Las reglas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaReglas"];
+                };
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    crearRegla: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NuevaRegla"];
+            };
+        };
+        responses: {
+            /** @description La regla creada */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReglaDisponibilidad"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    eliminarRegla: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del recurso sobre el que se opera. */
+                id: components["parameters"]["IdEnRuta"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Regla retirada. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            404: components["responses"]["NoEncontrado"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    listarExcepciones: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Las excepciones */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaExcepciones"];
+                };
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    crearExcepcion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NuevaExcepcion"];
+            };
+        };
+        responses: {
+            /** @description La excepción creada */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExcepcionCalendario"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    eliminarExcepcion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del recurso sobre el que se opera. */
+                id: components["parameters"]["IdEnRuta"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Excepción levantada. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            404: components["responses"]["NoEncontrado"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    listarPoliticas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Las versiones, de la más reciente a la más antigua */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaPoliticas"];
+                };
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    publicarPolitica: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NuevaPolitica"];
+            };
+        };
+        responses: {
+            /** @description La versión publicada */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Politica"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    listarVouchers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los vouchers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaVouchers"];
+                };
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    crearVoucher: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NuevoVoucher"];
+            };
+        };
+        responses: {
+            /** @description El voucher creado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Voucher"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            /** @description Ya existe un voucher con ese código en este tenant. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    eliminarVoucher: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del recurso sobre el que se opera. */
+                id: components["parameters"]["IdEnRuta"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Voucher eliminado. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            404: components["responses"]["NoEncontrado"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    listarTarifas: {
+        parameters: {
+            query?: {
+                servicio_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Las tarifas, de mayor a menor prioridad */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaTarifas"];
+                };
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    crearTarifa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NuevaTarifa"];
+            };
+        };
+        responses: {
+            /** @description La tarifa creada */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tarifa"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    eliminarTarifa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identificador del recurso sobre el que se opera. */
+                id: components["parameters"]["IdEnRuta"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tarifa retirada. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            404: components["responses"]["NoEncontrado"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    consultarAuditoria: {
+        parameters: {
+            query?: {
+                desde?: string;
+                hasta?: string;
+                actor_id?: string;
+                recurso_tipo?: string;
+                accion?: string;
+                limite?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Página de eventos, del más reciente al más antiguo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaAuditoria"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
     listarReservas: {
         parameters: {
             query?: {
                 estado?: components["schemas"]["EstadoReserva"][];
                 desde?: string;
                 hasta?: string;
+                /** @description Agenda de una sede (RF-32). */
+                sede_id?: string;
+                /** @description Agenda de un recurso concreto (RF-32). */
+                recurso_id?: string;
                 limite?: number;
                 /**
                  * @description Cursor opaco de la página siguiente. Paginación por cursor y no por
@@ -714,6 +3328,7 @@ export interface operations {
             };
             400: components["responses"]["PeticionInvalida"];
             401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
             500: components["responses"]["ErrorInterno"];
         };
     };
@@ -842,6 +3457,160 @@ export interface operations {
              * @description La reserva ya no está en un estado que se pueda cancelar: ya estaba
              *     cancelada, ya se completó, o el bloqueo expiró solo.
              */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    modificarReserva: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+                 *     (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+                 *     de un cliente en producción permitiría leer los datos de cualquier otro
+                 *     tenant.
+                 */
+                "X-Tenant-Id": components["parameters"]["Tenant"];
+            };
+            path: {
+                /** @description Identificador del recurso sobre el que se opera. */
+                id: components["parameters"]["IdEnRuta"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModificacionReserva"];
+            };
+        };
+        responses: {
+            /** @description La reserva, ya movida */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reserva"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            404: components["responses"]["NoEncontrado"];
+            /**
+             * @description El horario nuevo ya está tomado, o la reserva ya no está en un estado
+             *     desde el que se pueda mover.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    cambiarEstadoReserva: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+                 *     (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+                 *     de un cliente en producción permitiría leer los datos de cualquier otro
+                 *     tenant.
+                 */
+                "X-Tenant-Id": components["parameters"]["Tenant"];
+            };
+            path: {
+                /** @description Identificador del recurso sobre el que se opera. */
+                id: components["parameters"]["IdEnRuta"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CambioEstado"];
+            };
+        };
+        responses: {
+            /** @description La reserva, ya en el estado nuevo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reserva"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            404: components["responses"]["NoEncontrado"];
+            /**
+             * @description Esa transición no sale del estado actual. La respuesta dice en cuál
+             *     está: sin eso, la agenda tendría que adivinar por qué su botón no hizo
+             *     nada.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    calificarReserva: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+                 *     (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+                 *     de un cliente en producción permitiría leer los datos de cualquier otro
+                 *     tenant.
+                 */
+                "X-Tenant-Id": components["parameters"]["Tenant"];
+            };
+            path: {
+                /** @description Identificador del recurso sobre el que se opera. */
+                id: components["parameters"]["IdEnRuta"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NuevaCalificacion"];
+            };
+        };
+        responses: {
+            /** @description La calificación registrada */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Calificacion"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            404: components["responses"]["NoEncontrado"];
+            /** @description Esa reserva ya tiene una calificación. */
             409: {
                 headers: {
                     [name: string]: unknown;

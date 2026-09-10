@@ -76,6 +76,34 @@ type Peticion struct {
 	Tenant            uuid.UUID
 	ClaveIdempotencia string
 	Nueva             api.NuevaReserva
+
+	// Cuenta es quién reserva, cuando hay cuenta detrás (RF-12). Vacío
+	// significa invitado, que sigue siendo un caso de primera clase: RF-01
+	// admite reservar sin registrarse y es justo eso lo que crea la necesidad
+	// de RF-02.
+	//
+	// Su presencia cambia tres cosas en la misma transacción: la reserva lleva
+	// cuenta_id, se escribe plataforma.indice_reserva_global —sin él, "dame
+	// mis reservas" tendría que abanicar las 64 particiones de cada tenant
+	// (RNF-02)— y la transición inicial deja de ser del sistema para tener un
+	// actor con nombre.
+	Cuenta string
+
+	// Agente es quien reserva EN NOMBRE de Cuenta (RF-04). No amplía nada: el
+	// alcance ya vino recortado en el token de RF-13. Lo que cambia es la
+	// traza, que tiene que poder decir que fue un agente y no la persona.
+	Agente string
+
+	// Administrador es quien la registra desde la agenda del negocio (RF-32):
+	// la reserva presencial o telefónica que alguien pide en el mostrador.
+	//
+	// NO va junto con Cuenta, y esa es la diferencia que importa: la reserva es
+	// del CLIENTE, no del administrador que la teclea. Con cuenta_id apuntando
+	// a quien la registró, esa reserva aparecería en el listado del
+	// administrador y no en el de la persona que va a venir. Se guarda como de
+	// invitado, con los datos de contacto que el administrador anotó, que es
+	// exactamente lo que RF-32 describe.
+	Administrador string
 }
 
 // Crear inserta la reserva pendiente con el cupo ya garantizado.
@@ -353,18 +381,19 @@ func insertar(
 		estado  string
 	)
 
-	// cuenta_id va en NULL: sin autenticación (RF-12) toda reserva es de
-	// invitado, y por eso reserva_contacto_requerido exige nombre y correo.
-	// Cuando exista el token, el identificador de la cuenta sale de ahí y hay
-	// que escribir además plataforma.indice_reserva_global.
+	// El contacto se guarda SIEMPRE, también con cuenta. Podría leerse del
+	// perfil, pero entonces cambiar el correo en el perfil cambiaría a dónde se
+	// mandó la confirmación de una reserva que ya ocurrió, y el comprobante de
+	// RF-34 dejaría de reproducirse. Es la misma disciplina de snapshot que el
+	// precio y la política.
 	err := tx.QueryRow(ctx, `
 		INSERT INTO negocio.reserva (
-			tenant_id, servicio_id, recurso_id,
+			tenant_id, servicio_id, recurso_id, cuenta_id,
 			contacto_nombre, contacto_email, contacto_telefono,
 			periodo, estado, expira_en,
 			precio_cobrado, moneda, politica_version_id, clave_idempotencia
 		) VALUES (
-			$1, $2, $3,
+			$1, $2, $3, NULLIF($14, '')::uuid,
 			$4, $5, $6,
 			tstzrange($7::timestamptz, $8::timestamptz, '[)'),
 			'pendiente', now() + make_interval(secs => $9),
@@ -374,10 +403,22 @@ func insertar(
 		pet.Tenant, pet.Nueva.ServicioId, pet.Nueva.RecursoId,
 		pet.Nueva.Contacto.Nombre, string(pet.Nueva.Contacto.Email), pet.Nueva.Contacto.Telefono,
 		p.Inicio, p.Fin, ttl.Seconds(),
-		o.precio, o.moneda, politica, pet.ClaveIdempotencia,
+		o.precio, o.moneda, politica, pet.ClaveIdempotencia, pet.Cuenta,
 	).Scan(&id, &estado, &reserva.CreadaEn, &reserva.ExpiraEn, &reserva.PrecioCobrado.Monto)
 	if err != nil {
 		return api.Reserva{}, err
+	}
+
+	// El índice global, en la MISMA transacción. Dejarlo para un trabajador
+	// asíncrono haría que una reserva recién creada no apareciera en el listado
+	// de quien acaba de crearla, que es precisamente la lectura-de-lo-escrito
+	// que RNF-10 exige.
+	if pet.Cuenta != "" {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO plataforma.indice_reserva_global (cuenta_id, tenant_id, reserva_id)
+			VALUES ($1, $2, $3)`, pet.Cuenta, pet.Tenant, id); err != nil {
+			return api.Reserva{}, err
+		}
 	}
 
 	reservaID, err := uuid.Parse(id)
@@ -385,15 +426,20 @@ func insertar(
 		return api.Reserva{}, fmt.Errorf("el motor devolvió un id ilegible: %w", err)
 	}
 
-	// Primera transición: de nada a pendiente. actor_tipo es 'sistema' porque
-	// transicion_actor_coherente exige que solo el sistema tenga actor_id nulo,
-	// y sin RF-12 no hay identidad que poner. Cuando exista, esto pasa a
-	// 'usuario' con su cuenta detrás.
+	// Primera transición: de nada a pendiente.
+	//
+	// El actor sale de quién reservó. Un invitado no tiene identidad que poner,
+	// y transicion_actor_coherente exige que solo el sistema tenga actor_id
+	// nulo, así que es 'sistema'; una cuenta es 'usuario' con su
+	// identificador, y un agente es 'agente' con el suyo. La distinción no es
+	// cosmética: RF-36 pregunta quién hizo qué, y una traza que diga "sistema"
+	// para todo no puede responderlo.
+	actor, actorID := actorDe(pet)
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO negocio.transicion_estado
-			(tenant_id, reserva_id, estado_anterior, estado_nuevo, actor_tipo, motivo)
-		VALUES ($1, $2, NULL, 'pendiente', 'sistema', $3)`,
-		pet.Tenant, id, "creación de la reserva (RF-01)"); err != nil {
+			(tenant_id, reserva_id, estado_anterior, estado_nuevo, actor_tipo, actor_id, motivo)
+		VALUES ($1, $2, NULL, 'pendiente', $3::negocio.actor_tipo, NULLIF($4, '')::uuid, $5)`,
+		pet.Tenant, id, actor, actorID, "creación de la reserva (RF-01)"); err != nil {
 		return api.Reserva{}, err
 	}
 
@@ -454,4 +500,24 @@ func leerPorClave(ctx context.Context, tx pgx.Tx, clave string) (api.Reserva, bo
 	}
 
 	return reserva, true, nil
+}
+
+// actorDe traduce quién hizo la petición al par (actor_tipo, actor_id) que
+// exige negocio.transicion_estado.
+//
+// El agente gana sobre la cuenta cuando hay los dos, y ese orden importa: la
+// pregunta que responde la traza es QUIÉN EJECUTÓ la acción, no en nombre de
+// quién. La cuenta impersonada ya está en la propia reserva, así que no se
+// pierde; lo que se perdería registrando la cuenta es que fue un agente.
+func actorDe(pet Peticion) (string, string) {
+	switch {
+	case pet.Agente != "":
+		return "agente", pet.Agente
+	case pet.Administrador != "":
+		return "administrador", pet.Administrador
+	case pet.Cuenta != "":
+		return "usuario", pet.Cuenta
+	default:
+		return "sistema", ""
+	}
 }

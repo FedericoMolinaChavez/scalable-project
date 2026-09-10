@@ -34,6 +34,13 @@ const (
 	EventoReservaCreada    = "reserva.creada"
 	EventoReservaCancelada = "reserva.cancelada"
 	EventoReservaExpirada  = "reserva.expirada"
+
+	// RF-07 pide avisar de los cambios, y RF-28 emitir el evento de cada
+	// transición. Son dos tipos y no uno porque un consumidor querrá tratarlos
+	// distinto: mover una cita se le cuenta al cliente, y un check-in casi
+	// nunca.
+	EventoReservaModificada     = "reserva.modificada"
+	EventoReservaEstadoCambiado = "reserva.estado_cambiado"
 )
 
 // eventoReserva es lo que viaja en el payload.

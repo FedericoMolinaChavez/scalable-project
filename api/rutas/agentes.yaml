@@ -1,0 +1,41 @@
+# Agentes (RF-13).
+#
+# Una sola ruta: el intercambio. Un agente no tiene sesión, no refresca nada y
+# no gestiona su cuenta; pide un token corto para un trabajo concreto y lo gasta.
+
+token:
+  post:
+    operationId: intercambiarTokenAgente
+    security: []  # la credencial del agente ES la credencial de esta ruta
+    summary: Intercambiar la credencial por un token de acciones (RF-13)
+    description: |
+      Emite un token de vigencia corta acotado a `acciones ∩ alcance de la
+      cuenta impersonada` (RF-23). El alcance concedido puede ser menor que el
+      pedido y viaja en la respuesta.
+
+      Las tres razones de rechazo —credencial que no vale, cuenta que no
+      autorizó a este agente (RNF-07), acciones fuera del alcance de esa
+      cuenta— responden el mismo `403`. Separarlas le diría a quien prueba
+      credenciales cuál de los tres pasos ya superó.
+
+      El límite de acciones repetidas de RF-13 se aplica aquí como un `429`
+      sobre el par agente/cuenta, no como un `403`: pedir demasiado seguido no
+      es una falta de permiso, es el sistema pidiendo que espere.
+    tags: [agentes]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../componentes/esquemas/agentes.yaml#/IntercambioAgente'
+    responses:
+      '200':
+        description: Token emitido
+        content:
+          application/json:
+            schema:
+              $ref: '../componentes/esquemas/agentes.yaml#/TokenAgente'
+      '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '403': { $ref: '../componentes/respuestas.yaml#/FueraDeAlcance' }
+      '429': { $ref: '../componentes/respuestas.yaml#/DemasiadasPeticiones' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }

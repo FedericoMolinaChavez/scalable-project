@@ -30,6 +30,21 @@ NoAutorizado:
     application/problem+json:
       schema: { $ref: './esquemas/comunes.yaml#/Problema' }
 
+FueraDeAlcance:
+  description: |
+    La identificación es válida pero el recurso queda fuera del alcance de esa
+    cuenta (RF-23).
+
+    Se distingue del 401 a propósito: un 401 dice "no sé quién eres" y la
+    interfaz responde pidiendo identificarse otra vez, cosa que aquí no
+    arreglaría nada. Y no sustituye al 404 de un recurso ajeno: cuando decir
+    "existe pero no es tuyo" ya filtra la existencia del recurso, la respuesta
+    correcta sigue siendo 404. Este 403 es para las acciones cuyo alcance no
+    depende de un identificador que haya que adivinar.
+  content:
+    application/problem+json:
+      schema: { $ref: './esquemas/comunes.yaml#/Problema' }
+
 NoProcesable:
   description: Sintácticamente válida pero viola una regla de negocio
   content:

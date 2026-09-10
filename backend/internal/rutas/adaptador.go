@@ -6,6 +6,9 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/google/uuid"
+	openapi_types "github.com/oapi-codegen/runtime/types"
+
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/api"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/consulta"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/datos"
@@ -148,11 +151,38 @@ func (a *adaptador) CrearReserva(
 		}, nil
 	}
 
-	reserva, err := a.c.Nucleo.Crear(ctx, nucleo.Peticion{
-		Tenant:            pet.Params.XTenantId,
+	// El token es OPCIONAL en esta ruta: RF-01 admite reservar como invitado.
+	// Cuando viene, dice de quién es la reserva —y si la está haciendo un
+	// agente en su nombre (RF-04)—, que es lo que decide si se escribe
+	// cuenta_id y el índice global.
+	acceso, _ := identidad.DeAcceso(ctx)
+	if !acceso.Permite(string(api.Reservar)) {
+		return api.CrearReserva422ApplicationProblemPlusJSONResponse{
+			NoProcesableApplicationProblemPlusJSONResponse: api.NoProcesableApplicationProblemPlusJSONResponse(
+				transporte.FueraDeAlcance.Cuerpo(ctx,
+					"ese token de agente no incluye reservar"),
+			),
+		}, nil
+	}
+
+	peticion := nucleo.Peticion{
+		Tenant:            tenantDe(ctx, pet.Params.XTenantId),
 		ClaveIdempotencia: pet.Params.IdempotencyKey,
 		Nueva:             *pet.Body,
-	})
+		Cuenta:            acceso.Cuenta,
+		Agente:            acceso.Agente,
+	}
+
+	// La reserva que un administrador registra desde su agenda es del CLIENTE,
+	// no suya (RF-32). Con cuenta_id apuntando a quien la teclea, esa reserva
+	// aparecería en el listado del administrador y no en el de la persona que
+	// va a venir; se guarda como de invitado, con el contacto que él anotó.
+	if acceso.Tipo == identidad.TipoAdmin && !acceso.PorAgente() {
+		peticion.Cuenta = ""
+		peticion.Administrador = acceso.Cuenta
+	}
+
+	reserva, err := a.c.Nucleo.Crear(ctx, peticion)
 	if err != nil {
 		clase, cuerpo := problema(ctx, err)
 		switch clase.Estado {
@@ -195,10 +225,8 @@ func (a *adaptador) CancelarReserva(
 		return nil, errSinComponente
 	}
 
-	acceso, hay := identidad.DeAcceso(ctx)
-	if !hay || acceso.Destino == "" {
-		a.registro.ErrorContext(ctx, "ruta acotada sin acceso en el contexto",
-			slog.String("peticion", transporte.IdPeticion(ctx)))
+	alcance, listo := a.alcance(ctx)
+	if !listo {
 		return api.CancelarReserva401ApplicationProblemPlusJSONResponse{
 			NoAutorizadoApplicationProblemPlusJSONResponse: api.NoAutorizadoApplicationProblemPlusJSONResponse(
 				transporte.NoAutorizado.Cuerpo(ctx, ""),
@@ -206,7 +234,21 @@ func (a *adaptador) CancelarReserva(
 		}, nil
 	}
 
-	reserva, err := a.c.Nucleo.Cancelar(ctx, pet.Params.XTenantId, pet.Id, acceso.Destino)
+	// Un agente solo cancela si su token lo dice (RF-13). El alcance ya vino
+	// recortado al emitirlo, así que aquí no se decide nada nuevo: se comprueba
+	// que esta petición concreta esté dentro de lo que se concedió.
+	acceso, _ := identidad.DeAcceso(ctx)
+	if !acceso.Permite(string(api.CancelarReserva)) {
+		return api.CancelarReserva401ApplicationProblemPlusJSONResponse{
+			NoAutorizadoApplicationProblemPlusJSONResponse: api.NoAutorizadoApplicationProblemPlusJSONResponse(
+				transporte.NoAutorizado.Cuerpo(ctx,
+					"ese token de agente no incluye cancelar reservas"),
+			),
+		}, nil
+	}
+
+	reserva, err := a.c.Nucleo.Cancelar(
+		ctx, tenantDe(ctx, pet.Params.XTenantId), pet.Id, alcance, acceso.Agente)
 	if err != nil {
 		clase, cuerpo := problema(ctx, err)
 		switch clase.Estado {
@@ -234,21 +276,76 @@ func (a *adaptador) CancelarReserva(
 	return api.CancelarReserva200JSONResponse(reserva), nil
 }
 
-// alcance saca del contexto de quién es la petición.
+// alcance saca del token de quién son las reservas que se piden (RF-23).
 //
-// Devuelve falso cuando no hay ninguno, y eso solo puede pasar si la ruta se
-// montó sin exigirAcceso. Falla cerrado —responde 401— en vez de continuar sin
-// acotar: el error posible es negar el acceso a quien lo tenía; el inaceptable
-// sería servirle a alguien las reservas de todo el mundo por un fallo de
-// cableado.
+// Es la única traducción de "quién eres" a "qué puedes ver", y por eso vive en
+// un solo sitio: repartirla por manejador haría que la misma persona tuviera un
+// alcance en el listado y otro en el detalle, y ninguna prueba lo notaría hasta
+// que alguien viera lo que no debía.
+//
+// Los tres casos salen del propio token:
+//
+//	administrador -> su tenant entero (RF-32). La transacción ya corre con su
+//	                 tenant fijado, así que RLS acota el resto.
+//	cuenta        -> lo suyo, más lo que hizo como invitado con su correo YA
+//	                 verificado (RF-02 + RF-24).
+//	invitado      -> las reservas hechas con el correo que el código acreditó.
+//
+// El segundo valor es falso cuando no hay acceso en el contexto, que solo puede
+// ocurrir si la ruta se montó sin exigirAcceso. Falla cerrado —responde 401— en
+// vez de continuar sin acotar: el error posible es negar el acceso a quien lo
+// tenía; el inaceptable sería servirle a alguien las reservas de todo el mundo
+// por un fallo de cableado.
 func (a *adaptador) alcance(ctx context.Context) (consulta.Alcance, bool) {
 	acceso, hay := identidad.DeAcceso(ctx)
-	if !hay || acceso.Destino == "" {
+	if !hay {
 		a.registro.ErrorContext(ctx, "ruta acotada sin acceso en el contexto",
 			slog.String("peticion", transporte.IdPeticion(ctx)))
 		return consulta.Alcance{}, false
 	}
-	return consulta.Alcance{Destino: acceso.Destino}, true
+
+	alcance := consulta.Alcance{
+		Cuenta:  acceso.Cuenta,
+		Destino: acceso.Destino,
+
+		// Un administrador ve su tenant entero. Un agente NO hereda eso aunque
+		// represente a un administrador: RF-13 concede acciones sobre UNA
+		// cuenta, y "toda la agenda del negocio" no es una acción sobre una
+		// cuenta.
+		TenantCompleto: acceso.Tipo == identidad.TipoAdmin && !acceso.PorAgente(),
+	}
+
+	if alcance.Vacio() {
+		a.registro.ErrorContext(ctx, "token verificado sin nada que acredite un alcance",
+			slog.String("peticion", transporte.IdPeticion(ctx)))
+		return consulta.Alcance{}, false
+	}
+
+	return alcance, true
+}
+
+// tenantDe decide sobre qué negocio opera la petición.
+//
+// Un administrador opera sobre el suyo, salga lo que salga en la cabecera: el
+// tenant va DENTRO de su token y aceptar el de la cabecera permitiría leer los
+// datos de cualquier otro negocio escribiendo su identificador. Para todos los
+// demás sigue mandando la cabecera, que es lo que hoy identifica al negocio en
+// una ruta pública (catálogo, disponibilidad, crear reserva).
+func tenantDe(ctx context.Context, cabecera openapi_types.UUID) openapi_types.UUID {
+	acceso, hay := identidad.DeAcceso(ctx)
+	if !hay || acceso.Tenant == "" {
+		return cabecera
+	}
+
+	propio, err := uuid.Parse(acceso.Tenant)
+	if err != nil {
+		// Un tenant ilegible dentro de un token firmado por nosotros es un
+		// fallo nuestro, no de la petición. Se cae del lado seguro: la
+		// cabecera, que ya está acotada por RLS.
+		return cabecera
+	}
+
+	return propio
 }
 
 // ------------------------------------------------------------- identidad --
@@ -355,7 +452,12 @@ func (a *adaptador) ListarReservas(
 		}, nil
 	}
 
-	filtro := consulta.Filtro{Desde: pet.Params.Desde, Hasta: pet.Params.Hasta}
+	filtro := consulta.Filtro{
+		Desde:   pet.Params.Desde,
+		Hasta:   pet.Params.Hasta,
+		Sede:    pet.Params.SedeId,
+		Recurso: pet.Params.RecursoId,
+	}
 	if pet.Params.Estado != nil {
 		filtro.Estados = *pet.Params.Estado
 	}
@@ -380,7 +482,17 @@ func (a *adaptador) ListarReservas(
 		}
 	}
 
-	lista, err := a.c.Consulta.Listar(ctx, pet.Params.XTenantId, alcance, filtro)
+	// Un agente solo lista si su token lo dice (RF-05/RF-13).
+	if acceso, _ := identidad.DeAcceso(ctx); !acceso.Permite(string(api.ListarReservas)) {
+		return api.ListarReservas403ApplicationProblemPlusJSONResponse{
+			FueraDeAlcanceApplicationProblemPlusJSONResponse: api.FueraDeAlcanceApplicationProblemPlusJSONResponse(
+				transporte.FueraDeAlcance.Cuerpo(ctx,
+					"ese token de agente no incluye listar reservas"),
+			),
+		}, nil
+	}
+
+	lista, err := a.c.Consulta.Listar(ctx, tenantDe(ctx, pet.Params.XTenantId), alcance, filtro)
 	if err != nil {
 		clase, cuerpo := problema(ctx, err)
 		if clase.Estado == http.StatusBadRequest {
@@ -414,7 +526,7 @@ func (a *adaptador) ObtenerReserva(
 		}, nil
 	}
 
-	reserva, err := a.c.Consulta.Obtener(ctx, pet.Params.XTenantId, alcance, pet.Id)
+	reserva, err := a.c.Consulta.Obtener(ctx, tenantDe(ctx, pet.Params.XTenantId), alcance, pet.Id)
 	if err != nil {
 		clase, cuerpo := problema(ctx, err)
 		if clase.Estado == http.StatusNotFound {

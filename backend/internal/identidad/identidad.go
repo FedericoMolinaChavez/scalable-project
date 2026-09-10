@@ -55,11 +55,89 @@ var (
 )
 
 // Limitador impone las cuotas de RNF-08. Lo cumple *cache.Cliente.
+//
+// Son tres métodos y no uno porque este paquete cuenta DOS cosas distintas. Los
+// envíos de código se cuentan por intento y cada uno gasta cuota (Permite). Los
+// fallos de inicio de sesión se cuentan CONSECUTIVOS (RF-12 A3/A4): hay que
+// poder mirar el contador sin gastarlo (Consumo) y ponerlo a cero al acertar
+// (Reiniciar), o cinco entradas legítimas seguidas bloquearían la cuenta.
 type Limitador interface {
 	Permite(ctx context.Context, clave string, maximo int, ventana time.Duration, alFallar cache.AlFallar) cache.Veredicto
+	Consumo(ctx context.Context, clave string) (int, time.Duration, bool)
+	Reiniciar(ctx context.Context, clave string)
 }
 
-// Servicio emite y canjea códigos de un solo uso.
+// Opciones son los números que gobiernan la identidad.
+//
+// Van en una estructura y no como parámetros sueltos porque ya son ocho y todos
+// del mismo tipo: una llamada con ocho posicionales es una llamada donde
+// intercambiar dos duraciones compila y cambia el comportamiento sin que nada
+// lo note.
+type Opciones struct {
+	// TTLCodigo es la vigencia de los seis dígitos (RF-02, RF-19).
+	TTLCodigo time.Duration
+
+	// TTLEnlace es la de un enlace de un solo uso: magic link (RF-12),
+	// verificación de contacto (RF-19) y recuperación de contraseña (RF-18).
+	// Los tres diagramas piden quince minutos, y es más que la de un código a
+	// propósito: un enlace se abre desde el correo, y entre que llega, se ve y
+	// se pulsa pasa más tiempo que entre leer seis dígitos y teclearlos.
+	TTLEnlace time.Duration
+
+	// TTLRefresco es cuánto vive una sesión sin usarse (RF-25). Es larga
+	// porque su trabajo es que no haya que volver a escribir la contraseña, y
+	// puede permitírselo justamente porque SÍ se puede revocar: es la mitad de
+	// la pareja que se comprueba contra la base en cada canje.
+	TTLRefresco time.Duration
+
+	MaxIntentos   int
+	MaxEnviosHora int
+
+	// MaxIntentosLogin son los fallos consecutivos antes de bloquear el acceso
+	// a una cuenta (RF-12 A3/A4).
+	MaxIntentosLogin int
+
+	// BloqueoLogin es cuánto dura ese bloqueo. RF-12 A4 dice quince minutos.
+	BloqueoLogin time.Duration
+
+	// BaseURL es la raíz pública desde la que se construyen los enlaces que
+	// viajan por correo. Es configuración y no una constante porque el enlace
+	// tiene que abrir el FRONTEND, no esta API, y en despliegue son dominios
+	// distintos.
+	BaseURL string
+}
+
+func (o Opciones) conDefectos() Opciones {
+	if o.TTLCodigo <= 0 {
+		o.TTLCodigo = 5 * time.Minute
+	}
+	if o.TTLEnlace <= 0 {
+		o.TTLEnlace = 15 * time.Minute
+	}
+	if o.TTLRefresco <= 0 {
+		o.TTLRefresco = 30 * 24 * time.Hour
+	}
+	if o.MaxIntentos <= 0 {
+		o.MaxIntentos = 3
+	}
+	if o.MaxEnviosHora <= 0 {
+		o.MaxEnviosHora = 3
+	}
+	if o.MaxIntentosLogin <= 0 {
+		o.MaxIntentosLogin = 5
+	}
+	if o.BloqueoLogin <= 0 {
+		o.BloqueoLogin = 15 * time.Minute
+	}
+	if o.BaseURL == "" {
+		o.BaseURL = "http://localhost:5173"
+	}
+	return o
+}
+
+// Servicio es el Servicio de Identidad de ARQ-01: códigos de un solo uso
+// (RF-02), cuentas (RF-12, RF-18, RF-19, RF-22, RF-24, RF-25) y los tokens de
+// agente de RF-13.
 type Servicio struct {
 	bd       *datos.BD
 	emisor   correo.Emisor
@@ -67,24 +145,20 @@ type Servicio struct {
 	limites  Limitador
 	registro *slog.Logger
 
-	ttlCodigo     time.Duration
-	maxIntentos   int
-	maxEnviosHora int
+	op Opciones
 }
 
 func Nuevo(
-	bd *datos.BD, emisor correo.Emisor, firmante *Firmante, limites Limitador, registro *slog.Logger,
-	ttlCodigo time.Duration, maxIntentos, maxEnviosHora int,
+	bd *datos.BD, emisor correo.Emisor, firmante *Firmante, limites Limitador,
+	registro *slog.Logger, op Opciones,
 ) *Servicio {
 	return &Servicio{
-		bd:            bd,
-		emisor:        emisor,
-		firmante:      firmante,
-		limites:       limites,
-		registro:      registro,
-		ttlCodigo:     ttlCodigo,
-		maxIntentos:   maxIntentos,
-		maxEnviosHora: maxEnviosHora,
+		bd:       bd,
+		emisor:   emisor,
+		firmante: firmante,
+		limites:  limites,
+		registro: registro,
+		op:       op.conDefectos(),
 	}
 }
 
@@ -125,7 +199,7 @@ func (s *Servicio) Solicitar(ctx context.Context, destino string) error {
 	// negar es que alguien espere, y el de permitir es correo ilimitado hacia
 	// una dirección que cualquiera escribe en un formulario.
 	if veredicto := s.limites.Permite(
-		ctx, "codigo:"+destino, s.maxEnviosHora, time.Hour, cache.Denegar,
+		ctx, "codigo:"+destino, s.op.MaxEnviosHora, time.Hour, cache.Denegar,
 	); !veredicto.Permitido {
 		return ErrDemasiadosEnvios
 	}
@@ -146,7 +220,7 @@ func (s *Servicio) Solicitar(ctx context.Context, destino string) error {
 			INSERT INTO plataforma.token_verificacion
 				(cuenta_id, proposito, canal, destino, valor_hash, expira_en)
 			VALUES (NULL, $1, 'email', $2, $3, now() + make_interval(secs => $4))`,
-			PropositoConsulta, destino, huella(codigo), s.ttlCodigo.Seconds())
+			PropositoConsulta, destino, huella(codigo), s.op.TTLCodigo.Seconds())
 		return err
 	})
 	if err != nil {
@@ -161,7 +235,7 @@ func (s *Servicio) Solicitar(ctx context.Context, destino string) error {
 	mensaje := correo.Mensaje{
 		Para:   destino,
 		Asunto: "Tu código para ver tus reservas",
-		Cuerpo: cuerpoCodigo(codigo, s.ttlCodigo),
+		Cuerpo: cuerpoCodigo(codigo, s.op.TTLCodigo),
 	}
 	if err := s.emisor.Enviar(ctx, mensaje); err != nil {
 		return fmt.Errorf("no se pudo enviar el código: %w", err)
@@ -229,7 +303,7 @@ func (s *Servicio) Canjear(ctx context.Context, destino, codigo string) (string,
 			return err
 		}
 
-		if intentos >= s.maxIntentos {
+		if intentos >= s.op.MaxIntentos {
 			// Ya gastado por fuerza bruta: se quema para que no siga vivo
 			// hasta que expire.
 			veredicto = ErrCodigoInvalido

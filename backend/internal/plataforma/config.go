@@ -117,6 +117,29 @@ type Identidad struct {
 	// escriba.
 	MaxEnviosHora int
 
+	// TTLEnlace es la vigencia de un enlace de un solo uso: magic link
+	// (RF-12), verificación de contacto (RF-19) y recuperación de contraseña
+	// (RF-18). Los tres piden quince minutos, y es más que un código porque un
+	// enlace se abre desde el correo: entre que llega, se ve y se pulsa pasa
+	// más tiempo que entre leer seis dígitos y teclearlos.
+	TTLEnlace time.Duration
+
+	// TTLRefresco es cuánto vive una sesión de cuenta sin usarse (RF-25). Larga
+	// a propósito: su trabajo es que no haya que volver a escribir la
+	// contraseña, y puede permitírselo porque SÍ se puede revocar, a diferencia
+	// del token de acceso.
+	TTLRefresco time.Duration
+
+	// MaxIntentosLogin son los fallos CONSECUTIVOS antes de bloquear el acceso
+	// a una cuenta (RF-12 A3/A4), y BloqueoLogin es cuánto dura ese bloqueo.
+	MaxIntentosLogin int
+	BloqueoLogin     time.Duration
+
+	// URLApp es la raíz pública del FRONTEND, no de esta API: los enlaces que
+	// viajan por correo tienen que abrir una pantalla, y una respuesta JSON no
+	// es una confirmación de nada para quien la recibe.
+	URLApp string
+
 	// Remitente es el `From` de los correos.
 	Remitente string
 
@@ -133,10 +156,11 @@ type Identidad struct {
 // se peleen por el puerto. Sin ello, arrancar el segundo falla con un
 // "address already in use" que no dice cuál de los dos era.
 var direccionesPorDefecto = map[string]string{
-	"nucleo":       ":8080",
-	"consulta":     ":8081",
-	"identidad":    ":8082",
-	"trabajadores": ":8083",
+	"nucleo":        ":8080",
+	"consulta":      ":8081",
+	"identidad":     ":8082",
+	"trabajadores":  ":8083",
+	"configuracion": ":8084",
 }
 
 // CargarConfig lee la configuración del entorno. Falla si falta algo sin
@@ -176,9 +200,18 @@ func CargarConfig(servicio string) (Config, error) {
 		TTLAcceso:     duracion("TTL_ACCESO", 15*time.Minute),
 		MaxIntentos:   entero("MAX_INTENTOS_CODIGO", 3),
 		MaxEnviosHora: entero("MAX_ENVIOS_HORA", 3),
-		Remitente:     texto("CORREO_REMITENTE", "reservas@localhost"),
-		SMTPHost:      texto("SMTP_HOST", "localhost"),
-		SMTPPuerto:    texto("SMTP_PORT", "1025"),
+
+		TTLEnlace:   duracion("TTL_ENLACE", 15*time.Minute),
+		TTLRefresco: duracion("TTL_REFRESCO", 30*24*time.Hour),
+
+		MaxIntentosLogin: entero("MAX_INTENTOS_LOGIN", 5),
+		BloqueoLogin:     duracion("BLOQUEO_LOGIN", 15*time.Minute),
+
+		URLApp: texto("URL_APP", "http://localhost:5173"),
+
+		Remitente:  texto("CORREO_REMITENTE", "reservas@localhost"),
+		SMTPHost:   texto("SMTP_HOST", "localhost"),
+		SMTPPuerto: texto("SMTP_PORT", "1025"),
 	}
 
 	cfg.Trabajadores = Trabajadores{
@@ -218,9 +251,10 @@ func CargarConfig(servicio string) (Config, error) {
 }
 
 var usaTokens = map[string]bool{
-	"identidad": true, // los firma
-	"consulta":  true, // los verifica para acotar RF-02
-	"nucleo":    true, // los verifica para cancelar (RF-06)
+	"identidad":     true, // los firma
+	"consulta":      true, // los verifica para acotar RF-02
+	"nucleo":        true, // los verifica para cancelar (RF-06)
+	"configuracion": true, // los verifica para saber quién administra (RF-23)
 }
 
 // EnDesarrollo distingue el entorno local del desplegado. Se usa para decidir

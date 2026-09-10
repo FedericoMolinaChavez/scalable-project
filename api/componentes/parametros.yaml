@@ -10,3 +10,10 @@ Tenant:
     de un cliente en producción permitiría leer los datos de cualquier otro
     tenant.
   schema: { type: string, format: uuid }
+
+IdEnRuta:
+  name: id
+  in: path
+  required: true
+  description: Identificador del recurso sobre el que se opera.
+  schema: { type: string, format: uuid }

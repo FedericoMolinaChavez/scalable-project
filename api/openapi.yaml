@@ -16,8 +16,10 @@ info:
     verdad: un cambio que rompa el contrato rompe la compilación de los dos, en
     vez de aparecer como un fallo en tiempo de ejecución.
 
-    Solo cubre la rebanada inicial —catálogo, disponibilidad y creación de
-    reservas—. El resto de los RF se añaden a medida que se implementan.
+    Cubre el catálogo, la disponibilidad y las reservas (RF-01, RF-02, RF-03,
+    RF-06, RF-09, RF-26), y las cuentas con su acceso (RF-12, RF-13, RF-18,
+    RF-19, RF-21, RF-22, RF-23, RF-24, RF-25). El resto de los RF se añaden a
+    medida que se implementan.
 
 servers:
   - url: http://localhost:8080
@@ -31,7 +33,18 @@ tags:
   - name: reservas
     description: Creación y consulta de reservas (RF-01, RF-02, RF-03, RF-06)
   - name: sesiones
-    description: Identificación del cliente por código de un solo uso (RF-02)
+    description: |
+      Identificación del cliente. Dos puertas distintas sobre la misma etiqueta:
+      el código de un solo uso del invitado (RF-02) y el inicio de sesión de una
+      cuenta con sus tokens y su lista de sesiones (RF-12, RF-25).
+  - name: cuentas
+    description: Alta, perfil, verificación, contraseña y preferencias (RF-18, RF-19, RF-21, RF-22, RF-24, RF-25)
+  - name: agentes
+    description: Intercambio de credencial por token de acciones (RF-13)
+  - name: configuracion
+    description: |
+      Lo que un administrador configura para que haya algo que reservar
+      (RF-14, RF-15, RF-17, RF-30, RF-31) y la traza de quién hizo qué (RF-36).
 
 components:
   securitySchemes:
@@ -39,17 +52,24 @@ components:
       type: http
       scheme: bearer
       description: |
-        El token que devuelve `POST /v1/sesiones/token` tras acertar el código.
+        Un solo encabezado para tres portadores distintos, porque RF-23 modela
+        el alcance como una propiedad de la cuenta y no de la ruta:
 
-        Acredita UNA cosa: que quien lo presenta controla ese correo. No hay
-        cuenta detrás, así que tampoco hay roles: el alcance es exactamente las
-        reservas hechas con esa dirección. Cuando exista RF-12, el mismo
-        encabezado transportará tokens de cuenta y el alcance saldrá del tipo
-        de cuenta (RF-23).
+        - **Invitado** (`POST /v1/sesiones/token`): acredita que quien lo
+          presenta controla ese correo. Sin cuenta detrás y sin roles: su
+          alcance son exactamente las reservas hechas con esa dirección (RF-02).
+        - **Cuenta** (`POST /v1/sesiones/contrasena`, `.../enlace/canje`,
+          `.../refresco`): su alcance sale del tipo de cuenta (RF-23). Un
+          `usuario` ve lo suyo, un `administrador` ve su tenant entero (RF-32).
+        - **Agente** (`POST /v1/agentes/token`): actúa en nombre de una cuenta,
+          con el alcance ya intersecado al emitirlo (RF-13). Nunca recibe más
+          del que ya tiene la cuenta impersonada.
 
-        Es de vigencia corta y no se puede revocar. Un invitado no tiene sesión
-        que gestionar (RF-25 es de cuentas), así que caducar pronto es la única
-        defensa que tiene.
+        Todos son de vigencia corta y ninguno se comprueba contra la base al
+        verificarlo: es lo que le permite sostener la ruta de lectura de RNF-03.
+        Lo que sí se revoca es la SESIÓN (RF-25), y corta el refresco al
+        instante; el de acceso muere al vencer. La ventana de revocación es, por
+        tanto, exactamente su vigencia.
 
 paths:
   /v1/sedes:
@@ -67,6 +87,99 @@ paths:
   /v1/sesiones/token:
     $ref: './rutas/sesiones.yaml#/token'
 
+  /v1/sesiones/contrasena:
+    $ref: './rutas/sesiones.yaml#/contrasena'
+
+  /v1/sesiones/enlace:
+    $ref: './rutas/sesiones.yaml#/enlace'
+
+  /v1/sesiones/enlace/canje:
+    $ref: './rutas/sesiones.yaml#/canjeEnlace'
+
+  /v1/sesiones/refresco:
+    $ref: './rutas/sesiones.yaml#/refresco'
+
+  /v1/sesiones:
+    $ref: './rutas/sesiones.yaml#/coleccion'
+
+  /v1/sesiones/{id}:
+    $ref: './rutas/sesiones.yaml#/porId'
+
+  /v1/cuentas:
+    $ref: './rutas/cuentas.yaml#/coleccion'
+
+  /v1/cuentas/yo:
+    $ref: './rutas/cuentas.yaml#/propia'
+
+  /v1/cuentas/yo/preferencias:
+    $ref: './rutas/cuentas.yaml#/preferencias'
+
+  /v1/cuentas/verificacion:
+    $ref: './rutas/cuentas.yaml#/verificacion'
+
+  /v1/cuentas/verificacion/canje:
+    $ref: './rutas/cuentas.yaml#/canjeVerificacion'
+
+  /v1/cuentas/yo/contrasena:
+    $ref: './rutas/cuentas.yaml#/contrasenaPropia'
+
+  /v1/cuentas/contrasena/restablecimiento:
+    $ref: './rutas/cuentas.yaml#/restablecimiento'
+
+  /v1/cuentas/contrasena/recuperacion:
+    $ref: './rutas/cuentas.yaml#/recuperacion'
+
+  /v1/agentes/token:
+    $ref: './rutas/agentes.yaml#/token'
+
+  /v1/config/sedes:
+    $ref: './rutas/configuracion.yaml#/sedes'
+
+  /v1/config/sedes/{id}:
+    $ref: './rutas/configuracion.yaml#/sedePorId'
+
+  /v1/config/servicios:
+    $ref: './rutas/configuracion.yaml#/servicios'
+
+  /v1/config/servicios/{id}:
+    $ref: './rutas/configuracion.yaml#/servicioPorId'
+
+  /v1/config/recursos:
+    $ref: './rutas/configuracion.yaml#/recursos'
+
+  /v1/config/recursos/{id}:
+    $ref: './rutas/configuracion.yaml#/recursoPorId'
+
+  /v1/config/reglas:
+    $ref: './rutas/configuracion.yaml#/reglas'
+
+  /v1/config/reglas/{id}:
+    $ref: './rutas/configuracion.yaml#/reglaPorId'
+
+  /v1/config/excepciones:
+    $ref: './rutas/configuracion.yaml#/excepciones'
+
+  /v1/config/excepciones/{id}:
+    $ref: './rutas/configuracion.yaml#/excepcionPorId'
+
+  /v1/config/politicas:
+    $ref: './rutas/configuracion.yaml#/politicas'
+
+  /v1/config/vouchers:
+    $ref: './rutas/configuracion.yaml#/vouchers'
+
+  /v1/config/vouchers/{id}:
+    $ref: './rutas/configuracion.yaml#/voucherPorId'
+
+  /v1/config/tarifas:
+    $ref: './rutas/configuracion.yaml#/tarifas'
+
+  /v1/config/tarifas/{id}:
+    $ref: './rutas/configuracion.yaml#/tarifaPorId'
+
+  /v1/auditoria:
+    $ref: './rutas/configuracion.yaml#/auditoria'
+
   /v1/reservas:
     $ref: './rutas/reservas.yaml#/coleccion'
 
@@ -75,3 +188,12 @@ paths:
 
   /v1/reservas/{id}/cancelacion:
     $ref: './rutas/reservas.yaml#/cancelacion'
+
+  /v1/reservas/{id}/modificacion:
+    $ref: './rutas/reservas.yaml#/modificacion'
+
+  /v1/reservas/{id}/estado:
+    $ref: './rutas/reservas.yaml#/estado'
+
+  /v1/reservas/{id}/calificacion:
+    $ref: './rutas/reservas.yaml#/calificacion'

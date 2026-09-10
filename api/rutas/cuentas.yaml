@@ -1,0 +1,305 @@
+# Cuentas: alta, perfil, verificación, contraseña y preferencias.
+# RF-24, RF-22, RF-19, RF-18, RF-21, RF-25.
+#
+# Ninguna de estas rutas lleva `X-Tenant-Id`, y no es un olvido: una cuenta es
+# global (ER-02). Una persona es la misma aunque reserve en veinte negocios, y
+# pedir el tenant aquí sugeriría que su perfil, su contraseña o sus sesiones son
+# distintas según por qué puerta entró.
+
+coleccion:
+  post:
+    operationId: registrarCuenta
+    security: []  # es el alta: exigir un token aquí sería circular
+    summary: Registrar una cuenta (RF-24)
+    description: |
+      Crea la cuenta en estado `pendiente_verificacion` y dispara la
+      verificación del contacto (RF-19). No devuelve tokens: hasta que el
+      correo esté verificado no hay cuenta activa con la que iniciar sesión.
+
+      **Responde `202` exista o no ya ese correo.** Cuando ya existe no se crea
+      nada y se avisa al titular del intento, que es lo que RF-24 pide: quien
+      prueba direcciones recibe siempre la misma respuesta, y el dueño de la
+      dirección se entera.
+    tags: [cuentas]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../componentes/esquemas/cuentas.yaml#/NuevaCuenta'
+    responses:
+      '202':
+        description: |
+          Aceptado. NO significa que la cuenta se haya creado: significa que si
+          esa dirección estaba libre, la verificación va en camino. Es un 202 y
+          no un 201 precisamente porque no se puede afirmar el resultado sin
+          filtrarlo.
+      '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '422': { $ref: '../componentes/respuestas.yaml#/NoProcesable' }
+      '429': { $ref: '../componentes/respuestas.yaml#/DemasiadasPeticiones' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+propia:
+  get:
+    operationId: obtenerCuentaPropia
+    summary: El perfil propio (RF-22)
+    tags: [cuentas]
+    security:
+      - TokenCliente: []
+    responses:
+      '200':
+        description: La cuenta
+        content:
+          application/json:
+            schema:
+              $ref: '../componentes/esquemas/cuentas.yaml#/Cuenta'
+      '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
+      '403': { $ref: '../componentes/respuestas.yaml#/FueraDeAlcance' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+  patch:
+    operationId: actualizarCuentaPropia
+    summary: Editar el perfil (RF-22)
+    description: |
+      Cambiar el correo o el teléfono lo marca como NO verificado y dispara la
+      verificación de RF-19. El dato nuevo no sirve para recuperar la cuenta ni
+      para recibir avisos hasta que se verifique: si bastara con escribirlo,
+      apuntar la cuenta a una dirección propia sería suficiente para
+      interceptar los avisos de otra persona.
+
+      Un correo o teléfono que ya está en otra cuenta responde `409`, no `422`:
+      la petición es válida y la regla no se viola, lo que ocurre es que ese
+      valor ya está tomado.
+    tags: [cuentas]
+    security:
+      - TokenCliente: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../componentes/esquemas/cuentas.yaml#/ActualizacionCuenta'
+    responses:
+      '200':
+        description: La cuenta ya actualizada
+        content:
+          application/json:
+            schema:
+              $ref: '../componentes/esquemas/cuentas.yaml#/Cuenta'
+      '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
+      '403': { $ref: '../componentes/respuestas.yaml#/FueraDeAlcance' }
+      '409':
+        description: Ese correo o teléfono ya está registrado en otra cuenta.
+        content:
+          application/problem+json:
+            schema:
+              $ref: '../componentes/esquemas/comunes.yaml#/Problema'
+      '422': { $ref: '../componentes/respuestas.yaml#/NoProcesable' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+  delete:
+    operationId: eliminarCuentaPropia
+    summary: Eliminar la cuenta (RF-25)
+    description: |
+      Anonimiza los datos personales, revoca todas las sesiones y cancela las
+      reservas futuras todavía activas.
+
+      No borra la fila. Los comprobantes de RF-34 la referencian y hay
+      obligaciones fiscales detrás; lo que desaparece es lo que identifica a una
+      persona, no la contabilidad. El correo queda libre para volver a
+      registrarse, porque los índices de unicidad excluyen las cuentas
+      eliminadas.
+    tags: [cuentas]
+    security:
+      - TokenCliente: []
+    responses:
+      '204':
+        description: Cuenta anonimizada y sesiones revocadas.
+      '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
+      '403': { $ref: '../componentes/respuestas.yaml#/FueraDeAlcance' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+verificacion:
+  post:
+    operationId: solicitarVerificacion
+    summary: Pedir la verificación del contacto (RF-19)
+    tags: [cuentas]
+    security:
+      - TokenCliente: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../componentes/esquemas/cuentas.yaml#/SolicitudVerificacion'
+    responses:
+      '202':
+        description: Si ese contacto está sin verificar, el envío va en camino.
+      '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
+      '422': { $ref: '../componentes/respuestas.yaml#/NoProcesable' }
+      '429': { $ref: '../componentes/respuestas.yaml#/DemasiadasPeticiones' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+canjeVerificacion:
+  post:
+    operationId: canjearVerificacion
+    # Publica a proposito: el enlace llega por correo y se abre sin sesion, que
+    # es justo el caso de quien acaba de registrarse y todavia no puede entrar.
+    security: []
+    summary: Canjear el enlace o el código de verificación (RF-19)
+    description: |
+      Marca el contacto como verificado y, si la cuenta estaba
+      `pendiente_verificacion`, la activa. A partir de ahí ya puede iniciar
+      sesión (RF-12).
+
+      Un valor caducado, ya usado o inexistente responde igual: `401`, sin
+      decir cuál de los tres fue.
+    tags: [cuentas]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../componentes/esquemas/cuentas.yaml#/CanjeVerificacion'
+    responses:
+      '200':
+        description: Contacto verificado
+        content:
+          application/json:
+            schema:
+              $ref: '../componentes/esquemas/cuentas.yaml#/Cuenta'
+      '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
+      '429': { $ref: '../componentes/respuestas.yaml#/DemasiadasPeticiones' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+recuperacion:
+  post:
+    operationId: solicitarRecuperacion
+    security: []  # quien la pide es justamente quien no puede entrar
+    summary: Pedir el enlace de recuperación de contraseña (RF-18)
+    description: |
+      **Responde `202` exista o no la cuenta**, y no envía nada cuando no
+      existe. Es el mismo criterio anti-enumeración de RF-12 A12.
+    tags: [cuentas]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../componentes/esquemas/cuentas.yaml#/SolicitudRecuperacion'
+    responses:
+      '202':
+        description: Si esa dirección tiene cuenta, el enlace va en camino.
+      '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '429': { $ref: '../componentes/respuestas.yaml#/DemasiadasPeticiones' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+restablecimiento:
+  post:
+    operationId: restablecerContrasena
+    # Publica: quien llega aqui es justamente quien no puede entrar, y el token
+    # del enlace ES su credencial.
+    security: []
+    summary: Restablecer la contraseña con el enlace recibido (RF-18)
+    description: |
+      Un token caducado, ya usado o inexistente responde `401` sin
+      distinguirlos.
+
+      Revoca TODAS las sesiones, incluida cualquiera que estuviera abierta.
+    tags: [cuentas]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../componentes/esquemas/cuentas.yaml#/Restablecimiento'
+    responses:
+      '204':
+        description: Contraseña restablecida y sesiones revocadas.
+      '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
+      '422': { $ref: '../componentes/respuestas.yaml#/NoProcesable' }
+      '429': { $ref: '../componentes/respuestas.yaml#/DemasiadasPeticiones' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+contrasenaPropia:
+  post:
+    operationId: cambiarContrasena
+    summary: Cambiar la propia contraseña (RF-18, y destino de RF-12 A9)
+    description: |
+      Exige la contraseña actual aunque ya haya sesión: un token robado no debe
+      bastar para quedarse con la cuenta.
+
+      Revoca las DEMÁS sesiones y conserva la que hace el cambio.
+    tags: [cuentas]
+    security:
+      - TokenCliente: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../componentes/esquemas/cuentas.yaml#/CambioContrasena'
+    responses:
+      '204':
+        description: Contraseña cambiada y las demás sesiones revocadas.
+      '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
+      '403': { $ref: '../componentes/respuestas.yaml#/FueraDeAlcance' }
+      '422': { $ref: '../componentes/respuestas.yaml#/NoProcesable' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+preferencias:
+  get:
+    operationId: listarPreferencias
+    summary: Preferencias de notificación (RF-21)
+    description: |
+      Devuelve solo lo que se ha guardado explícitamente. Lo que no aparece está
+      en el valor por defecto del producto, que NO es lo mismo que
+      deshabilitado.
+    tags: [cuentas]
+    security:
+      - TokenCliente: []
+    responses:
+      '200':
+        description: Las preferencias guardadas
+        content:
+          application/json:
+            schema:
+              $ref: '../componentes/esquemas/cuentas.yaml#/ListaPreferencias'
+      '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
+      '403': { $ref: '../componentes/respuestas.yaml#/FueraDeAlcance' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+  put:
+    operationId: guardarPreferencias
+    summary: Guardar preferencias de notificación (RF-21)
+    description: |
+      Reemplaza el conjunto completo. Un PUT y no un PATCH porque la pantalla de
+      RF-21 se guarda entera: con PATCH, quitar una preferencia exigiría un
+      verbo aparte para decir "vuelve al valor por defecto", y esa distinción es
+      justo la que se pierde entre lo que se envía y lo que se omite.
+    tags: [cuentas]
+    security:
+      - TokenCliente: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../componentes/esquemas/cuentas.yaml#/ListaPreferencias'
+    responses:
+      '200':
+        description: Las preferencias ya guardadas
+        content:
+          application/json:
+            schema:
+              $ref: '../componentes/esquemas/cuentas.yaml#/ListaPreferencias'
+      '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
+      '403': { $ref: '../componentes/respuestas.yaml#/FueraDeAlcance' }
+      '422': { $ref: '../componentes/respuestas.yaml#/NoProcesable' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }

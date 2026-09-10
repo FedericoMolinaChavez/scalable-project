@@ -107,3 +107,54 @@ func (c *Cliente) Permite(
 
 	return Veredicto{Permitido: false, Espera: espera}
 }
+
+// Consumo lee el contador de una clave SIN consumirlo.
+//
+// Hace falta para el bloqueo por intentos fallidos de RF-12 A3/A4, que cuenta
+// una cosa distinta de lo que cuenta Permite. Permite cuenta INTENTOS: cada
+// llamada gasta cuota, que es lo correcto para "tres códigos por hora". El
+// bloqueo de login cuenta FALLOS CONSECUTIVOS, así que un inicio de sesión
+// correcto no puede gastar nada —si lo hiciera, cinco entradas legítimas
+// seguidas bloquearían la cuenta— y hay que poder preguntar por el contador
+// antes de saber si este intento va a fallar.
+//
+// El tercer valor dice si se pudo consultar. Distinguirlo de "cero fallos" es
+// lo que permite a quien llama elegir su política de fallo en vez de heredar
+// la de aquí, que es la misma libertad que da AlFallar en Permite.
+func (c *Cliente) Consumo(ctx context.Context, clave string) (int, time.Duration, bool) {
+	respuesta := c.valkey.DoMulti(ctx,
+		c.valkey.B().Get().Key("limite:"+clave).Build(),
+		c.valkey.B().Pttl().Key("limite:"+clave).Build(),
+	)
+
+	actual, errGet := respuesta[0].AsInt64()
+	if errGet != nil {
+		// Nil significa que la clave no está: cero fallos acumulados, y eso SÍ
+		// es una respuesta, no un fallo de consulta.
+		if valkey.IsValkeyNil(errGet) {
+			return 0, 0, true
+		}
+		return 0, 0, false
+	}
+
+	var espera time.Duration
+	if ttl, err := respuesta[1].AsInt64(); err == nil && ttl > 0 {
+		espera = time.Duration(ttl) * time.Millisecond
+	}
+
+	return int(actual), espera, true
+}
+
+// Reiniciar borra el contador de una clave.
+//
+// Es la otra mitad de "fallos CONSECUTIVOS": sin esto, cuatro fallos repartidos
+// a lo largo de una hora y un quinto al final bloquearían una cuenta que en
+// realidad se usó bien cuatro veces en medio.
+func (c *Cliente) Reiniciar(ctx context.Context, clave string) {
+	// El error se ignora a propósito y es el único sitio del paquete donde eso
+	// es correcto: no poder borrar el contador solo significa que un bloqueo
+	// caducará por tiempo en vez de al acertar. Propagarlo convertiría un fallo
+	// del caché en un fallo de inicio de sesión, que es exactamente lo que la
+	// nota de ARQ-01 prohíbe.
+	_ = c.valkey.Do(ctx, c.valkey.B().Del().Key("limite:"+clave).Build()).Error()
+}

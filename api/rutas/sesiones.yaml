@@ -67,3 +67,190 @@ token:
               $ref: '../componentes/esquemas/comunes.yaml#/Problema'
       '429': { $ref: '../componentes/respuestas.yaml#/DemasiadasPeticiones' }
       '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+
+# ---------------------------------------------------------------------------
+# Sesiones DE CUENTA (RF-12, RF-25).
+#
+# Lo de arriba es RF-02: el invitado que vuelve a ver lo suyo, sin cuenta y sin
+# nada que revocar. Lo de aquí abajo empieza donde hay cuenta, y por eso aparece
+# lo que allí no existe: un token de refresco y una lista de sesiones.
+#
+# Ninguna lleva `X-Tenant-Id`. Una cuenta es global (ER-02): la misma persona
+# reserva en varios negocios y su sesión no cambia según por cuál entró.
+# ---------------------------------------------------------------------------
+
+contrasena:
+  post:
+    operationId: iniciarSesion
+    security: []  # es la puerta de entrada
+    summary: Iniciar sesión con contraseña (RF-12)
+    description: |
+      Credenciales incorrectas, cuenta inexistente y contraseña sin definir
+      responden lo mismo: `401` con el mismo cuerpo. La tercera importa más de
+      lo que parece —una cuenta creada por magic link no tiene contraseña— y
+      distinguirla revelaría qué direcciones están registradas.
+
+      Una cuenta suspendida o pendiente de verificación SÍ se distingue
+      (RF-12 A8), y no contradice lo anterior: quien llega hasta ahí ya
+      demostró saber la contraseña, así que no se le está diciendo nada que no
+      supiera.
+
+      Los intentos fallidos consecutivos se cuentan por cuenta y bloquean el
+      acceso durante un rato (RF-12 A3/A4). El bloqueo responde `429`, no
+      `401`: no es que las credenciales estén mal, es que hay que esperar.
+    tags: [sesiones]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../componentes/esquemas/cuentas.yaml#/Credenciales'
+    responses:
+      '200':
+        description: Sesión iniciada
+        content:
+          application/json:
+            schema:
+              $ref: '../componentes/esquemas/cuentas.yaml#/ParTokens'
+      '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
+      '422': { $ref: '../componentes/respuestas.yaml#/NoProcesable' }
+      '429': { $ref: '../componentes/respuestas.yaml#/DemasiadasPeticiones' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+enlace:
+  post:
+    operationId: solicitarEnlace
+    security: []
+    summary: Pedir un magic link para entrar (RF-12)
+    description: |
+      Enlace de un solo uso, quince minutos de vigencia. **Responde igual exista
+      o no la cuenta** (RF-12 A12).
+    tags: [sesiones]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../componentes/esquemas/cuentas.yaml#/SolicitudEnlace'
+    responses:
+      '202':
+        description: Si esa dirección tiene cuenta, el enlace va en camino.
+      '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '429': { $ref: '../componentes/respuestas.yaml#/DemasiadasPeticiones' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+canjeEnlace:
+  post:
+    operationId: canjearEnlace
+    security: []  # el token del enlace ES la credencial
+    summary: Canjear el magic link por una sesión (RF-12)
+    tags: [sesiones]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../componentes/esquemas/cuentas.yaml#/CanjeEnlace'
+    responses:
+      '200':
+        description: Sesión iniciada
+        content:
+          application/json:
+            schema:
+              $ref: '../componentes/esquemas/cuentas.yaml#/ParTokens'
+      '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
+      '422': { $ref: '../componentes/respuestas.yaml#/NoProcesable' }
+      '429': { $ref: '../componentes/respuestas.yaml#/DemasiadasPeticiones' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+refresco:
+  post:
+    operationId: refrescarSesion
+    security: []  # el token de refresco ES la credencial de esta ruta
+    summary: Renovar el par de tokens (RF-12)
+    description: |
+      El token de refresco ROTA: el que se presenta deja de valer y se entrega
+      otro. Es lo que hace que un refresco copiado se note —el primero de los
+      dos en canjearlo deja al otro fuera— en vez de quedar utilizable en
+      paralelo hasta que caduque la sesión.
+
+      Un refresco revocado, vencido o desconocido responde `401` sin
+      distinguirlos.
+    tags: [sesiones]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../componentes/esquemas/cuentas.yaml#/SolicitudRefresco'
+    responses:
+      '200':
+        description: Par renovado
+        content:
+          application/json:
+            schema:
+              $ref: '../componentes/esquemas/cuentas.yaml#/ParTokens'
+      '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+coleccion:
+  get:
+    operationId: listarSesiones
+    summary: Sesiones activas (RF-25)
+    tags: [sesiones]
+    security:
+      - TokenCliente: []
+    responses:
+      '200':
+        description: Las sesiones vivas de la cuenta
+        content:
+          application/json:
+            schema:
+              $ref: '../componentes/esquemas/cuentas.yaml#/ListaSesiones'
+      '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
+      '403': { $ref: '../componentes/respuestas.yaml#/FueraDeAlcance' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+  delete:
+    operationId: revocarTodasLasSesiones
+    summary: Cerrar todas las sesiones (RF-25)
+    description: |
+      Incluye la propia. Es lo que se pulsa cuando se sospecha que alguien más
+      entró, y dejar viva justo la sesión desde la que se pulsa obligaría a
+      confiar en que la comprometida no es esa.
+    tags: [sesiones]
+    security:
+      - TokenCliente: []
+    responses:
+      '204':
+        description: Todas las sesiones quedaron revocadas.
+      '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
+      '403': { $ref: '../componentes/respuestas.yaml#/FueraDeAlcance' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+porId:
+  delete:
+    operationId: revocarSesion
+    summary: Revocar una sesión concreta (RF-25)
+    description: |
+      Una sesión de otra cuenta responde `404`, no `403`: un 403 confirmaría que
+      ese identificador existe.
+    tags: [sesiones]
+    security:
+      - TokenCliente: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    responses:
+      '204':
+        description: Sesión revocada.
+      '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
+      '403': { $ref: '../componentes/respuestas.yaml#/FueraDeAlcance' }
+      '404': { $ref: '../componentes/respuestas.yaml#/NoEncontrado' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }

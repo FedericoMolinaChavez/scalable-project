@@ -20,6 +20,7 @@ import (
 
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/api"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/datos"
+	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/dominio"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/reservas"
 )
 
@@ -48,57 +49,55 @@ func Nuevo(bd *datos.BD) *Servicio {
 }
 
 // Filtro son los criterios de RF-09, ya normalizados.
+//
+// Sede y recurso son los que RF-32 necesita para recorrer la agenda del
+// administrador. No estan acotados a ese rol: filtrar lo propio por sede es una
+// consulta legitima de cualquiera, y prohibirsela obligaria a que el filtro
+// supiera de tipos de cuenta. Quien ve que lo decide el Alcance, no el filtro.
 type Filtro struct {
 	Estados []api.EstadoReserva
 	Desde   *time.Time
 	Hasta   *time.Time
+	Sede    *uuid.UUID
+	Recurso *uuid.UUID
 	Limite  int
 	Cursor  string
 }
 
 // Alcance es de quién son las reservas que se piden.
 //
-// Hoy solo existe una forma de acotarlo —el correo que un token de invitado
-// acredita (RF-02)— pero es un tipo y no una cadena suelta porque RF-23 dice
-// que el alcance sale del tipo de cuenta: con RF-12 esto gana un CuentaID y un
-// caso de administrador que ve el tenant entero (RF-32). Que sea un tipo hace
-// que añadirlos sea un campo más, no una firma nueva en cada capa.
-type Alcance struct {
-	// Destino es el correo verificado. Vacío significa sin acotar, y eso NO es
-	// un valor válido que este paquete acepte: lo rechaza, porque una consulta
-	// de reservas sin alcance devuelve las de todo el mundo.
-	Destino string
-}
+// Es un alias de dominio.Alcance y no un tipo propio: el mismo alcance gobierna
+// la lectura de aquí y la cancelación del núcleo, y dos definiciones separadas
+// derivarían en cuanto alguien añadiera un caso a una sola.
+type Alcance = dominio.Alcance
 
-// ErrSinAlcance se devuelve cuando se pide una lista sin decir de quién.
+// ErrSinAlcance es el de dominio, reexportado.
 //
-// Falla cerrado a propósito. El error posible es no devolver nada; el
-// inaceptable sería devolver las reservas de otra persona porque alguien se
-// olvidó de pasar el alcance.
-var ErrSinAlcance = errors.New("no se puede listar reservas sin saber de quién son")
+// Se conserva el nombre en este paquete porque internal/rutas lo clasifica por
+// él y porque las pruebas de aquí lo esperan; lo que no se conserva es una
+// segunda definición, que acabaría siendo un error distinto con el mismo texto.
+var ErrSinAlcance = dominio.ErrSinAlcance
 
 // Listar devuelve una página de reservas, de la más reciente a la más antigua.
 //
-// El ALCANCE de esta ruta no es fijo: sale del tipo de cuenta que la llama
-// (RF-23). Un `usuario` ve las suyas (RF-02), un `administrador` ve las de su
-// tenant (RF-32), y un `agente` ve las de la cuenta a la que representa. Es una
-// sola ruta y no tres porque RF-23 modela el alcance como la intersección entre
-// la acción pedida y el alcance de la cuenta, no como rutas distintas por rol.
+// El ALCANCE no es fijo: sale del tipo de cuenta que la llama (RF-23). Un
+// `usuario` ve las suyas (RF-02), un `administrador` ve las de su tenant
+// (RF-32), un invitado ve las hechas con su correo, y un agente ve las de la
+// cuenta a la que representa (RF-05). Es una sola ruta y no cuatro porque RF-23
+// modela el alcance como la intersección entre la acción pedida y el alcance de
+// la cuenta, no como rutas distintas por rol.
 //
-// SIN AUTENTICACIÓN no hay de dónde derivar ese alcance, así que devuelve las
-// del tenant entero: en la práctica, el alcance del administrador. Eso NO
-// convierte esta función en provisional —el filtro por tenant es correcto para
-// ese rol— pero sí significa que hoy cualquiera ve lo que solo el
-// administrador debería ver.
-//
-// Con RF-12 el alcance entra por parámetro y esta consulta gana un
-// `cuenta_id = $n` cuando quien llama es un usuario. La lista del usuario
-// además debe pasar por plataforma.indice_reserva_global en vez de filtrar
-// aquí, para no abanicar las 64 particiones (RNF-02).
+// Una cuenta ve además las reservas que hizo como INVITADO con su correo ya
+// verificado. Es lo que RF-24 llama "asociar las reservas previas", resuelto en
+// la lectura y no con una escritura al verificar: negocio.reserva está
+// particionada por tenant y no hay índice global de reservas de invitado, así
+// que reasignarlas todas exigiría barrer las 64 particiones de cada tenant sin
+// saber en cuáles hay algo. Aquí la consulta ya está acotada al tenant que se
+// está mirando, y lo que ve la persona es lo mismo.
 func (s *Servicio) Listar(
 	ctx context.Context, tenant uuid.UUID, alcance Alcance, f Filtro,
 ) (api.ListaReservas, error) {
-	if alcance.Destino == "" {
+	if alcance.Vacio() {
 		return api.ListaReservas{}, ErrSinAlcance
 	}
 
@@ -147,16 +146,26 @@ func (s *Servicio) Listar(
 		filas, err := tx.Query(ctx, `
 			SELECT `+reservas.Columnas+`
 			FROM negocio.reserva
-			WHERE cuenta_id IS NULL
-			  AND lower(contacto_email) = $7
+			WHERE (
+			        $7::boolean
+			        OR ($8::uuid IS NOT NULL AND cuenta_id = $8::uuid)
+			        OR ($9::text IS NOT NULL
+			            AND cuenta_id IS NULL
+			            AND lower(contacto_email) = $9::text)
+			      )
 			  AND ($1::text[] IS NULL OR estado::text = ANY ($1::text[]))
 			  AND ($2::timestamptz IS NULL OR lower(periodo) >= $2::timestamptz)
 			  AND ($3::timestamptz IS NULL OR lower(periodo) <  $3::timestamptz)
+			  AND ($10::uuid IS NULL OR recurso_id = $10::uuid)
+			  AND ($11::uuid IS NULL OR recurso_id IN (
+			        SELECT r.id FROM negocio.recurso r WHERE r.sede_id = $11::uuid))
 			  AND ($4::timestamptz IS NULL
 			       OR (creada_en, id) < ($4::timestamptz, $5::uuid))
 			ORDER BY creada_en DESC, id DESC
 			LIMIT $6`,
-			estados, f.Desde, f.Hasta, desdeCursor, idCursor, limite+1, alcance.Destino)
+			estados, f.Desde, f.Hasta, desdeCursor, idCursor, limite+1,
+			alcance.TenantCompleto, nulo(alcance.Cuenta), nulo(alcance.Destino),
+			f.Recurso, f.Sede)
 		if err != nil {
 			return err
 		}
@@ -196,7 +205,7 @@ func (s *Servicio) Listar(
 func (s *Servicio) Obtener(
 	ctx context.Context, tenant uuid.UUID, alcance Alcance, id uuid.UUID,
 ) (api.Reserva, error) {
-	if alcance.Destino == "" {
+	if alcance.Vacio() {
 		return api.Reserva{}, ErrSinAlcance
 	}
 
@@ -208,8 +217,14 @@ func (s *Servicio) Obtener(
 			`SELECT `+reservas.Columnas+`
 			 FROM negocio.reserva
 			 WHERE id = $1
-			   AND cuenta_id IS NULL
-			   AND lower(contacto_email) = $2`, id, alcance.Destino))
+			   AND (
+			         $2::boolean
+			         OR ($3::uuid IS NOT NULL AND cuenta_id = $3::uuid)
+			         OR ($4::text IS NOT NULL
+			             AND cuenta_id IS NULL
+			             AND lower(contacto_email) = $4::text)
+			       )`,
+			id, alcance.TenantCompleto, nulo(alcance.Cuenta), nulo(alcance.Destino)))
 		return err
 	})
 	if err != nil {
@@ -258,4 +273,18 @@ func descodificarCursor(texto string) (cursor, error) {
 	}
 
 	return cursor{creadaEn: creadaEn, id: id}, nil
+}
+
+// nulo convierte una cadena vacia en NULL para el motor.
+//
+// Hace falta porque el WHERE del alcance decide por "este criterio aplica o no"
+// y no por "el valor esta vacio": con la cadena vacia, comparar
+// lower(contacto_email) con ella puede resultar cierto sobre una fila cuyo
+// correo tambien lo este, y esa reserva pasaria a ser de cualquiera. Con NULL,
+// la comparacion es desconocida y la rama entera se apaga.
+func nulo(v string) *string {
+	if v == "" {
+		return nil
+	}
+	return &v
 }

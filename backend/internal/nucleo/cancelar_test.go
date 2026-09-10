@@ -10,6 +10,7 @@ import (
 
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/api"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/datos"
+	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/dominio"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/nucleo"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/pruebas"
 )
@@ -43,7 +44,7 @@ func TestCancelarLiberaElCupoYDejaHistoria(t *testing.T) {
 
 	id := reservaEn(t, svc, inicio, fin)
 
-	reserva, err := svc.Cancelar(t.Context(), tenant, id, correoPropio)
+	reserva, err := svc.Cancelar(t.Context(), tenant, id, dominio.Alcance{Destino: correoPropio}, "")
 	if err != nil {
 		t.Fatalf("Cancelar devolvió error: %v", err)
 	}
@@ -90,11 +91,11 @@ func TestCancelarDosVecesDaNoCancelable(t *testing.T) {
 
 	id := reservaEn(t, svc, inicio, fin)
 
-	if _, err := svc.Cancelar(t.Context(), tenant, id, correoPropio); err != nil {
+	if _, err := svc.Cancelar(t.Context(), tenant, id, dominio.Alcance{Destino: correoPropio}, ""); err != nil {
 		t.Fatalf("la primera cancelación debía funcionar: %v", err)
 	}
 
-	if _, err := svc.Cancelar(t.Context(), tenant, id, correoPropio); !errors.Is(err, nucleo.ErrNoCancelable) {
+	if _, err := svc.Cancelar(t.Context(), tenant, id, dominio.Alcance{Destino: correoPropio}, ""); !errors.Is(err, nucleo.ErrNoCancelable) {
 		t.Fatalf("se esperaba ErrNoCancelable, se obtuvo %v", err)
 	}
 }
@@ -111,7 +112,7 @@ func TestNoSeCancelaLaReservaDeOtro(t *testing.T) {
 
 	id := reservaEn(t, svc, inicio, fin)
 
-	_, err := svc.Cancelar(t.Context(), tenant, id, "intruso@ejemplo.test")
+	_, err := svc.Cancelar(t.Context(), tenant, id, dominio.Alcance{Destino: "intruso@ejemplo.test"}, "")
 	if !errors.Is(err, datos.ErrNoEncontrado) {
 		t.Fatalf("se esperaba ErrNoEncontrado, se obtuvo %v", err)
 	}
@@ -176,7 +177,7 @@ func TestFueraDePlazoNoSeCancela(t *testing.T) {
 	// sobrevive hasta la siguiente ejecución, que revienta con un 23P01 sin
 	// relación con lo que probaba.
 
-	_, err := svc.Cancelar(t.Context(), tenant, id, correoPropio)
+	_, err := svc.Cancelar(t.Context(), tenant, id, dominio.Alcance{Destino: correoPropio}, "")
 	if !errors.Is(err, nucleo.ErrFueraDePlazo) {
 		t.Fatalf("se esperaba ErrFueraDePlazo, se obtuvo %v", err)
 	}

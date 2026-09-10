@@ -1,0 +1,392 @@
+# La superficie de escritura del administrador: RF-14, RF-15, RF-17, RF-30,
+# RF-31 y la consulta de RF-36.
+#
+# Es la otra mitad de catalogo.yaml. Aquella describe lo que un cliente ve para
+# poder reservar; esta, lo que un administrador configura para que haya algo que
+# reservar. Comparten las entidades —Sede, Servicio— porque son las mismas: lo
+# que cambia no es la forma del dato sino quién puede escribirlo.
+#
+# Ninguna de estas operaciones acepta el identificador del tenant en el cuerpo.
+# El tenant sale del token de quien administra (RF-23), y aceptarlo del cliente
+# permitiría configurar el negocio de otro escribiendo su identificador.
+
+NuevaSede:
+  type: object
+  required: [nombre, zona_horaria]
+  properties:
+    nombre: { type: string, minLength: 1, maxLength: 200 }
+    zona_horaria:
+      type: string
+      description: |
+        Identificador IANA. El motor lo valida contra su propia base de zonas:
+        un `America/Bogata` mal escrito no falla al guardarse, falla semanas
+        más tarde dentro del cálculo de disponibilidad, que es el peor sitio
+        posible para enterarse.
+      examples: ['America/Bogota']
+    direccion: { type: string, maxLength: 500 }
+
+ActualizacionSede:
+  type: object
+  description: |
+    Todo opcional: se envía lo que cambia.
+
+    Desactivar una sede NO cancela sus reservas. Deja de poder elegirse para
+    reservas nuevas y nada más: lo ya vendido sigue en pie, y cancelarlo es una
+    decisión aparte que RF-32 hace explícita.
+  properties:
+    nombre: { type: string, minLength: 1, maxLength: 200 }
+    zona_horaria: { type: string }
+    direccion: { type: string, maxLength: 500 }
+    estado: { $ref: './catalogo.yaml#/EstadoCatalogo' }
+
+NuevoServicio:
+  type: object
+  required: [sede_id, nombre, duracion_min, precio_monto]
+  properties:
+    sede_id: { type: string, format: uuid }
+    nombre: { type: string, minLength: 1, maxLength: 200 }
+    descripcion: { type: string, maxLength: 2000 }
+    duracion_min:
+      type: integer
+      minimum: 1
+      maximum: 1440
+      description: |
+        Es también la duración exacta de cada reserva: el núcleo rechaza un
+        período que no coincida. Cambiarla no altera las reservas ya hechas.
+    precio_monto:
+      type: string
+      pattern: '^\d+(\.\d{1,2})?$'
+      description: |
+        Cadena decimal, no número: en JSON los números son de coma flotante y
+        80000.10 no se representa exactamente. La moneda no se envía —es del
+        tenant (RF-38)— y la reserva congela ambas al crearse (RF-31).
+
+ActualizacionServicio:
+  type: object
+  properties:
+    nombre: { type: string, minLength: 1, maxLength: 200 }
+    descripcion: { type: string, maxLength: 2000 }
+    duracion_min: { type: integer, minimum: 1, maximum: 1440 }
+    precio_monto: { type: string, pattern: '^\d+(\.\d{1,2})?$' }
+    estado: { $ref: './catalogo.yaml#/EstadoCatalogo' }
+
+Recurso:
+  type: object
+  description: |
+    Lo que de verdad se reserva: la sala, la silla, el equipo, la persona. La
+    invariante de no solapamiento es sobre un RECURSO, no sobre un servicio.
+  required: [id, sede_id, nombre, estado]
+  properties:
+    id: { type: string, format: uuid }
+    sede_id: { type: string, format: uuid }
+    nombre: { type: string }
+    estado: { $ref: './catalogo.yaml#/EstadoCatalogo' }
+    servicios:
+      type: array
+      description: Servicios que este recurso presta (RF-30).
+      items: { type: string, format: uuid }
+
+ListaRecursos:
+  type: object
+  required: [datos]
+  properties:
+    datos:
+      type: array
+      items: { $ref: './configuracion.yaml#/Recurso' }
+
+NuevoRecurso:
+  type: object
+  required: [sede_id, nombre]
+  properties:
+    sede_id: { type: string, format: uuid }
+    nombre: { type: string, minLength: 1, maxLength: 200 }
+    servicios:
+      type: array
+      description: |
+        Qué servicios presta. Sin al menos uno, el recurso existe pero no es
+        reservable: el núcleo comprueba que el par servicio/recurso esté
+        declarado antes de insertar.
+      items: { type: string, format: uuid }
+
+ActualizacionRecurso:
+  type: object
+  properties:
+    nombre: { type: string, minLength: 1, maxLength: 200 }
+    estado: { $ref: './catalogo.yaml#/EstadoCatalogo' }
+    servicios:
+      type: array
+      description: Reemplaza la lista completa, no la amplía.
+      items: { type: string, format: uuid }
+
+ReglaDisponibilidad:
+  type: object
+  description: |
+    Un tramo semanal recurrente de un recurso (RF-14).
+
+    Las horas van SIN zona porque hablan del reloj de pared del negocio: "los
+    lunes de 9 a 17" significa las 9 de la sede, no las 9 UTC. La zona la pone
+    la sede, y por eso la regla no cambia cuando cambia el horario de verano.
+  required: [id, recurso_id, dia_semana, hora_inicio, hora_fin]
+  properties:
+    id: { type: string, format: uuid }
+    recurso_id: { type: string, format: uuid }
+    dia_semana:
+      type: integer
+      minimum: 0
+      maximum: 6
+      description: 0 = domingo, como `extract(dow)` de PostgreSQL.
+    hora_inicio: { type: string, examples: ['09:00'] }
+    hora_fin:
+      type: string
+      examples: ['17:00']
+      description: |
+        Tiene que ser mayor que `hora_inicio`: una regla no cruza medianoche.
+        Un turno de noche son DOS reglas, una por cada día que toca, y esa es la
+        única forma en que el cálculo de disponibilidad puede resolverlo sin
+        ambigüedad.
+    vigente_desde: { type: string, format: date }
+    vigente_hasta: { type: string, format: date }
+
+ListaReglas:
+  type: object
+  required: [datos]
+  properties:
+    datos:
+      type: array
+      items: { $ref: './configuracion.yaml#/ReglaDisponibilidad' }
+
+NuevaRegla:
+  type: object
+  required: [recurso_id, dia_semana, hora_inicio, hora_fin]
+  properties:
+    recurso_id: { type: string, format: uuid }
+    dia_semana: { type: integer, minimum: 0, maximum: 6 }
+    hora_inicio: { type: string, examples: ['09:00'] }
+    hora_fin: { type: string, examples: ['17:00'] }
+    vigente_desde: { type: string, format: date }
+    vigente_hasta: { type: string, format: date }
+
+TipoExcepcion:
+  type: string
+  enum: [feriado, mantenimiento, cierre]
+
+ExcepcionCalendario:
+  type: object
+  description: |
+    Un hueco que tapa la disponibilidad (RF-14). Es de una sede o de un recurso,
+    nunca de los dos ni de ninguno.
+  required: [id, periodo, tipo]
+  properties:
+    id: { type: string, format: uuid }
+    sede_id: { type: string, format: uuid }
+    recurso_id: { type: string, format: uuid }
+    periodo: { $ref: './comunes.yaml#/Periodo' }
+    tipo: { $ref: './configuracion.yaml#/TipoExcepcion' }
+    motivo: { type: string }
+
+ListaExcepciones:
+  type: object
+  required: [datos]
+  properties:
+    datos:
+      type: array
+      items: { $ref: './configuracion.yaml#/ExcepcionCalendario' }
+
+NuevaExcepcion:
+  type: object
+  description: |
+    Exactamente uno de `sede_id` o `recurso_id`. Ninguno de los dos deja una
+    excepción que no tapa nada; los dos a la vez, una que no se sabe si tapa la
+    sede entera o solo ese recurso.
+  required: [periodo, tipo]
+  properties:
+    sede_id: { type: string, format: uuid }
+    recurso_id: { type: string, format: uuid }
+    periodo: { $ref: './comunes.yaml#/Periodo' }
+    tipo: { $ref: './configuracion.yaml#/TipoExcepcion' }
+    motivo: { type: string, maxLength: 500 }
+
+Politica:
+  type: object
+  description: |
+    Una versión publicada de la política de cancelación y modificación (RF-15).
+
+    Es INMUTABLE: no se edita ni se borra. Publicar condiciones nuevas es
+    publicar una versión nueva, y las reservas existentes siguen apuntando a la
+    que congelaron al crearse. Es lo que impide que un negocio endurezca su
+    política el martes y se la aplique a quien reservó el lunes.
+  required: [id, version, rango_cancelacion_horas, rango_modificacion_horas, vigente_desde]
+  properties:
+    id: { type: string, format: uuid }
+    servicio_id:
+      type: string
+      format: uuid
+      description: Ausente = política por defecto del tenant.
+    version: { type: integer, minimum: 1 }
+    rango_cancelacion_horas: { type: integer, minimum: 0 }
+    rango_modificacion_horas: { type: integer, minimum: 0 }
+    penalidad_pct: { type: string, pattern: '^\d+(\.\d{1,2})?$' }
+    vigente_desde: { type: string, format: date-time }
+    creada_en: { type: string, format: date-time }
+
+ListaPoliticas:
+  type: object
+  required: [datos]
+  properties:
+    datos:
+      type: array
+      items: { $ref: './configuracion.yaml#/Politica' }
+
+NuevaPolitica:
+  type: object
+  description: |
+    El número de versión NO se envía: lo asigna el servidor como el siguiente
+    del mismo ámbito. Dejarlo al cliente permitiría publicar una versión 3
+    después de una 7 y romper el orden del que depende "cuál está vigente".
+  required: [rango_cancelacion_horas, rango_modificacion_horas]
+  properties:
+    servicio_id: { type: string, format: uuid }
+    rango_cancelacion_horas: { type: integer, minimum: 0, maximum: 8760 }
+    rango_modificacion_horas: { type: integer, minimum: 0, maximum: 8760 }
+    penalidad_pct: { type: string, pattern: '^\d+(\.\d{1,2})?$' }
+    vigente_desde:
+      type: string
+      format: date-time
+      description: Ausente = ahora. Sirve para publicar con antelación.
+
+Voucher:
+  type: object
+  description: |
+    Un descuento porcentual (RF-17). Solo porcentaje, nunca monto fijo: es una
+    restricción de alcance del producto y vive en un CHECK para que no se filtre
+    por accidente.
+  required: [id, codigo, porcentaje, usos_actuales, estado, creado_en]
+  properties:
+    id: { type: string, format: uuid }
+    codigo: { type: string }
+    porcentaje: { type: string, pattern: '^\d+(\.\d{1,2})?$' }
+    limite_usos: { type: integer, minimum: 1 }
+    usos_actuales: { type: integer }
+    caduca_en: { type: string, format: date-time }
+    estado: { type: string, enum: [activo, eliminado] }
+    creado_en: { type: string, format: date-time }
+
+ListaVouchers:
+  type: object
+  required: [datos]
+  properties:
+    datos:
+      type: array
+      items: { $ref: './configuracion.yaml#/Voucher' }
+
+NuevoVoucher:
+  type: object
+  description: |
+    Hace falta un límite de usos o una caducidad, al menos uno. Un voucher del
+    50% sin ninguno de los dos es una fuga de ingresos abierta para siempre, y
+    el motor lo rechaza.
+
+    No hay operación de edición, y no es un olvido: RF-17 permite crear o
+    eliminar y nada más. Cambiarle las condiciones a un voucher que ya está
+    circulando es cambiárselas a quien ya lo recibió.
+  required: [codigo, porcentaje]
+  properties:
+    codigo: { type: string, minLength: 3, maxLength: 64 }
+    porcentaje:
+      type: string
+      pattern: '^\d+(\.\d{1,2})?$'
+      description: Mayor que 0 y hasta 100.
+    limite_usos: { type: integer, minimum: 1 }
+    caduca_en: { type: string, format: date-time }
+
+TipoTarifa:
+  type: string
+  enum: [franja_horaria, dia_semana, temporada]
+
+Tarifa:
+  type: object
+  description: |
+    Sobrescribe el precio del servicio cuando su condición aplica (RF-31). El
+    precio base sigue viviendo en el servicio; esto existe aparte porque sí es
+    uno a muchos.
+  required: [id, servicio_id, tipo, condicion, monto, prioridad]
+  properties:
+    id: { type: string, format: uuid }
+    servicio_id: { type: string, format: uuid }
+    tipo: { $ref: './configuracion.yaml#/TipoTarifa' }
+    condicion:
+      type: object
+      description: |
+        Su forma depende del tipo: una franja lleva horas, un día de semana un
+        número, una temporada dos fechas. Sin esquema fijo porque el motor no la
+        evalúa, la interpreta quien calcula el precio.
+      additionalProperties: true
+    monto: { type: string, pattern: '^\d+(\.\d{1,2})?$' }
+    prioridad:
+      type: integer
+      description: |
+        Con dos tarifas que aplican a la vez gana la de prioridad más alta. Sin
+        este campo el resultado dependería del orden de las filas, que no es un
+        orden.
+
+ListaTarifas:
+  type: object
+  required: [datos]
+  properties:
+    datos:
+      type: array
+      items: { $ref: './configuracion.yaml#/Tarifa' }
+
+NuevaTarifa:
+  type: object
+  required: [servicio_id, tipo, condicion, monto]
+  properties:
+    servicio_id: { type: string, format: uuid }
+    tipo: { $ref: './configuracion.yaml#/TipoTarifa' }
+    condicion: { type: object, additionalProperties: true }
+    monto: { type: string, pattern: '^\d+(\.\d{1,2})?$' }
+    prioridad: { type: integer, default: 0 }
+
+ResultadoAuditoria:
+  type: string
+  enum: [exito, rechazo]
+
+EventoAuditoria:
+  type: object
+  description: |
+    Una acción registrada (RF-36). Append-only: los eventos no se modifican ni
+    se eliminan.
+  required: [id, ocurrido_en, actor_tipo, accion, recurso_tipo, resultado]
+  properties:
+    id: { type: string, format: uuid }
+    ocurrido_en: { type: string, format: date-time }
+    actor_tipo:
+      type: string
+      enum: [usuario, administrador, agente, sistema, super_admin]
+    actor_id: { type: string, format: uuid }
+    agente_id:
+      type: string
+      format: uuid
+      description: Presente solo cuando la ejecutó un agente en nombre de otra cuenta.
+    cuenta_impersonada_id: { type: string, format: uuid }
+    alcance_token:
+      type: array
+      description: El alcance con el que actuó el agente (RF-13).
+      items: { type: string }
+    accion: { type: string, examples: ['crear_sede'] }
+    recurso_tipo: { type: string, examples: ['sede'] }
+    recurso_id: { type: string, format: uuid }
+    resultado: { $ref: './configuracion.yaml#/ResultadoAuditoria' }
+    ip: { type: string }
+    dispositivo: { type: string }
+
+ListaAuditoria:
+  type: object
+  required: [datos]
+  properties:
+    datos:
+      type: array
+      items: { $ref: './configuracion.yaml#/EventoAuditoria' }
+    siguiente_cursor:
+      type: string
+      description: Ausente cuando no hay más páginas.

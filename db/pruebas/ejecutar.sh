@@ -23,6 +23,13 @@ BD="reservas"
 CLIENTES="${CLIENTES:-100}"
 TRANSACCIONES="${TRANSACCIONES:-10}"
 
+# El puerto que se publica al host. El guion NO lo usa --todo va por docker
+# exec-- pero se publica para poder asomarse con --dejar. Es configurable
+# porque 55432 es un numero que cualquier otro proyecto de la maquina puede
+# haber elegido, y entonces el contenedor ni siquiera arranca: el fallo aparece
+# como "port is already allocated" antes de aplicar una sola migracion.
+PUERTO="${PUERTO_PRUEBAS:-55432}"
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # docker cp necesita la ruta de origen en formato nativo de Windows; el resto
 # del guion sigue usando la forma POSIX.
@@ -37,6 +44,7 @@ limpiar() {
     echo ""
     echo "Contenedor '$CONTENEDOR' en pie. Para entrar:"
     echo "  docker exec -it $CONTENEDOR psql -U app_dev -d $BD"
+    echo "  ...o desde el host por el $PUERTO (PUERTO_PRUEBAS para cambiarlo)"
   fi
 }
 trap limpiar EXIT
@@ -51,7 +59,7 @@ docker rm -f "$CONTENEDOR" >/dev/null 2>&1 || true
 # PgBouncer multiplexa (ARQ-01); aqui cada cliente abre la suya.
 docker run -d --name "$CONTENEDOR" \
   -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB="$BD" \
-  -p 55432:5432 "$IMAGEN" \
+  -p "$PUERTO":5432 "$IMAGEN" \
   -c max_connections=$((CLIENTES + 50)) >/dev/null
 
 # -h localhost, y no es opcional.

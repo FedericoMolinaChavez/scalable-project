@@ -41,25 +41,30 @@ opcional.
 ```bash
 cp .env.example .env
 task infra:up
-task back:run -- consulta       # :8081 — lecturas
-task back:run -- nucleo         # :8080 — escrituras
-task back:run -- identidad      # :8082 — códigos y tokens
+task back:run -- consulta       # :8081 — lecturas de reserva y disponibilidad
+task back:run -- nucleo         # :8080 — escritura de reservas
+task back:run -- identidad      # :8082 — cuentas, sesiones y agentes
+task back:run -- configuracion  # :8084 — catálogo, configuración y auditoría
 task back:run -- trabajadores   # :8083 — expirador, transiciones, relay
 task front:dev
 ```
 
-Cada servicio va en su terminal, y son tres y no uno por la razón de ARQ-01: se
-separa por **frontera transaccional y dominio de fallo**. La escritura de una
-reserva debe ser atómica; la lectura no; y la identidad manda correo, así que un
-relé caído no puede arrastrar consigo la ruta de reserva.
+Cada servicio va en su terminal, y son varios y no uno por la razón de ARQ-01:
+se separa por **frontera transaccional y dominio de fallo**. La escritura de una
+reserva debe ser atómica; la lectura no; la identidad manda correo, así que un
+relé caído no puede arrastrar consigo la ruta de reserva; y la configuración
+escribe, así que va contra el primario y no contra las réplicas.
 
 La consecuencia es que `/v1/reservas` lo sirven dos procesos —el `POST` el
-núcleo, el `GET` el de consulta— y el proxy de Vite enruta por método y por
-prefijo. Está explicado en [backend/README.md](backend/README.md) y en
-`frontend/vite.config.ts`.
+núcleo, el `GET` el de consulta— y el proxy de Vite tiene que enrutar por
+método además de por prefijo. Está explicado en
+[backend/README.md](backend/README.md) y en `frontend/vite.config.ts`.
 
-El correo de desarrollo lo captura Mailpit en <http://localhost:8025>: ahí se lee
-el código de RF-02 sin que salga nada fuera.
+El correo de desarrollo lo captura Mailpit en <http://localhost:8025>: ahí se
+leen el código de RF-02, el enlace de verificación de una cuenta nueva (RF-19),
+el magic link de RF-12 y el de recuperación de contraseña (RF-18), sin que salga
+nada fuera. Los enlaces apuntan a `URL_APP`, que por defecto es el servidor de
+Vite.
 
 `task` sin argumentos lista todo lo disponible. Los detalles de la
 infraestructura local están en [deploy/README.md](deploy/README.md).

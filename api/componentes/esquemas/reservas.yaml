@@ -74,3 +74,71 @@ ListaReservas:
     siguiente_cursor:
       type: string
       description: Ausente cuando no hay más páginas.
+
+ModificacionReserva:
+  type: object
+  description: |
+    Reprogramar una reserva (RF-07): moverla de hora, y opcionalmente de
+    recurso.
+
+    Es la MISMA reserva, no una nueva. Cancelar y volver a reservar tiene dos
+    problemas que esto no tiene: entre las dos operaciones el cupo queda libre y
+    otro puede llevárselo, y la reserva pierde su historia, su precio congelado
+    y su política. Aquí el cupo viejo se libera y el nuevo se toma en la misma
+    transacción, así que no hay instante en el que la persona no tenga nada.
+
+    El precio NO se recalcula. Se congeló al crear (RF-31) y mover la hora no lo
+    descongela: cobrar más por reprogramar sería una decisión de negocio que
+    nadie ha tomado, y hacerlo en silencio sería peor.
+  required: [periodo]
+  properties:
+    periodo: { $ref: './comunes.yaml#/Periodo' }
+    recurso_id:
+      type: string
+      format: uuid
+      description: |
+        Ausente = se queda en el mismo recurso. El nuevo tiene que prestar el
+        mismo servicio: cambiar de servicio cambiaría el precio y la duración,
+        y eso ya no es reprogramar.
+
+CambioEstado:
+  type: object
+  description: |
+    Una transición manual de RF-28, de las que la agenda del administrador
+    dispara (RF-32).
+
+    Solo tres, y son las que la leyenda de RF-28 asigna a una persona:
+    `confirmada → en_curso` es el check-in, `confirmada → no_show` es la
+    ausencia registrada a mano antes de que el umbral la marque sola, y
+    `en_curso → completada` cierra la cita. Cancelar tiene ruta propia porque
+    libera cupo y aplica una política; las automáticas las hace el trabajador.
+  required: [estado]
+  properties:
+    estado: { $ref: './reservas.yaml#/EstadoReserva' }
+    motivo:
+      type: string
+      maxLength: 500
+      description: Queda en el historial de la reserva, que el cliente puede ver.
+
+NuevaCalificacion:
+  type: object
+  description: |
+    RF-20. Una por reserva, y solo sobre una reserva completada: calificar algo
+    que todavía no ocurrió no es una opinión, es una expectativa.
+  required: [puntaje]
+  properties:
+    puntaje:
+      type: integer
+      minimum: 1
+      maximum: 5
+    comentario: { type: string, maxLength: 2000 }
+
+Calificacion:
+  type: object
+  required: [id, reserva_id, puntaje, creada_en]
+  properties:
+    id: { type: string, format: uuid }
+    reserva_id: { type: string, format: uuid }
+    puntaje: { type: integer }
+    comentario: { type: string }
+    creada_en: { type: string, format: date-time }

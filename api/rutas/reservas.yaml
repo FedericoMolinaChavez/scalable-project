@@ -9,9 +9,15 @@ coleccion:
       existe el token de invitado, así que devuelve las reservas hechas con el
       correo que ese token acredita.
 
-      Cuando exista RF-12, la misma ruta devolverá las de la cuenta a un
-      `usuario` y las del tenant a un `administrador` (RF-32). Es una operación
-      con el alcance acotado por la cuenta, no tres rutas distintas por rol.
+      Con un token de cuenta el alcance sale del tipo (RF-23): un `usuario` ve
+      las suyas, un `administrador` ve las de su tenant (RF-32) y un agente, las
+      de la cuenta que representa (RF-05). Es una operación con el alcance
+      acotado por la cuenta, no cuatro rutas distintas por rol.
+
+      Los filtros `sede_id` y `recurso_id` solo tienen sentido en el alcance del
+      administrador —la agenda de RF-32 se recorre por sede y por recurso— pero
+      no se rechazan a un `usuario`: acotar lo propio por sede es una consulta
+      legítima, y prohibirla obligaría a que el filtro supiera de roles.
     tags: [reservas]
     security:
       - TokenCliente: []
@@ -34,6 +40,16 @@ coleccion:
         in: query
         required: false
         schema: { type: string, format: date-time }
+      - name: sede_id
+        in: query
+        required: false
+        description: Agenda de una sede (RF-32).
+        schema: { type: string, format: uuid }
+      - name: recurso_id
+        in: query
+        required: false
+        description: Agenda de un recurso concreto (RF-32).
+        schema: { type: string, format: uuid }
       - name: limite
         in: query
         required: false
@@ -55,6 +71,7 @@ coleccion:
               $ref: '../componentes/esquemas/reservas.yaml#/ListaReservas'
       '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
       '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
+      '403': { $ref: '../componentes/respuestas.yaml#/FueraDeAlcance' }
       '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
 
   post:
@@ -179,6 +196,145 @@ cancelacion:
         description: |
           La reserva ya no está en un estado que se pueda cancelar: ya estaba
           cancelada, ya se completó, o el bloqueo expiró solo.
+        content:
+          application/problem+json:
+            schema:
+              $ref: '../componentes/esquemas/comunes.yaml#/Problema'
+      '422': { $ref: '../componentes/respuestas.yaml#/NoProcesable' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+modificacion:
+  post:
+    operationId: modificarReserva
+    summary: Reprogramar una reserva (RF-07)
+    description: |
+      Mueve la MISMA reserva a otra hora, y opcionalmente a otro recurso. El
+      cupo viejo se libera y el nuevo se toma en la misma transacción, así que
+      no hay un instante en el que la persona se quede sin nada: cancelar y
+      volver a reservar sí lo tendría, y en él otro cliente puede llevarse el
+      horario.
+
+      Aplica el `rango_modificacion_horas` de la política que la reserva congeló
+      al crearse (RF-15), no la vigente hoy. Fuera de ese plazo responde `422`
+      con lo que faltaba, no un `403`: no es una cuestión de permisos, es que la
+      regla del negocio no lo permite en ese momento. Un administrador sobre su
+      propio tenant no lo tiene, por lo mismo que en la cancelación.
+
+      El `409` es el de siempre: la restricción EXCLUDE rechazando el horario
+      nuevo porque otro se lo quedó.
+    tags: [reservas]
+    security:
+      - TokenCliente: []
+    parameters:
+      - $ref: '../componentes/parametros.yaml#/Tenant'
+      - $ref: '../componentes/parametros.yaml#/IdEnRuta'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../componentes/esquemas/reservas.yaml#/ModificacionReserva'
+    responses:
+      '200':
+        description: La reserva, ya movida
+        content:
+          application/json:
+            schema:
+              $ref: '../componentes/esquemas/reservas.yaml#/Reserva'
+      '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
+      '404': { $ref: '../componentes/respuestas.yaml#/NoEncontrado' }
+      '409':
+        description: |
+          El horario nuevo ya está tomado, o la reserva ya no está en un estado
+          desde el que se pueda mover.
+        content:
+          application/problem+json:
+            schema:
+              $ref: '../componentes/esquemas/comunes.yaml#/Problema'
+      '422': { $ref: '../componentes/respuestas.yaml#/NoProcesable' }
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+estado:
+  post:
+    operationId: cambiarEstadoReserva
+    summary: Registrar una transición manual (RF-28, RF-32)
+    description: |
+      El check-in, la ausencia y el cierre de una cita: las tres transiciones
+      que la leyenda de RF-28 asigna a una persona y no al sistema.
+
+      Es del administrador del tenant. Cancelar NO entra aquí aunque sea una
+      transición: libera cupo y aplica una política, así que tiene su propia
+      ruta y su propio 422.
+    tags: [reservas]
+    security:
+      - TokenCliente: []
+    parameters:
+      - $ref: '../componentes/parametros.yaml#/Tenant'
+      - $ref: '../componentes/parametros.yaml#/IdEnRuta'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../componentes/esquemas/reservas.yaml#/CambioEstado'
+    responses:
+      '200':
+        description: La reserva, ya en el estado nuevo
+        content:
+          application/json:
+            schema:
+              $ref: '../componentes/esquemas/reservas.yaml#/Reserva'
+      '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
+      '403': { $ref: '../componentes/respuestas.yaml#/FueraDeAlcance' }
+      '404': { $ref: '../componentes/respuestas.yaml#/NoEncontrado' }
+      '409':
+        description: |
+          Esa transición no sale del estado actual. La respuesta dice en cuál
+          está: sin eso, la agenda tendría que adivinar por qué su botón no hizo
+          nada.
+        content:
+          application/problem+json:
+            schema:
+              $ref: '../componentes/esquemas/comunes.yaml#/Problema'
+      '500': { $ref: '../componentes/respuestas.yaml#/ErrorInterno' }
+
+calificacion:
+  post:
+    operationId: calificarReserva
+    summary: Calificar una reserva completada (RF-20)
+    description: |
+      Una por reserva, y solo sobre una completada. Las dos reglas están en
+      sitios distintos a propósito: la unicidad la sostiene el motor —es la que
+      se ataca desde fuera— y "solo completada" vive en el núcleo, porque exige
+      mirar el estado y no cabe en un CHECK.
+
+      Una reserva ajena responde `404`, igual que una inexistente.
+    tags: [reservas]
+    security:
+      - TokenCliente: []
+    parameters:
+      - $ref: '../componentes/parametros.yaml#/Tenant'
+      - $ref: '../componentes/parametros.yaml#/IdEnRuta'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../componentes/esquemas/reservas.yaml#/NuevaCalificacion'
+    responses:
+      '201':
+        description: La calificación registrada
+        content:
+          application/json:
+            schema:
+              $ref: '../componentes/esquemas/reservas.yaml#/Calificacion'
+      '400': { $ref: '../componentes/respuestas.yaml#/PeticionInvalida' }
+      '401': { $ref: '../componentes/respuestas.yaml#/NoAutorizado' }
+      '404': { $ref: '../componentes/respuestas.yaml#/NoEncontrado' }
+      '409':
+        description: Esa reserva ya tiene una calificación.
         content:
           application/problem+json:
             schema:
