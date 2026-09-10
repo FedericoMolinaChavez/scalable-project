@@ -80,6 +80,16 @@ restricción EXCLUDE no puede excluirlas: PostgreSQL exige que el predicado de u
 antes de insertar. No sustituye al expirador de RF-27 —que barre la tabla entera
 y todavía no existe—, cubre el caso concreto que está a punto de estorbar.
 
+**El webhook ignora el desajuste de versión de la API, no la firma.** Cada
+cuenta de Stripe tiene fijada una versión por defecto y sus eventos salen con
+ella; stripe-go espera la suya y por defecto rechaza todo lo demás. Con una
+cuenta creada hace años eso descarta el 100% de los webhooks con un 400, y
+ninguna reserva se confirma jamás: una caída completa de RF-33 disfrazada de
+problema de firma. Se pasa `IgnoreAPIVersionMismatch`, y solo eso: la firma se
+sigue validando entera. El riesgo aceptado está acotado a los cinco campos que
+`internal/pagos` lee de un PaymentIntent, todos estables entre versiones; leer
+campos nuevos o anidados obliga a revisar la decisión.
+
 **El código de un solo uso no se guarda, se guarda su huella** (RNF-09). SHA-256
 a secas, sin sal ni derivación lenta, y eso es correcto porque no es una
 contraseña: seis dígitos que viven cinco minutos y aguantan tres intentos se

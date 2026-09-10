@@ -255,7 +255,29 @@ func (s *stripePasarela) Reembolsar(
 }
 
 func (s *stripePasarela) VerificarEvento(cuerpo []byte, firma string) (Evento, error) {
-	evento, err := webhook.ConstructEvent(cuerpo, firma, s.cfg.SecretoWebhook)
+	// La FIRMA se valida entera; lo que se ignora es solo el desajuste de
+	// versión de la API, y esa distinción es todo lo que hay que entender aquí.
+	//
+	// Cada cuenta de Stripe tiene fijada una versión por defecto, y los eventos
+	// salen con ELLA. La biblioteca, en cambio, espera la versión con la que se
+	// generó, y por defecto rechaza cualquier evento que no la traiga. Con una
+	// cuenta creada hace años eso significa que TODOS los webhooks se descartan
+	// con un 400: ninguna reserva se confirma nunca, Stripe reintenta durante
+	// días, y el conciliador de RF-33 acaba tapándolo preguntando uno por uno.
+	// Es una caída completa de la ruta de confirmación disfrazada de problema
+	// de firma.
+	//
+	// Lo que se arriesga a cambio es acotado y conviene dejarlo escrito: de un
+	// PaymentIntent este componente lee `id`, `client_secret`, `status`,
+	// `metadata` y `last_payment_error.message`, cinco campos que no han
+	// cambiado de nombre ni de forma en ninguna versión de la API. Si algún día
+	// se leen campos nuevos o anidados, esta decisión hay que revisarla: ahí sí
+	// la deserialización silenciosa puede mentir.
+	//
+	// La alternativa —subir la versión por defecto de la cuenta— no es de este
+	// código: afecta a todo lo que esa cuenta tenga en producción.
+	evento, err := webhook.ConstructEventWithOptions(cuerpo, firma, s.cfg.SecretoWebhook,
+		webhook.ConstructEventOptions{IgnoreAPIVersionMismatch: true})
 	if err != nil {
 		return Evento{}, fmt.Errorf("%w: %w", ErrFirmaInvalida, err)
 	}
