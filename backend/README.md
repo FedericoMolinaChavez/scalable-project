@@ -289,8 +289,10 @@ recuentos cambiantes que no tienen nada que ver con lo que cada uno comprueba.
   rama más en el inicio de sesión.
 - **El `usado_en` de `token_agente` no se escribe.** El token de agente se
   verifica solo por firma, como todos los demás, así que nada consulta la fila
-  al usarlo. Registrar el primer uso exige una lectura en la ruta del agente, y
-  entra con la auditoría de RF-36, que es quien la necesita.
+  al usarlo. Registrar el primer uso exige una lectura por petición en la ruta
+  del agente, y a cambio daría revocación real sobre esos tokens: es la única
+  familia donde el volumen lo hace asumible. La auditoría de RF-36 ya registra
+  qué se concedió y a quién; lo que falta es cuándo se gastó.
 - **`super_admin` no tiene superficie.** Existe en el modelo, en RF-23 y en el
   rol `reservas_soporte`, pero ninguna ruta lo distingue de un administrador: la
   consulta de auditoría de RF-36 responde hoy solo con el alcance del
