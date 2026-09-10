@@ -158,6 +158,17 @@ func (n *Notificador) mensajePara(asunto string, e eventoReserva) (string, strin
 				"El horario vuelve a estar disponible.\n",
 			e.ContactoNombre, cuando), true
 
+	case "reservas." + tipoModificada:
+		// RF-07 lo pide explícitamente: "envía notificación con los cambios
+		// realizados". El aviso lleva la hora NUEVA y no las dos, porque el
+		// evento no transporta la anterior: un evento es un aviso de que algo
+		// pasó, no un diff, y quien quiera el antes lo tiene en el historial.
+		return "Tu reserva cambió de horario", fmt.Sprintf(
+			"Hola %s:\n\n"+
+				"Tu reserva quedó reprogramada para el %s.\n\n"+
+				"Si no fuiste tú quien lo pidió, responde a este correo.\n",
+			e.ContactoNombre, cuando), true
+
 	case "reservas." + tipoExpirada:
 		return "El horario que tenías apartado venció", fmt.Sprintf(
 			"Hola %s:\n\n"+
@@ -176,7 +187,8 @@ func (n *Notificador) mensajePara(asunto string, e eventoReserva) (string, strin
 // mañana serán también el webhook de pagos y el administrador, y ninguno de
 // ellos debería tener que importar a los otros para nombrar un evento.
 const (
-	tipoCreada    = "reserva.creada"
-	tipoCancelada = "reserva.cancelada"
-	tipoExpirada  = "reserva.expirada"
+	tipoCreada     = "reserva.creada"
+	tipoCancelada  = "reserva.cancelada"
+	tipoExpirada   = "reserva.expirada"
+	tipoModificada = "reserva.modificada"
 )

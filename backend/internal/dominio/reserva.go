@@ -72,3 +72,10 @@ func (p Periodo) Duracion() time.Duration {
 func (p Periodo) CoincideCon(duracionMin int) bool {
 	return p.Duracion() == time.Duration(duracionMin)*time.Minute
 }
+
+// ErrPuntajeInvalido es el rango de RF-20: de 1 a 5.
+//
+// Está aquí y no en el paquete que lo usa porque es una regla sobre un valor,
+// no sobre una fila: el mismo rango lo comprueban el contrato al recibirlo, el
+// CHECK del esquema al guardarlo y esta constante en medio.
+var ErrPuntajeInvalido = errors.New("el puntaje tiene que estar entre 1 y 5")

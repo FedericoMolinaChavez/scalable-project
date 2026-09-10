@@ -188,3 +188,12 @@ paths:
 
   /v1/reservas/{id}/cancelacion:
     $ref: './rutas/reservas.yaml#/cancelacion'
+
+  /v1/reservas/{id}/modificacion:
+    $ref: './rutas/reservas.yaml#/modificacion'
+
+  /v1/reservas/{id}/estado:
+    $ref: './rutas/reservas.yaml#/estado'
+
+  /v1/reservas/{id}/calificacion:
+    $ref: './rutas/reservas.yaml#/calificacion'

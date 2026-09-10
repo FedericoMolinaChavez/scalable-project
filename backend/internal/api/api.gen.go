@@ -326,6 +326,15 @@ type ActualizacionServicio struct {
 	PrecioMonto *string         `json:"precio_monto,omitempty"`
 }
 
+// Calificacion defines model for Calificacion.
+type Calificacion struct {
+	Comentario *string            `json:"comentario,omitempty"`
+	CreadaEn   time.Time          `json:"creada_en"`
+	Id         openapi_types.UUID `json:"id"`
+	Puntaje    int                `json:"puntaje"`
+	ReservaId  openapi_types.UUID `json:"reserva_id"`
+}
+
 // CambioContrasena El camino de RF-18 para quien ya entró: la prueba de identidad es la
 // contraseña actual, y se exige aunque haya sesión. Un token robado no debe
 // bastar para quedarse con la cuenta cambiando su contraseña.
@@ -336,6 +345,22 @@ type ActualizacionServicio struct {
 type CambioContrasena struct {
 	ContrasenaActual string `json:"contrasena_actual"`
 	ContrasenaNueva  string `json:"contrasena_nueva"`
+}
+
+// CambioEstado Una transición manual de RF-28, de las que la agenda del administrador
+// dispara (RF-32).
+//
+// Solo tres, y son las que la leyenda de RF-28 asigna a una persona:
+// `confirmada → en_curso` es el check-in, `confirmada → no_show` es la
+// ausencia registrada a mano antes de que el umbral la marque sola, y
+// `en_curso → completada` cierra la cita. Cancelar tiene ruta propia porque
+// libera cupo y aplica una política; las automáticas las hace el trabajador.
+type CambioEstado struct {
+	// Estado Estados de RF-28.
+	Estado EstadoReserva `json:"estado"`
+
+	// Motivo Queda en el historial de la reserva, que el cliente puede ver.
+	Motivo *string `json:"motivo,omitempty"`
 }
 
 // CanalContacto Por dónde viaja un código o un enlace de un solo uso.
@@ -581,6 +606,41 @@ type ListaTarifas struct {
 // ListaVouchers defines model for ListaVouchers.
 type ListaVouchers struct {
 	Datos []Voucher `json:"datos"`
+}
+
+// ModificacionReserva Reprogramar una reserva (RF-07): moverla de hora, y opcionalmente de
+// recurso.
+//
+// Es la MISMA reserva, no una nueva. Cancelar y volver a reservar tiene dos
+// problemas que esto no tiene: entre las dos operaciones el cupo queda libre y
+// otro puede llevárselo, y la reserva pierde su historia, su precio congelado
+// y su política. Aquí el cupo viejo se libera y el nuevo se toma en la misma
+// transacción, así que no hay instante en el que la persona no tenga nada.
+//
+// El precio NO se recalcula. Se congeló al crear (RF-31) y mover la hora no lo
+// descongela: cobrar más por reprogramar sería una decisión de negocio que
+// nadie ha tomado, y hacerlo en silencio sería peor.
+type ModificacionReserva struct {
+	// Periodo Intervalo semiabierto `[inicio, fin)`. El límite inferior entra, el superior
+	// no.
+	//
+	// No es un detalle de estilo: con ambos límites cerrados, 10:00–11:00 y
+	// 11:00–12:00 comparten un instante, el operador `&&` de PostgreSQL las declara
+	// solapadas y la restricción EXCLUDE rechazaría dos citas consecutivas
+	// perfectamente válidas.
+	Periodo Periodo `json:"periodo"`
+
+	// RecursoId Ausente = se queda en el mismo recurso. El nuevo tiene que prestar el
+	// mismo servicio: cambiar de servicio cambiaría el precio y la duración,
+	// y eso ya no es reprogramar.
+	RecursoId *openapi_types.UUID `json:"recurso_id,omitempty"`
+}
+
+// NuevaCalificacion RF-20. Una por reserva, y solo sobre una reserva completada: calificar algo
+// que todavía no ocurrió no es una opinión, es una expectativa.
+type NuevaCalificacion struct {
+	Comentario *string `json:"comentario,omitempty"`
+	Puntaje    int     `json:"puntaje"`
 }
 
 // NuevaCuenta Registro de RF-24.
@@ -1220,8 +1280,35 @@ type ObtenerReservaParams struct {
 	XTenantId Tenant `json:"X-Tenant-Id"`
 }
 
+// CalificarReservaParams defines parameters for CalificarReserva.
+type CalificarReservaParams struct {
+	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+	// (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+	// de un cliente en producción permitiría leer los datos de cualquier otro
+	// tenant.
+	XTenantId Tenant `json:"X-Tenant-Id"`
+}
+
 // CancelarReservaParams defines parameters for CancelarReserva.
 type CancelarReservaParams struct {
+	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+	// (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+	// de un cliente en producción permitiría leer los datos de cualquier otro
+	// tenant.
+	XTenantId Tenant `json:"X-Tenant-Id"`
+}
+
+// CambiarEstadoReservaParams defines parameters for CambiarEstadoReserva.
+type CambiarEstadoReservaParams struct {
+	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+	// (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+	// de un cliente en producción permitiría leer los datos de cualquier otro
+	// tenant.
+	XTenantId Tenant `json:"X-Tenant-Id"`
+}
+
+// ModificarReservaParams defines parameters for ModificarReserva.
+type ModificarReservaParams struct {
 	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
 	// (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
 	// de un cliente en producción permitiría leer los datos de cualquier otro
@@ -1329,6 +1416,15 @@ type GuardarPreferenciasJSONRequestBody = ListaPreferencias
 
 // CrearReservaJSONRequestBody defines body for CrearReserva for application/json ContentType.
 type CrearReservaJSONRequestBody = NuevaReserva
+
+// CalificarReservaJSONRequestBody defines body for CalificarReserva for application/json ContentType.
+type CalificarReservaJSONRequestBody = NuevaCalificacion
+
+// CambiarEstadoReservaJSONRequestBody defines body for CambiarEstadoReserva for application/json ContentType.
+type CambiarEstadoReservaJSONRequestBody = CambioEstado
+
+// ModificarReservaJSONRequestBody defines body for ModificarReserva for application/json ContentType.
+type ModificarReservaJSONRequestBody = ModificacionReserva
 
 // SolicitarCodigoJSONRequestBody defines body for SolicitarCodigo for application/json ContentType.
 type SolicitarCodigoJSONRequestBody = SolicitudCodigo
@@ -1470,9 +1566,18 @@ type ServerInterface interface {
 	// ObtenerReserva Detalle de una reserva (RF-03)
 	// (GET /v1/reservas/{id})
 	ObtenerReserva(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, params ObtenerReservaParams)
+	// CalificarReserva Calificar una reserva completada (RF-20)
+	// (POST /v1/reservas/{id}/calificacion)
+	CalificarReserva(w http.ResponseWriter, r *http.Request, id IdEnRuta, params CalificarReservaParams)
 	// CancelarReserva Cancelar una reserva (RF-06)
 	// (POST /v1/reservas/{id}/cancelacion)
 	CancelarReserva(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, params CancelarReservaParams)
+	// CambiarEstadoReserva Registrar una transición manual (RF-28, RF-32)
+	// (POST /v1/reservas/{id}/estado)
+	CambiarEstadoReserva(w http.ResponseWriter, r *http.Request, id IdEnRuta, params CambiarEstadoReservaParams)
+	// ModificarReserva Reprogramar una reserva (RF-07)
+	// (POST /v1/reservas/{id}/modificacion)
+	ModificarReserva(w http.ResponseWriter, r *http.Request, id IdEnRuta, params ModificarReservaParams)
 	// ListarSedes Sedes del tenant
 	// (GET /v1/sedes)
 	ListarSedes(w http.ResponseWriter, r *http.Request, params ListarSedesParams)
@@ -2582,6 +2687,60 @@ func (siw *ServerInterfaceWrapper) ObtenerReserva(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// CalificarReserva operation middleware
+func (siw *ServerInterfaceWrapper) CalificarReserva(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id IdEnRuta
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CalificarReservaParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Tenant-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Tenant-Id")]; found {
+		var XTenantId Tenant
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Tenant-Id", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Tenant-Id", valueList[0], &XTenantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Tenant-Id", Err: err})
+			return
+		}
+
+		params.XTenantId = XTenantId
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Tenant-Id is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Tenant-Id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CalificarReserva(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CancelarReserva operation middleware
 func (siw *ServerInterfaceWrapper) CancelarReserva(w http.ResponseWriter, r *http.Request) {
 
@@ -2627,6 +2786,114 @@ func (siw *ServerInterfaceWrapper) CancelarReserva(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CancelarReserva(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CambiarEstadoReserva operation middleware
+func (siw *ServerInterfaceWrapper) CambiarEstadoReserva(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id IdEnRuta
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CambiarEstadoReservaParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Tenant-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Tenant-Id")]; found {
+		var XTenantId Tenant
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Tenant-Id", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Tenant-Id", valueList[0], &XTenantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Tenant-Id", Err: err})
+			return
+		}
+
+		params.XTenantId = XTenantId
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Tenant-Id is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Tenant-Id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CambiarEstadoReserva(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ModificarReserva operation middleware
+func (siw *ServerInterfaceWrapper) ModificarReserva(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id IdEnRuta
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ModificarReservaParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Tenant-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Tenant-Id")]; found {
+		var XTenantId Tenant
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Tenant-Id", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Tenant-Id", valueList[0], &XTenantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Tenant-Id", Err: err})
+			return
+		}
+
+		params.XTenantId = XTenantId
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Tenant-Id is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Tenant-Id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ModificarReserva(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3111,6 +3378,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/reservas", wrapper.CrearReserva)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/reservas/{id}", wrapper.ObtenerReserva)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/reservas/{id}/cancelacion", wrapper.CancelarReserva)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/reservas/{id}/modificacion", wrapper.ModificarReserva)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/reservas/{id}/estado", wrapper.CambiarEstadoReserva)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/reservas/{id}/calificacion", wrapper.CalificarReserva)
 
 	return m
 }
@@ -6671,6 +6941,124 @@ func (response ObtenerReserva500ApplicationProblemPlusJSONResponse) VisitObtener
 	return err
 }
 
+type CalificarReservaRequestObject struct {
+	Id     IdEnRuta `json:"id"`
+	Params CalificarReservaParams
+	Body   *CalificarReservaJSONRequestBody
+}
+
+type CalificarReservaResponseObject interface {
+	VisitCalificarReservaResponse(w http.ResponseWriter) error
+}
+
+type CalificarReserva201JSONResponse Calificacion
+
+func (response CalificarReserva201JSONResponse) VisitCalificarReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CalificarReserva400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response CalificarReserva400ApplicationProblemPlusJSONResponse) VisitCalificarReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CalificarReserva401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response CalificarReserva401ApplicationProblemPlusJSONResponse) VisitCalificarReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CalificarReserva404ApplicationProblemPlusJSONResponse struct {
+	NoEncontradoApplicationProblemPlusJSONResponse
+}
+
+func (response CalificarReserva404ApplicationProblemPlusJSONResponse) VisitCalificarReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CalificarReserva409ApplicationProblemPlusJSONResponse Problema
+
+func (response CalificarReserva409ApplicationProblemPlusJSONResponse) VisitCalificarReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CalificarReserva422ApplicationProblemPlusJSONResponse struct {
+	NoProcesableApplicationProblemPlusJSONResponse
+}
+
+func (response CalificarReserva422ApplicationProblemPlusJSONResponse) VisitCalificarReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CalificarReserva500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response CalificarReserva500ApplicationProblemPlusJSONResponse) VisitCalificarReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CancelarReservaRequestObject struct {
 	Id     openapi_types.UUID `json:"id"`
 	Params CancelarReservaParams
@@ -6761,6 +7149,242 @@ type CancelarReserva500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response CancelarReserva500ApplicationProblemPlusJSONResponse) VisitCancelarReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CambiarEstadoReservaRequestObject struct {
+	Id     IdEnRuta `json:"id"`
+	Params CambiarEstadoReservaParams
+	Body   *CambiarEstadoReservaJSONRequestBody
+}
+
+type CambiarEstadoReservaResponseObject interface {
+	VisitCambiarEstadoReservaResponse(w http.ResponseWriter) error
+}
+
+type CambiarEstadoReserva200JSONResponse Reserva
+
+func (response CambiarEstadoReserva200JSONResponse) VisitCambiarEstadoReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CambiarEstadoReserva400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response CambiarEstadoReserva400ApplicationProblemPlusJSONResponse) VisitCambiarEstadoReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CambiarEstadoReserva401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response CambiarEstadoReserva401ApplicationProblemPlusJSONResponse) VisitCambiarEstadoReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CambiarEstadoReserva403ApplicationProblemPlusJSONResponse struct {
+	FueraDeAlcanceApplicationProblemPlusJSONResponse
+}
+
+func (response CambiarEstadoReserva403ApplicationProblemPlusJSONResponse) VisitCambiarEstadoReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CambiarEstadoReserva404ApplicationProblemPlusJSONResponse struct {
+	NoEncontradoApplicationProblemPlusJSONResponse
+}
+
+func (response CambiarEstadoReserva404ApplicationProblemPlusJSONResponse) VisitCambiarEstadoReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CambiarEstadoReserva409ApplicationProblemPlusJSONResponse Problema
+
+func (response CambiarEstadoReserva409ApplicationProblemPlusJSONResponse) VisitCambiarEstadoReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CambiarEstadoReserva500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response CambiarEstadoReserva500ApplicationProblemPlusJSONResponse) VisitCambiarEstadoReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ModificarReservaRequestObject struct {
+	Id     IdEnRuta `json:"id"`
+	Params ModificarReservaParams
+	Body   *ModificarReservaJSONRequestBody
+}
+
+type ModificarReservaResponseObject interface {
+	VisitModificarReservaResponse(w http.ResponseWriter) error
+}
+
+type ModificarReserva200JSONResponse Reserva
+
+func (response ModificarReserva200JSONResponse) VisitModificarReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ModificarReserva400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response ModificarReserva400ApplicationProblemPlusJSONResponse) VisitModificarReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ModificarReserva401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response ModificarReserva401ApplicationProblemPlusJSONResponse) VisitModificarReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ModificarReserva404ApplicationProblemPlusJSONResponse struct {
+	NoEncontradoApplicationProblemPlusJSONResponse
+}
+
+func (response ModificarReserva404ApplicationProblemPlusJSONResponse) VisitModificarReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ModificarReserva409ApplicationProblemPlusJSONResponse Problema
+
+func (response ModificarReserva409ApplicationProblemPlusJSONResponse) VisitModificarReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ModificarReserva422ApplicationProblemPlusJSONResponse struct {
+	NoProcesableApplicationProblemPlusJSONResponse
+}
+
+func (response ModificarReserva422ApplicationProblemPlusJSONResponse) VisitModificarReservaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ModificarReserva500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response ModificarReserva500ApplicationProblemPlusJSONResponse) VisitModificarReservaResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -7717,9 +8341,18 @@ type StrictServerInterface interface {
 	// ObtenerReserva Detalle de una reserva (RF-03)
 	// (GET /v1/reservas/{id})
 	ObtenerReserva(ctx context.Context, request ObtenerReservaRequestObject) (ObtenerReservaResponseObject, error)
+	// CalificarReserva Calificar una reserva completada (RF-20)
+	// (POST /v1/reservas/{id}/calificacion)
+	CalificarReserva(ctx context.Context, request CalificarReservaRequestObject) (CalificarReservaResponseObject, error)
 	// CancelarReserva Cancelar una reserva (RF-06)
 	// (POST /v1/reservas/{id}/cancelacion)
 	CancelarReserva(ctx context.Context, request CancelarReservaRequestObject) (CancelarReservaResponseObject, error)
+	// CambiarEstadoReserva Registrar una transición manual (RF-28, RF-32)
+	// (POST /v1/reservas/{id}/estado)
+	CambiarEstadoReserva(ctx context.Context, request CambiarEstadoReservaRequestObject) (CambiarEstadoReservaResponseObject, error)
+	// ModificarReserva Reprogramar una reserva (RF-07)
+	// (POST /v1/reservas/{id}/modificacion)
+	ModificarReserva(ctx context.Context, request ModificarReservaRequestObject) (ModificarReservaResponseObject, error)
 	// ListarSedes Sedes del tenant
 	// (GET /v1/sedes)
 	ListarSedes(ctx context.Context, request ListarSedesRequestObject) (ListarSedesResponseObject, error)
@@ -8930,6 +9563,40 @@ func (sh *strictHandler) ObtenerReserva(w http.ResponseWriter, r *http.Request, 
 	}
 }
 
+// CalificarReserva operation middleware
+func (sh *strictHandler) CalificarReserva(w http.ResponseWriter, r *http.Request, id IdEnRuta, params CalificarReservaParams) {
+	var request CalificarReservaRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body CalificarReservaJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CalificarReserva(ctx, request.(CalificarReservaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CalificarReserva")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CalificarReservaResponseObject); ok {
+		if err := validResponse.VisitCalificarReservaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CancelarReserva operation middleware
 func (sh *strictHandler) CancelarReserva(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, params CancelarReservaParams) {
 	var request CancelarReservaRequestObject
@@ -8950,6 +9617,74 @@ func (sh *strictHandler) CancelarReserva(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CancelarReservaResponseObject); ok {
 		if err := validResponse.VisitCancelarReservaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CambiarEstadoReserva operation middleware
+func (sh *strictHandler) CambiarEstadoReserva(w http.ResponseWriter, r *http.Request, id IdEnRuta, params CambiarEstadoReservaParams) {
+	var request CambiarEstadoReservaRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body CambiarEstadoReservaJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CambiarEstadoReserva(ctx, request.(CambiarEstadoReservaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CambiarEstadoReserva")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CambiarEstadoReservaResponseObject); ok {
+		if err := validResponse.VisitCambiarEstadoReservaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ModificarReserva operation middleware
+func (sh *strictHandler) ModificarReserva(w http.ResponseWriter, r *http.Request, id IdEnRuta, params ModificarReservaParams) {
+	var request ModificarReservaRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body ModificarReservaJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ModificarReserva(ctx, request.(ModificarReservaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ModificarReserva")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ModificarReservaResponseObject); ok {
+		if err := validResponse.VisitModificarReservaResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

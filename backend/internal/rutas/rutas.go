@@ -217,5 +217,12 @@ func Montar(s *plataforma.Servidor, c Componentes, registro *slog.Logger, plazo 
 			http.HandlerFunc(envoltura.CrearReserva),
 			append(append([]transporte.Medio{}, medios...), accesoOpcional(c.Verificador))...))
 		acotada("POST /v1/reservas/{id}/cancelacion", envoltura.CancelarReserva)
+
+		// Lo que se le hace a una reserva que ya existe. Las tres escriben en
+		// negocio.reserva o dependen de su estado dentro de la transacción, así
+		// que son del núcleo por la misma frontera que las dos de arriba.
+		acotada("POST /v1/reservas/{id}/modificacion", envoltura.ModificarReserva)
+		acotada("POST /v1/reservas/{id}/estado", envoltura.CambiarEstadoReserva)
+		acotada("POST /v1/reservas/{id}/calificacion", envoltura.CalificarReserva)
 	}
 }

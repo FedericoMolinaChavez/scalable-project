@@ -213,6 +213,9 @@ Lo que existe de verdad y se puede usar:
   (RF-30), reglas de disponibilidad y excepciones de calendario (RF-14),
   políticas versionadas (RF-15), vouchers (RF-17) y tarifas (RF-31), cada
   cambio con su evento de auditoría escrito en la misma transacción (RF-36).
+- **Lo que se le hace a una reserva que ya existe**: reprogramarla sin perder el
+  cupo (RF-07), el check-in y el cierre de la agenda del administrador (RF-28,
+  RF-32) y la calificación de una completada (RF-20).
 - **Semilla de desarrollo** (`db/semillas/dev.sql`): un tenant "Estudio Demo",
   una "Sede Centro", un servicio "Sesión de una hora" a 80.000 COP, una "Sala 1".
 

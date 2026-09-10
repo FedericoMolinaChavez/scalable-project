@@ -20,7 +20,7 @@ token no rechaza nada, sirve los datos igual.
 
 | Binario | Puerto | Rutas | Por qué ahí |
 |---|---|---|---|
-| `nucleo` | 8080 | `POST /v1/reservas`, `POST /v1/reservas/{id}/cancelacion` | Único que escribe en `negocio.reserva` por la ruta síncrona |
+| `nucleo` | 8080 | `POST /v1/reservas` y sus sub-rutas: `cancelacion`, `modificacion`, `estado`, `calificacion` | Único que escribe en `negocio.reserva` por la ruta síncrona |
 | `consulta` | 8081 | `GET /v1/disponibilidad`, `/v1/reservas`, `/v1/reservas/{id}` | Solo lee; en despliegue va contra las réplicas |
 | `configuracion` | 8084 | `GET /v1/sedes`, `/v1/servicios`, todo `/v1/config` y `/v1/auditoria` | En ARQ-01 va contra el PRIMARIO (`config --> pgb`): escribe |
 | `identidad` | 8082 | Todo `/v1/sesiones`, `/v1/cuentas` y `/v1/agentes` | Manda correo: es un dominio de fallo propio, y un relé caído no puede arrastrar la ruta de reserva |
@@ -219,11 +219,30 @@ mismo trabajador seleccionan las mismas filas, la segunda espera a la primera, y
 añadir réplicas no acelera nada: solo consume conexiones. Con él se reparten la
 cola sin coordinarse, que es la misma filosofía que el resto del sistema.
 
-**El sistema no marca la llegada de nadie.** RF-28 asigna `confirmada → en_curso`
-al administrador (el check-in de RF-32), así que las transiciones automáticas son
-solo dos: `en_curso → completada` al pasar la hora, y `confirmada → no_show` al
-superar el umbral. Una cita que nadie registró acaba en `no_show`, que es lo que
-de verdad pasó, no en `completada`.
+**Las transiciones se reparten por quién decide, no por quién las escribe.**
+RF-28 asigna al administrador las tres que dependen de que alguien mire:
+`confirmada → en_curso` (el check-in de RF-32), `confirmada → no_show` a mano y
+`en_curso → completada`. Las automáticas dependen del reloj y de nadie más:
+`en_curso → completada` al pasar la hora y `confirmada → no_show` al superar el
+umbral. Se solapan en una, y eso es correcto: el trabajador cierra lo que el
+administrador no cerró.
+
+Una cita que nadie registró sigue acabando en `no_show`, que es lo que de verdad
+pasó, no en `completada`. La diferencia con antes es que ahora hay una forma de
+que sí se registre.
+
+**Reprogramar es un UPDATE, no un cancelar-y-crear** (RF-07). La secuencia tiene
+dos problemas que el UPDATE no tiene: entre las dos operaciones el cupo viejo
+queda libre —y otro cliente puede llevárselo mientras el primero se queda sin
+ninguno de los dos— y la reserva nueva pierde su historia, su precio congelado y
+su política. Dentro de una transacción, la restricción EXCLUDE arbitra el
+horario nuevo y el viejo se libera al confirmar, sin instante intermedio.
+
+Su traza va a `evento_auditoria` y NO a `transicion_estado`, porque el estado no
+cambia: `transicion_cambia_algo` exige que cambie, y una reserva movida sigue
+pendiente o confirmada. RF-28 dibuja una flecha "reprogramada", pero
+`negocio.estado_reserva` no tiene ese valor y no debería tenerlo: no es un
+estado, es un cambio de horario.
 
 **Los códigos de estado se deciden en un solo sitio.** `internal/rutas/errores.go`
 es el único que conoce a la vez los errores del dominio y los códigos HTTP. Con

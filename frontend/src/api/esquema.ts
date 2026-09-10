@@ -900,6 +900,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/reservas/{id}/modificacion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reprogramar una reserva (RF-07)
+         * @description Mueve la MISMA reserva a otra hora, y opcionalmente a otro recurso. El
+         *     cupo viejo se libera y el nuevo se toma en la misma transacción, así que
+         *     no hay un instante en el que la persona se quede sin nada: cancelar y
+         *     volver a reservar sí lo tendría, y en él otro cliente puede llevarse el
+         *     horario.
+         *
+         *     Aplica el `rango_modificacion_horas` de la política que la reserva congeló
+         *     al crearse (RF-15), no la vigente hoy. Fuera de ese plazo responde `422`
+         *     con lo que faltaba, no un `403`: no es una cuestión de permisos, es que la
+         *     regla del negocio no lo permite en ese momento. Un administrador sobre su
+         *     propio tenant no lo tiene, por lo mismo que en la cancelación.
+         *
+         *     El `409` es el de siempre: la restricción EXCLUDE rechazando el horario
+         *     nuevo porque otro se lo quedó.
+         */
+        post: operations["modificarReserva"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reservas/{id}/estado": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Registrar una transición manual (RF-28, RF-32)
+         * @description El check-in, la ausencia y el cierre de una cita: las tres transiciones
+         *     que la leyenda de RF-28 asigna a una persona y no al sistema.
+         *
+         *     Es del administrador del tenant. Cancelar NO entra aquí aunque sea una
+         *     transición: libera cupo y aplica una política, así que tiene su propia
+         *     ruta y su propio 422.
+         */
+        post: operations["cambiarEstadoReserva"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reservas/{id}/calificacion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Calificar una reserva completada (RF-20)
+         * @description Una por reserva, y solo sobre una completada. Las dos reglas están en
+         *     sitios distintos a propósito: la unicidad la sostiene el motor —es la que
+         *     se ataca desde fuera— y "solo completada" vive en el núcleo, porque exige
+         *     mirar el estado y no cabe en un CHECK.
+         *
+         *     Una reserva ajena responde `404`, igual que una inexistente.
+         */
+        post: operations["calificarReserva"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1687,6 +1770,63 @@ export interface components {
             reserva: components["schemas"]["Reserva"];
             /** @description `client_secret` del PaymentIntent de Stripe. */
             pago_client_secret?: string;
+        };
+        /**
+         * @description Reprogramar una reserva (RF-07): moverla de hora, y opcionalmente de
+         *     recurso.
+         *
+         *     Es la MISMA reserva, no una nueva. Cancelar y volver a reservar tiene dos
+         *     problemas que esto no tiene: entre las dos operaciones el cupo queda libre y
+         *     otro puede llevárselo, y la reserva pierde su historia, su precio congelado
+         *     y su política. Aquí el cupo viejo se libera y el nuevo se toma en la misma
+         *     transacción, así que no hay instante en el que la persona no tenga nada.
+         *
+         *     El precio NO se recalcula. Se congeló al crear (RF-31) y mover la hora no lo
+         *     descongela: cobrar más por reprogramar sería una decisión de negocio que
+         *     nadie ha tomado, y hacerlo en silencio sería peor.
+         */
+        ModificacionReserva: {
+            periodo: components["schemas"]["Periodo"];
+            /**
+             * Format: uuid
+             * @description Ausente = se queda en el mismo recurso. El nuevo tiene que prestar el
+             *     mismo servicio: cambiar de servicio cambiaría el precio y la duración,
+             *     y eso ya no es reprogramar.
+             */
+            recurso_id?: string;
+        };
+        /**
+         * @description Una transición manual de RF-28, de las que la agenda del administrador
+         *     dispara (RF-32).
+         *
+         *     Solo tres, y son las que la leyenda de RF-28 asigna a una persona:
+         *     `confirmada → en_curso` es el check-in, `confirmada → no_show` es la
+         *     ausencia registrada a mano antes de que el umbral la marque sola, y
+         *     `en_curso → completada` cierra la cita. Cancelar tiene ruta propia porque
+         *     libera cupo y aplica una política; las automáticas las hace el trabajador.
+         */
+        CambioEstado: {
+            estado: components["schemas"]["EstadoReserva"];
+            /** @description Queda en el historial de la reserva, que el cliente puede ver. */
+            motivo?: string;
+        };
+        /**
+         * @description RF-20. Una por reserva, y solo sobre una reserva completada: calificar algo
+         *     que todavía no ocurrió no es una opinión, es una expectativa.
+         */
+        NuevaCalificacion: {
+            puntaje: number;
+            comentario?: string;
+        };
+        Calificacion: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            reserva_id: string;
+            puntaje: number;
+            comentario?: string;
+            /** Format: date-time */
+            creada_en: string;
         };
     };
     responses: {
@@ -3317,6 +3457,160 @@ export interface operations {
              * @description La reserva ya no está en un estado que se pueda cancelar: ya estaba
              *     cancelada, ya se completó, o el bloqueo expiró solo.
              */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    modificarReserva: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+                 *     (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+                 *     de un cliente en producción permitiría leer los datos de cualquier otro
+                 *     tenant.
+                 */
+                "X-Tenant-Id": components["parameters"]["Tenant"];
+            };
+            path: {
+                /** @description Identificador del recurso sobre el que se opera. */
+                id: components["parameters"]["IdEnRuta"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModificacionReserva"];
+            };
+        };
+        responses: {
+            /** @description La reserva, ya movida */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reserva"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            404: components["responses"]["NoEncontrado"];
+            /**
+             * @description El horario nuevo ya está tomado, o la reserva ya no está en un estado
+             *     desde el que se pueda mover.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            422: components["responses"]["NoProcesable"];
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    cambiarEstadoReserva: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+                 *     (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+                 *     de un cliente en producción permitiría leer los datos de cualquier otro
+                 *     tenant.
+                 */
+                "X-Tenant-Id": components["parameters"]["Tenant"];
+            };
+            path: {
+                /** @description Identificador del recurso sobre el que se opera. */
+                id: components["parameters"]["IdEnRuta"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CambioEstado"];
+            };
+        };
+        responses: {
+            /** @description La reserva, ya en el estado nuevo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reserva"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            403: components["responses"]["FueraDeAlcance"];
+            404: components["responses"]["NoEncontrado"];
+            /**
+             * @description Esa transición no sale del estado actual. La respuesta dice en cuál
+             *     está: sin eso, la agenda tendría que adivinar por qué su botón no hizo
+             *     nada.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            500: components["responses"]["ErrorInterno"];
+        };
+    };
+    calificarReserva: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+                 *     (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+                 *     de un cliente en producción permitiría leer los datos de cualquier otro
+                 *     tenant.
+                 */
+                "X-Tenant-Id": components["parameters"]["Tenant"];
+            };
+            path: {
+                /** @description Identificador del recurso sobre el que se opera. */
+                id: components["parameters"]["IdEnRuta"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NuevaCalificacion"];
+            };
+        };
+        responses: {
+            /** @description La calificación registrada */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Calificacion"];
+                };
+            };
+            400: components["responses"]["PeticionInvalida"];
+            401: components["responses"]["NoAutorizado"];
+            404: components["responses"]["NoEncontrado"];
+            /** @description Esa reserva ya tiene una calificación. */
             409: {
                 headers: {
                     [name: string]: unknown;

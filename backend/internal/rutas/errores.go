@@ -42,7 +42,8 @@ func clasificar(err error) (transporte.Clase, string) {
 	case errors.Is(err, nucleo.ErrClaveIdempotenciaCorta),
 		errors.Is(err, consulta.ErrCursorInvalido),
 		errors.Is(err, disponibilidad.ErrRangoInvalido),
-		errors.Is(err, dominio.ErrPeriodoInvalido):
+		errors.Is(err, dominio.ErrPeriodoInvalido),
+		errors.Is(err, dominio.ErrPuntajeInvalido):
 		return transporte.Invalida, err.Error()
 
 	// ------------------------------------------------------------- 422 --
@@ -51,6 +52,8 @@ func clasificar(err error) (transporte.Clase, string) {
 		errors.Is(err, dominio.ErrFueraDeHorario),
 		errors.Is(err, dominio.ErrPeriodoEnElPasado),
 		errors.Is(err, nucleo.ErrSinPoliticaVigente),
+		errors.Is(err, nucleo.ErrRecursoNoEquivalente),
+		errors.Is(err, nucleo.ErrNoCalificable),
 		errors.Is(err, datos.ErrReferenciaInvalida),
 		errors.Is(err, datos.ErrRestriccion):
 		return transporte.ReglaNegocio, err.Error()
@@ -62,7 +65,12 @@ func clasificar(err error) (transporte.Clase, string) {
 	// No es un fallo de la petición: la reserva simplemente ya no está en un
 	// estado desde el que se pueda cancelar. Es un conflicto con el estado
 	// actual del recurso, que es exactamente lo que significa un 409.
-	case errors.Is(err, nucleo.ErrNoCancelable):
+	// ErrTransicionInvalida entra por aquí: se declara comparable con
+	// ErrNoCancelable porque es el mismo conflicto —el recurso no está en un
+	// estado que admita la operación— y merece el mismo 409.
+	case errors.Is(err, nucleo.ErrNoCancelable),
+		errors.Is(err, nucleo.ErrNoModificable),
+		errors.Is(err, nucleo.ErrYaCalificada):
 		return transporte.EstadoIncompatible, err.Error()
 
 	// ------------------------------------------------------------- 422 --
@@ -77,6 +85,13 @@ func clasificar(err error) (transporte.Clase, string) {
 		return transporte.TokenVencido, ""
 	case errors.Is(err, identidad.ErrTokenInvalido), errors.Is(err, consulta.ErrSinAlcance):
 		return transporte.NoAutorizado, ""
+
+	// ------------------------------------------------------------- 403 --
+	// El alcance de RF-23 diciendo que no. No es un 404 porque aquí no hay
+	// nada que ocultar: la reserva puede ser suya, lo que no es suyo es el
+	// gesto —registrar un check-in es de la agenda del negocio—.
+	case errors.Is(err, dominio.ErrSinAlcance):
+		return transporte.FueraDeAlcance, ""
 
 	// ------------------------------------------------------------- 500 --
 	default:
