@@ -11,6 +11,7 @@ import (
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/dominio"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/identidad"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/nucleo"
+	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/pagos"
 	"github.com/FedericoMolinaChavez/scalable-project/backend/internal/transporte"
 )
 
@@ -71,6 +72,32 @@ func clasificar(err error) (transporte.Clase, string) {
 	// adivinar por qué.
 	case errors.Is(err, nucleo.ErrFueraDePlazo):
 		return transporte.ReglaNegocio, err.Error()
+
+	// ------------------------------------------------------------- 409 --
+	// El bloqueo venció, la reserva ya está confirmada, o se canceló. No es un
+	// fallo de la petición: es que llegó tarde, que es exactamente lo que un
+	// 409 significa.
+	case errors.Is(err, pagos.ErrReservaNoPagable):
+		return transporte.EstadoIncompatible, err.Error()
+
+	// ------------------------------------------------------------- 502 --
+	// El fallo está aguas arriba. Se separa del 500 para que quede claro que
+	// este sistema respondió y el proveedor no, y para que la reserva se pueda
+	// seguir pagando cuando Stripe vuelva: el bloqueo sigue vivo.
+	case errors.Is(err, pagos.ErrProveedor):
+		return transporte.ProveedorCaido,
+			"No se pudo contactar con el proveedor de pago. Tu horario sigue apartado: vuelve a intentarlo."
+
+	// ------------------------------------------------------------- 400 --
+	// Un importe que no se puede cobrar solo puede venir de un dato corrupto
+	// aguas arriba, así que llega aquí como lo que es: algo que no se puede
+	// procesar, nunca como un cobro por un importe adivinado.
+	case errors.Is(err, pagos.ErrMontoInvalido):
+		return transporte.ReglaNegocio, err.Error()
+
+	// ------------------------------------------------------------- 404 --
+	case errors.Is(err, pagos.ErrSinComprobante):
+		return transporte.NoEncontrado, ""
 
 	// ------------------------------------------------------------- 401 --
 	case errors.Is(err, identidad.ErrTokenVencido):

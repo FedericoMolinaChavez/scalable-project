@@ -6,6 +6,7 @@ Un módulo Go, un binario por componente síncrono de ARQ-01.
 task back:run -- consulta       # :8081
 task back:run -- nucleo         # :8080
 task back:run -- identidad      # :8082
+task back:run -- pagos          # :8084
 task back:run -- trabajadores   # :8083
 task back:test                  # necesita `task infra:up`
 task back:lint
@@ -22,7 +23,8 @@ token no rechaza nada, sirve los datos igual.
 | `nucleo` | 8080 | `POST /v1/reservas`, `POST /v1/reservas/{id}/cancelacion` | Único que escribe en `negocio.reserva` por la ruta síncrona |
 | `consulta` | 8081 | `GET /v1/sedes`, `/v1/servicios`, `/v1/disponibilidad`, `/v1/reservas`, `/v1/reservas/{id}` | Solo lee; en despliegue va contra las réplicas |
 | `identidad` | 8082 | `POST /v1/sesiones/codigo`, `/v1/sesiones/token` | Manda correo: es un dominio de fallo propio, y un relé caído no puede arrastrar la ruta de reserva |
-| `trabajadores` | 8083 | ninguna de negocio (solo sondas y `/metrics`) | El paquete "Asíncrono" de ARQ-01: expirador (RF-27), transiciones automáticas (RF-28), relay del outbox y notificador (RF-10) |
+| `pagos` | 8084 | `POST /v1/pagos/intencion`, `GET /v1/pagos/{id}/estado`, `POST /v1/webhooks/stripe` | ARQ-01 lo dibuja aparte porque su disponibilidad la acota Stripe: vive fuera del presupuesto de RNF-04, y por eso la reserva se confirma ahí y no en la ruta síncrona |
+| `trabajadores` | 8083 | ninguna de negocio (solo sondas y `/metrics`) | El paquete "Asíncrono" de ARQ-01: los ocho bucles |
 
 **`/v1/reservas` lo sirven los dos**, y no es un descuido: el `POST` tiene que
 ser atómico con la invariante y el `GET` no, que es exactamente la frontera por
@@ -45,6 +47,8 @@ internal/
   dominio/              las reglas que el motor NO hace cumplir
   transporte/           middleware y el formato de error RFC 9457
   rutas/                monta el HTTP sobre los componentes y traduce errores a códigos
+  almacen/              ARQ-01: MinIO. Su único inquilino son los comprobantes
+  pagos/                ARQ-01: Webhook de Pagos, en sus dos direcciones
   catalogo/             ARQ-01: Configuración y Catálogo
   disponibilidad/       ARQ-01: Servicio de Disponibilidad
   nucleo/               ARQ-01: Núcleo de Reservas (escritura)
@@ -75,6 +79,16 @@ restricción EXCLUDE no puede excluirlas: PostgreSQL exige que el predicado de u
 (`expira_en > now()`) y el núcleo las recicla dentro de su propia transacción
 antes de insertar. No sustituye al expirador de RF-27 —que barre la tabla entera
 y todavía no existe—, cubre el caso concreto que está a punto de estorbar.
+
+**El webhook ignora el desajuste de versión de la API, no la firma.** Cada
+cuenta de Stripe tiene fijada una versión por defecto y sus eventos salen con
+ella; stripe-go espera la suya y por defecto rechaza todo lo demás. Con una
+cuenta creada hace años eso descarta el 100% de los webhooks con un 400, y
+ninguna reserva se confirma jamás: una caída completa de RF-33 disfrazada de
+problema de firma. Se pasa `IgnoreAPIVersionMismatch`, y solo eso: la firma se
+sigue validando entera. El riesgo aceptado está acotado a los cinco campos que
+`internal/pagos` lee de un PaymentIntent, todos estables entre versiones; leer
+campos nuevos o anidados obliga a revisar la decisión.
 
 **El código de un solo uso no se guarda, se guarda su huella** (RNF-09). SHA-256
 a secas, sin sal ni derivación lenta, y eso es correcto porque no es una
@@ -177,29 +191,31 @@ recuentos cambiantes que no tienen nada que ver con lo que cada uno comprueba.
 - **RF-32 pide además filtros que el contrato no tiene.** La agenda del
   administrador se recorre por sede y por recurso, y `GET /v1/reservas` solo
   filtra por estado y rango (RF-09). Faltan `sede_id` y `recurso_id`.
+- **RF-11 tiene su rollup pero no su superficie.** El trabajador mantiene
+  `negocio.metrica_diaria` al día, y no hay ruta que lo sirva: el panel de
+  métricas es del administrador, y sin RF-12 no hay forma de saber que quien
+  pregunta lo es. Exponerlo bajo `X-Tenant-Id` publicaría los ingresos de cada
+  negocio a quien escribiera su identificador.
+- **La lista de espera (RF-37) corre y no encuentra nada.**
+  `negocio.lista_espera.cuenta_id` es NOT NULL y referencia
+  `plataforma.cuenta`, así que hoy nadie puede anotarse. El bucle está montado
+  porque su lógica —qué es un cupo liberado, a quién le toca— no depende de cómo
+  se autentique quien espera.
 - **Solo correo, no SMS.** El canal es un enum en el modelo y RF-02 admite los
   dos; no hay proveedor de SMS, y Mailpit sí está provisionado. Añadir SMS es
   una rama más en el envío.
-- **El reembolso de una cancelación no ocurre** (RF-29). Cancelar libera el cupo
-  y escribe su transición; el dinero lo mueve un trabajador que no existe.
-- **Cuatro de los ocho trabajadores de ARQ-01 siguen sin existir**: conciliador
-  de pagos (RF-33), procesador de reembolsos (RF-29), rollup de métricas (RF-11)
-  y lista de espera (RF-37). Los cuatro dependen de tablas de ER-03 que aún no
-  se han creado o de Stripe.
-- **RF-10 está en su versión mínima**: el notificador manda el correo, pero sin
-  plantillas, sin `preferencia_notificacion` (RF-21), sin `config_notificacion`
-  (RF-16) y sin registro de lo enviado. Hoy no se puede responder «¿se le
-  avisó?» mirando la base, solo mirando el buzón.
-- **Sin trazas.** `internal/plataforma` prometía OpenTelemetry hacia Tempo y no
-  había ninguna dependencia; la frase está corregida. Faltan las dos mitades: el
-  SDK y un colector en el compose, donde hoy no hay nada que reciba OTLP.
-- **MinIO sigue levantado y sin usar.** Su trabajo en ARQ-01 son los
-  comprobantes de RF-34, que dependen del pago de RF-33.
-- **Sin Stripe (RF-33).** El `201` no trae `pago_client_secret`, y la reserva se
-  queda pendiente hasta que venza. La confirmación llega por webhook, que no
-  entra en esta rebanada.
-- **Sin trabajadores.** No hay expirador (RF-27), ni conciliador de pagos, ni
-  notificaciones, ni relay del outbox.
+- **RF-10 sigue en su versión mínima**: el notificador manda el correo de
+  creada, confirmada, cancelada, expirada y cupo libre, pero sin plantillas, sin
+  `preferencia_notificacion` (RF-21), sin `config_notificacion` (RF-16) y sin
+  registro de lo enviado. Hoy no se puede responder «¿se le avisó?» mirando la
+  base, solo mirando el buzón.
+- **El comprobante es HTML, no PDF** (RF-34). Un PDF exige una biblioteca de
+  composición o un navegador headless, y ninguna aporta nada a lo que el
+  requisito pide: un documento que se pueda guardar e imprimir. El HTML lleva su
+  hoja de estilos de impresión dentro. El día que haga falta firma electrónica,
+  eso cambia en `trabajadores/comprobantes.go` y en ningún otro sitio.
+- **Sin trazas.** Faltan las dos mitades: el SDK de OpenTelemetry y un colector
+  en el compose, donde hoy no hay nada que reciba OTLP.
 - **Sin vouchers.** `voucher_codigo` se rechaza con un `422` explícito en vez de
   ignorarse: aceptar un código y cobrar el precio completo sin decirlo es peor
   que negarse.

@@ -13,6 +13,8 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
+    "@stripe/react-stripe-js": "^6.8.2",
+    "@stripe/stripe-js": "^9.15.0",
     "@tanstack/react-query": "^5.102.8",
     "openapi-fetch": "^0.17.0",
     "react": "^19.2.8",

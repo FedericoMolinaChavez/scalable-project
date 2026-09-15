@@ -50,7 +50,7 @@ afirmando "ocho franjas" sin depender de datos que alguien pueda tocar.
 ./db/pruebas/ejecutar.sh
 ```
 
-Levanta un PostgreSQL 17 desechable en Docker, aplica las siete migraciones,
+Levanta un PostgreSQL 17 desechable en Docker, aplica todas las migraciones,
 siembra los tenants y corre dos cosas:
 
 - **`pruebas/invariantes.sql`** — 22 casos que comprueban que el *motor* impide
@@ -63,7 +63,7 @@ siembra los tenants y corre dos cosas:
   el mismo cupo. El resultado esperado es exactamente una fila, en todas las
   ejecuciones.
 
-Última ejecución contra PostgreSQL 17.10: las siete migraciones aplican
+Última ejecución contra PostgreSQL 17.10: las migraciones aplican
 limpias, las 24 invariantes pasan, y de **1.000 intentos concurrentes sobre el
 mismo cupo sobrevivió exactamente 1** (100 clientes × 10 transacciones, 8 hilos,
 ~7.500 tps, 13 ms de latencia media).
@@ -98,8 +98,12 @@ se satisface y las consultas no devuelven filas. Falla cerrado.
 | `0005_negocio_politica_voucher.sql` | `politica_version`, `voucher` — adelantadas de ER-03 porque `reserva` las referencia |
 | `0006_negocio_reserva.sql` | `reserva`, restricción de exclusión, `uso_voucher`, `transicion_estado`, `lista_espera`, `calificacion` |
 | `0007_rls_y_privilegios.sql` | RLS por tenant y reparto de privilegios |
+| `0008_plataforma_tokens.sql` | `token_verificacion` y el índice por contacto de `reserva` |
+| `0009_negocio_regla_unica.sql` | El índice único de `regla_disponibilidad` |
+| `0010_negocio_outbox.sql` | `outbox_evento`: el patrón que evita la doble escritura hacia NATS |
+| `0011_dinero_operacion.sql` | ER-03: `pago`, `evento_webhook`, `reembolso`, `comprobante`, `folio_comprobante`, `metrica_diaria` |
 
-## Las cuatro decisiones que hay que entender antes de tocar nada
+## Las cinco decisiones que hay que entender antes de tocar nada
 
 **La invariante vive en el motor.** `EXCLUDE USING gist (tenant_id WITH =,
 recurso_id WITH =, periodo WITH &&) WHERE estado IN ('pendiente','confirmada')`.
@@ -123,6 +127,15 @@ libre parece ocupado.
 **Las claves foráneas arrastran `tenant_id`.** Todas son compuestas:
 `(tenant_id, x_id) → (tenant_id, id)`. Una referencia entre tenants distintos
 no es un error a evitar, es una fila que el motor rechaza.
+
+**Un índice único sobre una tabla particionada DEBE incluir la clave de
+partición.** Por eso `pago.payment_intent_id` es único por tenant y no
+globalmente, aunque ER-03 lo dibuje a secas. No se pierde nada —el
+identificador lo genera Stripe y ya es único en el universo— pero sí obliga a
+algo: el webhook tiene que saber a qué tenant pertenece el evento ANTES de
+buscar la fila, y para eso el tenant viaja en la metadata del PaymentIntent.
+Es la clase de restricción del motor que decide una parte del diseño de la
+aplicación, y por eso está aquí y no solo en un comentario del SQL.
 
 ## Particionado
 
@@ -159,10 +172,9 @@ requiere privilegios sobre los hijos, así que revocarlos no cuesta nada.
   `preferencia_notificacion`, `agente`, `autorizacion_agente`, `token_agente`.
   Trae consigo el aislamiento por cuenta de `plataforma.*`, hoy sostenido solo
   por la capa de autorización.
-- `0009` — resto de ER-03 (dinero): `tarifa`, `pago`, `evento_webhook`,
-  `reembolso`, `comprobante`.
-- `0010` — operación: `config_notificacion`, `notificacion_programada`,
-  `evento_auditoria` (`PARTITION BY RANGE`), `outbox_evento`, `metrica_diaria`.
+- Lo que queda de ER-03: `tarifa` (RF-31), y de operación
+  `config_notificacion`, `notificacion_programada` (RF-16, RF-21) y
+  `evento_auditoria` (`PARTITION BY RANGE`, RNF-36).
 - Decidir si `clave_idempotencia` en `reserva` se queda. Es un añadido respecto
   a ER-01: el modelo tenía idempotencia en el webhook, el reembolso y la
   notificación, pero no en la creación, y un agente que reintenta un `POST`

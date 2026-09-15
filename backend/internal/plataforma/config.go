@@ -66,6 +66,47 @@ type Config struct {
 
 	// Trabajadores agrupa los ritmos de los bucles asíncronos.
 	Trabajadores Trabajadores
+
+	// Pagos son las credenciales del proveedor (RF-33).
+	Pagos Pagos
+
+	// Almacen es el almacenamiento de objetos donde viven los comprobantes de
+	// RF-34.
+	Almacen Almacen
+}
+
+// Pagos son las tres credenciales de Stripe.
+//
+// Las tres son de despliegue y ninguna tiene valor por defecto razonable: una
+// clave de prueba embebida en el código acabaría en producción el día que
+// alguien olvide el Secret, y entonces los cobros se harían contra una cuenta
+// que no es la del negocio.
+type Pagos struct {
+	// ClaveSecreta autoriza a crear cobros. Es la credencial más peligrosa del
+	// sistema y solo la lleva el binario `pagos`.
+	ClaveSecreta string
+
+	// ClavePublicable inicializa Stripe.js en el navegador. Se sirve desde la
+	// API (ver el contrato) porque es del entorno y no del artefacto del
+	// frontend.
+	ClavePublicable string
+
+	// SecretoWebhook firma los eventos entrantes. Sin él, cualquiera que
+	// conozca la URL puede confirmar reservas que nadie pagó, así que el
+	// binario se niega a arrancar si falta: es la misma decisión que con
+	// TOKEN_SECRETO, y por la misma razón.
+	SecretoWebhook string
+}
+
+// Almacen es cómo se llega a MinIO.
+type Almacen struct {
+	Endpoint  string
+	AccessKey string
+	SecretKey string
+
+	// Seguro distingue http de https. En desarrollo MinIO va sin TLS; en
+	// despliegue no.
+	Seguro bool
 }
 
 // Trabajadores es cada cuánto despierta cada bucle.
@@ -78,6 +119,32 @@ type Trabajadores struct {
 	IntervaloExpirador    time.Duration
 	IntervaloTransiciones time.Duration
 	IntervaloRelay        time.Duration
+
+	// IntervaloConciliador es cada cuánto se le pregunta a Stripe por los pagos
+	// cuyo webhook no llegó (RF-33). Es el más lento de todos a propósito: cada
+	// pasada son llamadas a un tercero con cuota, y el camino normal es que el
+	// webhook llegue en segundos.
+	IntervaloConciliador time.Duration
+
+	// IntervaloReembolsos es cada cuánto se drenan los reembolsos pendientes
+	// (RF-29).
+	IntervaloReembolsos time.Duration
+
+	// IntervaloComprobantes es cada cuánto se emiten los comprobantes de los
+	// pagos ya confirmados (RF-34).
+	IntervaloComprobantes time.Duration
+
+	// IntervaloMetricas es cada cuánto se recalcula el rollup de RF-11.
+	IntervaloMetricas time.Duration
+
+	// IntervaloEspera es cada cuánto se revisa si un cupo liberado tiene a
+	// alguien esperándolo (RF-37).
+	IntervaloEspera time.Duration
+
+	// GraciaConciliacion es cuánto se espera a que llegue el webhook antes de
+	// ir a preguntar. Corto de más multiplica llamadas a Stripe por nada; largo
+	// de más deja al cliente mirando una reserva pendiente que ya pagó.
+	GraciaConciliacion time.Duration
 
 	// UmbralNoShow es cuánto se espera desde el inicio de la cita antes de
 	// darla por ausencia (RF-28). Es el único de estos números que tiene
@@ -137,6 +204,7 @@ var direccionesPorDefecto = map[string]string{
 	"consulta":     ":8081",
 	"identidad":    ":8082",
 	"trabajadores": ":8083",
+	"pagos":        ":8084",
 }
 
 // CargarConfig lee la configuración del entorno. Falla si falta algo sin
@@ -198,6 +266,64 @@ func CargarConfig(servicio string) (Config, error) {
 		IntervaloRelay: duracion("INTERVALO_RELAY", time.Second),
 
 		UmbralNoShow: duracion("UMBRAL_NO_SHOW", 15*time.Minute),
+
+		// Treinta segundos. El webhook de Stripe suele llegar en menos de dos,
+		// así que este bucle casi nunca encuentra nada; existe para el caso en
+		// que la entrega falle, y ahí lo que importa es que actúe antes de que
+		// el bloqueo venza, no que actúe rápido.
+		IntervaloConciliador: duracion("INTERVALO_CONCILIADOR", 30*time.Second),
+
+		// Un minuto. Devolver dinero no es urgente al segundo, pero sí visible:
+		// quien cancela quiere ver el movimiento el mismo día.
+		IntervaloReembolsos: duracion("INTERVALO_REEMBOLSOS", time.Minute),
+
+		// Diez segundos. El comprobante es lo que la persona busca justo
+		// después de pagar, así que aquí la latencia sí se percibe.
+		IntervaloComprobantes: duracion("INTERVALO_COMPROBANTES", 10*time.Second),
+
+		// Cinco minutos. El panel de RF-11 mira días, no minutos: recalcular
+		// más a menudo consume lecturas para mover un número que nadie está
+		// mirando.
+		IntervaloMetricas: duracion("INTERVALO_METRICAS", 5*time.Minute),
+
+		// Quince segundos. Un cupo que se libera y tiene lista de espera es
+		// justo el caso en que la velocidad se convierte en una reserva más.
+		IntervaloEspera: duracion("INTERVALO_ESPERA", 15*time.Second),
+
+		// Dos minutos de gracia antes de preguntarle a Stripe. Es holgadamente
+		// más que lo que tarda un webhook y holgadamente menos que el TTL de un
+		// bloqueo, que es la ventana donde esto tiene que actuar.
+		GraciaConciliacion: duracion("GRACIA_CONCILIACION", 2*time.Minute),
+	}
+
+	cfg.Pagos = Pagos{
+		ClaveSecreta:    texto("STRIPE_SECRET_KEY", ""),
+		ClavePublicable: texto("STRIPE_PUBLISHABLE_KEY", ""),
+		SecretoWebhook:  texto("STRIPE_WEBHOOK_SECRET", ""),
+	}
+
+	cfg.Almacen = Almacen{
+		Endpoint:  texto("MINIO_ENDPOINT", "localhost:9000"),
+		AccessKey: texto("MINIO_ACCESS_KEY", ""),
+		SecretKey: texto("MINIO_SECRET_KEY", ""),
+		Seguro:    texto("MINIO_SEGURO", "") == "true",
+	}
+
+	// Las credenciales de Stripe se exigen solo a quien cobra. El binario
+	// `pagos` no puede hacer nada sin ellas: sin la clave secreta no abre
+	// cobros, y sin el secreto del webhook no puede distinguir un evento de
+	// Stripe de uno que se inventó cualquiera, que es peor que no recibir
+	// ninguno. Fallar al arrancar es ruidoso y ocurre una vez; arrancar sin
+	// verificar firmas es silencioso y confirma reservas que nadie pagó.
+	if usaStripe[servicio] {
+		if cfg.Pagos.ClaveSecreta == "" {
+			return Config{}, fmt.Errorf(
+				"falta STRIPE_SECRET_KEY: sin ella no se puede abrir ningún cobro")
+		}
+		if cfg.Pagos.SecretoWebhook == "" {
+			return Config{}, fmt.Errorf(
+				"falta STRIPE_WEBHOOK_SECRET: sin firma, cualquiera puede confirmar una reserva que nadie pagó")
+		}
 	}
 
 	// El secreto lo exigen los servicios que tocan tokens: identidad los firma,
@@ -221,6 +347,16 @@ var usaTokens = map[string]bool{
 	"identidad": true, // los firma
 	"consulta":  true, // los verifica para acotar RF-02
 	"nucleo":    true, // los verifica para cancelar (RF-06)
+}
+
+// usaStripe son los binarios que hablan con el proveedor de pago.
+//
+// `consulta` NO está, aunque sirva el comprobante de RF-34: leer un comprobante
+// ya emitido no llama a Stripe. Repartir la clave secreta a un componente que
+// no la usa solo aumenta las formas de filtrarla.
+var usaStripe = map[string]bool{
+	"pagos":        true, // abre los cobros y recibe los webhooks
+	"trabajadores": true, // concilia (RF-33) y reembolsa (RF-29)
 }
 
 // EnDesarrollo distingue el entorno local del desplegado. Se usa para decidir

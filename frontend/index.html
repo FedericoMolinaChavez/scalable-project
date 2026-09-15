@@ -4,9 +4,57 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0d1b3d" />
     <title>Reservas</title>
+
+    <!--
+      Dos caras y ninguna más. Archivo es la grotesca de compañía aérea de la
+      cartera de cupones: pesada, apretada, hecha para versalitas de rótulo.
+      Azeret Mono es la máquina que estampa: cada hora, importe y referencia de
+      esta aplicación sale de ella, en cifras tabulares.
+
+      preconnect antes del stylesheet: sin él, el navegador descubre el dominio
+      de las fuentes al leer el CSS y añade una resolución de DNS y un
+      apretón de manos TLS a la ruta crítica de la primera pintura.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Azeret+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body>
+    <!--
+      THESIS: Una reserva es un cupón de papel: se emite, se sella, se anula, y
+      nunca se borra. Se niega a la rejilla de tarjetas blancas flotando sobre
+      gris con botón azul que envía siempre esta categoría.
+
+      OWN-WORLD: La cartera de billete de la era del jet. Azul de compañía
+      #0D1B3D y rojo #D7262D sobre papel #F2F2F0, toda cifra registrada en
+      carbón violeta #4B2E83, el comprobante en el papel lavanda de la copia.
+      Cupones con cabecera de pestañas y campos reglados a filete, tira roja
+      perforada, sello VOID inclinado. Archivo en versalitas apretadas, Azeret
+      Mono tabular para todo lo que se mide. Nada flota: se separa con filetes.
+
+      STORY: Quien llega con prisa ve los horarios como un tablero de salidas,
+      elige uno, y recibe un cupón con su reloj colgando de la tira perforada.
+      Paga bajo ese reloj, sin salir de la página, y el cupón queda sellado.
+
+      FIRST VIEWPORT: Barra azul de compañía arriba con el rótulo y la
+      navegación en versalitas. Debajo, sobre papel, la cabecera del servicio
+      como pestañas de cupón, y a su derecha el tablero de horarios: filas
+      regladas de HH:MM → HH:MM con su estado en chip contorneado. La acción
+      principal es cada fila del tablero.
+
+      FORM: la cartera de cupones de la era del jet; alternativa competitiva
+      elegida por el usuario sobre la asignada (la tarjeta de fichaje).
+      Seed key 9db2fb0d.
+
+      FINISH: unreviewed and undocumented is unfinished; this build ends with
+      the finish review, the verdict, DESIGN.md, and every shipping raster
+      carrying its provenance.
+    -->
     <div id="raiz"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

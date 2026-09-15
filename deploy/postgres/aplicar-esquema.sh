@@ -5,8 +5,8 @@
 # funciona docker-entrypoint-initdb.d. Para reaplicar desde cero hace falta
 # borrar el volumen (task infra:reset).
 #
-# Replica exactamente el orden que documenta db/README.md: las siete
-# migraciones numeradas y despues la semilla, que es la que crea el rol de
+# Replica exactamente el orden que documenta db/README.md: las migraciones
+# numeradas en orden y despues la semilla, que es la que crea el rol de
 # conexion app_dev. Sin ese ultimo paso no hay usuario con el que conectarse.
 set -eu
 

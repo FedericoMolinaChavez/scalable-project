@@ -1,0 +1,116 @@
+# Pagos (RF-01, RF-33, RF-34).
+
+SolicitudIntencion:
+  type: object
+  description: |
+    Pedir la intención de pago de una reserva ya creada. Nada más: el importe
+    NO viaja aquí. Lo calcula el servidor desde el precio que la reserva congeló
+    al crearse (RF-31), porque un importe que llega del cliente es un importe
+    que el cliente elige.
+  required: [reserva_id]
+  properties:
+    reserva_id: { type: string, format: uuid }
+
+IntencionPago:
+  type: object
+  description: |
+    Lo que el navegador necesita para cobrar contra Stripe sin que la tarjeta
+    pase por este backend (RNF-05).
+
+    Pedirla dos veces para la misma reserva devuelve la MISMA intención, no una
+    nueva: el índice `pago_un_intento_vivo_por_reserva` lo garantiza en el
+    motor. Sin eso, dos pestañas abiertas crearían dos PaymentIntent y se
+    podrían pagar los dos.
+  required: [client_secret, clave_publicable, monto, estado]
+  properties:
+    client_secret:
+      type: string
+      description: |
+        `client_secret` del PaymentIntent. Es una credencial de un solo
+        propósito y de una sola reserva: solo sirve para confirmar ESE cobro, y
+        no permite leer ni mover nada más en la cuenta de Stripe.
+    clave_publicable:
+      type: string
+      description: |
+        Clave publicable de Stripe (`pk_...`), la que inicializa Stripe.js.
+
+        Viaja en la respuesta y no en una variable de compilación del frontend a
+        propósito: la clave es del entorno, no del artefacto. Empotrarla al
+        construir obliga a un build distinto por entorno y a redesplegar el
+        frontend para rotarla. Es publicable —está pensada para vivir en el
+        navegador— así que no hay nada que proteger al enviarla.
+    monto: { $ref: './comunes.yaml#/Dinero' }
+    estado:
+      $ref: './pagos.yaml#/EstadoPago'
+    expira_en:
+      type: string
+      format: date-time
+      description: |
+        Cuándo vence el bloqueo de la reserva (RF-27). Se repite aquí porque es
+        lo que decide si vale la pena empezar a pagar: el reloj es parte del
+        producto, no un detalle del flujo.
+
+EstadoPago:
+  type: string
+  description: Estado del intento de cobro (ER-03).
+  enum:
+    - iniciado
+    - confirmado
+    - fallido
+
+EstadoConfirmacion:
+  type: object
+  description: |
+    Dónde está la confirmación asíncrona de RF-33.
+
+    Existe porque el pago se confirma por webhook, fuera del presupuesto de
+    latencia del núcleo: cuando Stripe.js devuelve "succeeded" al navegador, la
+    reserva todavía puede estar `pendiente` durante unos cientos de
+    milisegundos. Sin esta ruta, la interfaz no tiene forma de saber cuándo
+    dejar de esperar.
+
+    Es pública, igual que crear la reserva: quien pregunta ya tiene el
+    identificador de una reserva que acaba de crear, y la respuesta no dice nada
+    que no sea suyo. No devuelve el contacto ni el importe.
+  required: [reserva_estado]
+  properties:
+    reserva_estado: { $ref: './reservas.yaml#/EstadoReserva' }
+    pago_estado:
+      $ref: './pagos.yaml#/EstadoPago'
+    motivo_fallo:
+      type: string
+      description: |
+        Lo que dijo el proveedor cuando el cobro no salió. Presente solo con
+        `pago_estado = fallido`, y con el texto de Stripe tal cual: reescribirlo
+        aquí produciría dos vocabularios para el mismo rechazo.
+
+Comprobante:
+  type: object
+  description: |
+    Comprobante de pago (RF-34). El documento vive en el almacén de objetos, no
+    en esta respuesta: lo que se entrega es un enlace firmado y de vida corta.
+  required: [numero, tipo, emitido_en]
+  properties:
+    numero:
+      type: string
+      description: Correlativo por negocio y año.
+      examples: ['2026-000042']
+    tipo:
+      type: string
+      enum: [pago, nota_credito]
+    emitido_en: { type: string, format: date-time }
+    url:
+      type: string
+      format: uri
+      description: |
+        Enlace firmado al documento. Ausente mientras el documento todavía no se
+        haya subido: la fila del comprobante se emite dentro de la transacción y
+        el objeto se sube después, así que hay una ventana —de segundos— en la
+        que el comprobante existe y el PDF no.
+    url_expira_en:
+      type: string
+      format: date-time
+      description: |
+        Cuándo caduca el enlace. Corto a propósito: un enlace firmado es una
+        credencial, y una credencial que no caduca es una credencial que se
+        reenvía por chat y sigue sirviendo un año después.

@@ -1,5 +1,555 @@
 @import 'tailwindcss';
 
-/* Sin tokens de diseño todavía: la identidad visual se define aparte, con la
-   skill de diseño, sobre componentes ya existentes. Lo que hay aquí es lo
-   mínimo para que la aplicación sea legible mientras tanto. */
+/* ==========================================================================
+   LA CARTERA DE CUPONES
+   ==========================================================================
+   El sistema visual de esta aplicación es la cartera de billete de la era del
+   jet: cupones de papel con cabecera de pestañas, campos reglados a filete,
+   cifras en carbón violeta, talón perforado, y el sello VOID para lo anulado.
+
+   No es decoración. Cada pieza del objeto corresponde a una verdad del modelo:
+
+     el cupón          una reserva: se emite, se sella, se anula, nunca se borra
+     el talón perforado el reloj de RF-27: lo provisional cuelga de una tira
+     el carbón violeta  lo que el sistema ya registró y no se puede editar
+     el sello VOID      cancelada y expirada — RF-28 es append-only
+     la copia carbón    el comprobante de RF-34, literalmente la copia del pago
+
+   Regla que gobierna todo lo demás: LOS ELEMENTOS SE SEPARAN CON FILETES, no
+   con tarjetas. Un cupón sí levanta del papel —es una hoja apoyada sobre otra,
+   y el mundo elegido lo dibuja así— pero esa sombra tiene desplazamiento y
+   difuminado, como una sombra de verdad; nunca es un halo de color alrededor
+   de una caja. Lo que no existe en ningún sitio es una rejilla de tarjetas
+   flotando sobre gris, que es lo que envía siempre esta categoría.
+   ========================================================================== */
+
+@theme {
+  /* --- Tinta y papel ----------------------------------------------------
+     Cuatro papeles y tres tintas, tomados del sistema del mundo elegido.
+     No hay grises neutros en toda la paleta: los tonos secundarios se sacan
+     del propio azul, porque un gris al lado de una tinta de imprenta se lee
+     como suciedad y no como jerarquía. */
+
+  --color-marina: #0d1b3d; /* azul de la compañía: estructura y texto */
+  --color-marina-media: #465067; /* secundario, teñido del azul, nunca gris */
+  /* Terciario y placeholders. Se eligió por contraste y no por gusto: sobre el
+     papel da 4.8:1, justo por encima del 4.5 que exige el texto pequeño. El
+     tono anterior era más claro y bonito, y dejaba los placeholders en 2.7:1
+     —ilegibles a pleno sol, que es la escena real de este producto—. */
+  --color-marina-tenue: #626b80;
+
+  --color-rojo: #d7262d; /* rojo de la compañía: acción y anulación */
+  --color-rojo-hondo: #a81c22; /* su estado pulsado */
+
+  --color-carbon: #4b2e83; /* violeta de carbón: TODA cifra registrada */
+  --color-copia: #c7b8e6; /* la copia carbón: el talón del comprobante */
+  --color-copia-papel: #ded4f0; /* su papel, más claro */
+
+  /* El verde de "a tiempo" del tablero de salidas. Un punto más oscuro que el
+     del mundo original, por la misma razón: el chip de estado es texto de 10 px
+     y a 4.48:1 se quedaba a un pelo del mínimo. Ahora da 5.5:1. */
+  --color-conforme: #17703f;
+
+  --color-papel: #f2f2f0; /* stock white: el fondo de la aplicación */
+  --color-cupon: #ffffff; /* coupon white: el papel del cupón */
+  --color-filete: #c9c9c4; /* el filete impreso que separa campos */
+  --color-filete-fuerte: #0d1b3d; /* el filete de contorno del cupón */
+
+  /* --- Tipografía -------------------------------------------------------
+     Dos caras y ninguna más. La grotesca de compañía aérea para todo lo que
+     se lee, y la mono de carbón para todo lo que se MIDE: horas, importes,
+     referencias, cuentas atrás. La mono aquí no es un disfraz de "técnico":
+     es la máquina que estampó la cifra sobre el cupón. */
+
+  --font-cuerpo: 'Archivo', ui-sans-serif, system-ui, sans-serif;
+  --font-datos: 'Azeret Mono', ui-monospace, 'Cascadia Mono', monospace;
+
+  /* --- Ritmo ------------------------------------------------------------
+     Una sola unidad de pauta: 4px. Todo alto de fila, filete y separación
+     cae sobre ella. Es lo que sostiene la regla de que nada flota — sin una
+     pauta común, unos filetes desalineados piden a gritos una caja que los
+     recoja. */
+
+  --radio-sm: 2px;
+  --radio-md: 3px;
+
+  /* --- Movimiento -------------------------------------------------------
+     Una sola curva, exponencial de salida, y una sola duración base. El
+     movimiento amortiguado es una decisión de producto y no de estilo: la
+     cuenta atrás avanza de forma continua y la desviación se inclina antes
+     de alarmar, así que nada en esta interfaz salta. */
+
+  --salida: cubic-bezier(0.16, 1, 0.3, 1);
+  --paso: 220ms;
+}
+
+/* --------------------------------------------------------------------------
+   Base
+   -------------------------------------------------------------------------- */
+
+:root {
+  /* La escena decide la luz, no la categoría: alguien mirando el móvil en un
+     bus a las 8:40 de la mañana en Bogotá, con el sol dándole en la pantalla.
+     Eso obliga a papel claro. La aplicación no tiene modo oscuro y no es un
+     olvido: un cupón de papel no tiene versión nocturna. */
+  color-scheme: light;
+
+  /* Las variables que el iframe de Stripe recibe (ver componentes/Pago.tsx).
+     Vive en el mismo sitio que el resto de la paleta para que no puedan
+     divergir. */
+  --color-acento: var(--color-rojo);
+  --color-superficie: var(--color-cupon);
+  --color-texto: var(--color-marina);
+  --color-peligro: var(--color-rojo);
+  --fuente-cuerpo: var(--font-cuerpo);
+  --radio-md: 3px;
+}
+
+body {
+  background-color: var(--color-papel);
+  color: var(--color-marina);
+  font-family: var(--font-cuerpo);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+
+  /* La trama de seguridad del billete: una retícula de puntos finísima, del
+     azul de la compañía, al 4%. Es la textura que separa "papel" de "fondo
+     blanco", y es literalmente el material del mundo elegido. */
+  background-image: radial-gradient(circle at 1px 1px, rgb(13 27 61 / 0.055) 1px, transparent 0);
+  background-size: 4px 4px;
+}
+
+/* Las superficies del navegador también llevan el diseño. Son lo más barato
+   de teñir y lo que más delata una página montada en vez de diseñada. */
+
+::selection {
+  background-color: var(--color-carbon);
+  color: #fff;
+}
+
+::placeholder {
+  color: var(--color-marina-tenue);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-carbon);
+  outline-offset: 2px;
+}
+
+* {
+  scrollbar-color: var(--color-marina-tenue) transparent;
+  scrollbar-width: thin;
+}
+
+a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+/* Toda cifra es tabular. Sin esto, una cuenta atrás cambia de ancho en cada
+   segundo y el bloque entero tiembla, que es exactamente la sensación de
+   urgencia fabricada que este producto no quiere. */
+.datos,
+input,
+time {
+  font-family: var(--font-datos);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+@layer components {
+  /* ------------------------------------------------------------------ voz */
+
+  /* La marca de sección del mundo: tres barras rojas inclinadas y la etiqueta
+     en versalitas apretadas. ES el encabezado, nunca un antetítulo colgado
+     encima de otro. */
+  .marca {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-marina);
+  }
+
+  .marca::before {
+    content: '///';
+    color: var(--color-rojo);
+    letter-spacing: -0.05em;
+    font-weight: 800;
+  }
+
+  /* La voz de titular: grotesca de compañía, pesada y muy apretada. */
+  .titular {
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    line-height: 0.94;
+    text-transform: uppercase;
+    text-wrap: balance;
+  }
+
+  /* La etiqueta de campo del cupón: minúscula, tracking abierto, azul medio. */
+  .etiqueta {
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-marina-media);
+  }
+
+  /* El valor que la máquina estampó. Siempre en carbón, siempre en mono. */
+  .cifra {
+    font-family: var(--font-datos);
+    font-variant-numeric: tabular-nums;
+    color: var(--color-carbon);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+
+  /* ---------------------------------------------------------------- cupón */
+
+  /* El cupón: papel blanco, contorno de filete azul, esquinas recortadas
+     arriba a la derecha como el troquel de un billete. */
+  .cupon {
+    background-color: var(--color-cupon);
+    border: 1px solid var(--color-filete-fuerte);
+    border-radius: var(--radio-md);
+
+    /* Un cupón es papel apoyado sobre papel. Desplazamiento y difuminado, del
+       azul de la compañía y no de un negro neutro: una sombra gris sobre papel
+       tibio se ve sucia. Es deliberadamente corta porque lo que levanta es una
+       hoja, no una tarjeta de una interfaz.
+    
+       drop-shadow y no box-shadow: este elemento lleva clip-path para el
+       troquel, y clip-path recorta TAMBIÉN la sombra de caja, así que un
+       box-shadow aquí simplemente no se vería. El filtro dibuja la sombra
+       siguiendo el contorno ya recortado, muescas incluidas, que además es lo
+       correcto: la sombra de una hoja troquelada tiene la forma del troquel. */
+    filter: drop-shadow(0 2px 3px rgb(13 27 61 / 0.16));
+
+    /* El troquel. clip-path y no un pseudo-elemento porque tiene que morder
+       el borde de verdad, incluido el filete. */
+    clip-path: polygon(
+      0 0,
+      calc(100% - 10px) 0,
+      100% 10px,
+      100% 100%,
+      10px 100%,
+      0 calc(100% - 10px)
+    );
+  }
+
+  /* La cabecera de pestañas del cupón. Cada pestaña es un trapecio, como la
+     lengüeta de un talonario. */
+  .pestanas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1px;
+    margin-bottom: -1px;
+  }
+
+  .pestana {
+    background-color: var(--color-marina);
+    color: #fff;
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 0.3125rem 0.875rem 0.375rem;
+    clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 100%, 0 100%);
+    padding-right: 1.25rem;
+  }
+
+  .pestana--clara {
+    background-color: var(--color-cupon);
+    color: var(--color-marina);
+    border: 1px solid var(--color-filete-fuerte);
+    border-bottom-color: transparent;
+  }
+
+  /* La rejilla de campos: filetes de 1px, sin más separación. Es el interior
+     de un cupón y no una tabla con celdas. */
+  .campos {
+    display: grid;
+    gap: 1px;
+    background-color: var(--color-filete);
+    border-top: 1px solid var(--color-filete);
+  }
+
+  .campo {
+    background-color: var(--color-cupon);
+    padding: 0.5rem 0.75rem 0.625rem;
+    min-width: 0;
+  }
+
+  /* --------------------------------------------------------------- estado */
+
+  /* El estado es SIEMPRE una palabra antes que un color: se lee correcto en
+     escala de grises, con lector de pantalla y a pleno sol. */
+  .estado {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border: 1px solid currentColor;
+    border-radius: var(--radio-sm);
+    padding: 0.0625rem 0.4375rem 0.125rem;
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .estado--libre {
+    color: var(--color-conforme);
+  }
+  .estado--pendiente {
+    color: var(--color-carbon);
+  }
+  .estado--conforme {
+    color: var(--color-conforme);
+  }
+  .estado--anulado {
+    color: var(--color-rojo);
+  }
+  .estado--inerte {
+    color: var(--color-marina-media);
+  }
+
+  /* El sello VOID, para lo cancelado y lo expirado. Nada desaparece de esta
+     interfaz: se anula, y el sello lo dice. Va inclinado y con el trazo
+     grueso de un tampón, no como una etiqueta más. */
+  .sello {
+    display: inline-flex;
+    align-items: center;
+    border: 2px solid var(--color-rojo);
+    border-radius: var(--radio-sm);
+    color: var(--color-rojo);
+    font-weight: 800;
+    font-size: 0.6875rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 0.125rem 0.5rem 0.1875rem;
+    rotate: -6deg;
+    opacity: 0.85;
+  }
+
+  /* ---------------------------------------------------------------- tiras */
+
+  /* La tira perforada: el borde por el que un cupón se arranca. Aquí es lo
+     que marca que algo es PROVISIONAL — un bloqueo de RF-27 cuelga de ella. */
+  .tira {
+    background-image: repeating-linear-gradient(
+      45deg,
+      var(--color-rojo) 0 2px,
+      transparent 2px 6px
+    );
+  }
+
+  .perforado {
+    border-left: 1px dashed var(--color-marina-tenue);
+  }
+
+  /* El talón de copia carbón: el comprobante de RF-34, en el papel violeta
+     de la copia, con su perforado. */
+  .talon {
+    background-color: var(--color-copia-papel);
+    border: 1px solid var(--color-copia);
+    border-radius: var(--radio-md);
+    color: var(--color-carbon);
+
+    /* El troquel del talón: las dos muescas por las que se arranca del cupón.
+       Sin ellas es un rectángulo lavanda, y la copia carbón deja de leerse
+       como lo que es. */
+    clip-path: polygon(
+      6px 0,
+      100% 0,
+      100% 100%,
+      6px 100%,
+      6px calc(50% + 4px),
+      0 50%,
+      6px calc(50% - 4px)
+    );
+    padding-left: 0.5rem;
+  }
+
+  /* -------------------------------------------------------------- mandos */
+
+  /* El botón primario: rojo de compañía, versalitas apretadas, y un desplome
+     al pulsarlo. La sombra dura NO es un adorno neobrutalista: es el relieve
+     del botón de una máquina expendedora de billetes, y solo existe para que
+     el pulsado se hunda. Está en el sistema del mundo elegido. */
+  .boton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background-color: var(--color-rojo);
+    color: #fff;
+    border: 1px solid var(--color-rojo-hondo);
+    border-radius: var(--radio-sm);
+    padding: 0.5rem 1.125rem 0.5625rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    box-shadow: 0 2px 0 0 var(--color-rojo-hondo);
+    transition:
+      translate var(--paso) var(--salida),
+      box-shadow var(--paso) var(--salida),
+      background-color var(--paso) var(--salida);
+    cursor: pointer;
+  }
+
+  .boton:hover:not(:disabled) {
+    background-color: var(--color-rojo-hondo);
+  }
+
+  .boton:active:not(:disabled) {
+    translate: 0 2px;
+    box-shadow: 0 0 0 0 var(--color-rojo-hondo);
+  }
+
+  .boton:disabled {
+    background-color: var(--color-marina-tenue);
+    border-color: var(--color-marina-media);
+    box-shadow: 0 2px 0 0 var(--color-marina-media);
+    cursor: not-allowed;
+  }
+
+  /* El secundario: contorno azul que se rellena. */
+  .boton--secundario {
+    background-color: transparent;
+    color: var(--color-marina);
+    border: 1px solid var(--color-marina);
+    box-shadow: none;
+  }
+
+  .boton--secundario:hover:not(:disabled) {
+    background-color: var(--color-marina);
+    color: #fff;
+  }
+
+  .boton--secundario:active:not(:disabled) {
+    translate: 0 1px;
+  }
+
+  .boton--secundario:disabled {
+    background-color: transparent;
+    color: var(--color-marina-tenue);
+    border-color: var(--color-filete);
+    box-shadow: none;
+  }
+
+  /* El botón discreto: para acciones de fila, sin peso de acción principal. */
+  .boton--texto {
+    background: none;
+    border: none;
+    box-shadow: none;
+    color: var(--color-marina-media);
+    padding: 0.125rem 0;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.25em;
+    letter-spacing: 0.08em;
+  }
+
+  .boton--texto:hover:not(:disabled) {
+    background: none;
+    color: var(--color-rojo);
+  }
+
+  /* El campo de entrada: filete fino, y al enfocarlo pasa a carbón — el color
+     de lo que la máquina va a registrar. */
+  .entrada {
+    width: 100%;
+    background-color: var(--color-cupon);
+    border: 1px solid var(--color-filete);
+    border-radius: var(--radio-sm);
+    padding: 0.4375rem 0.625rem 0.5rem;
+    color: var(--color-marina);
+    font-family: var(--font-datos);
+    font-size: 0.875rem;
+    transition: border-color var(--paso) var(--salida);
+  }
+
+  .entrada:focus {
+    border-color: var(--color-carbon);
+    color: var(--color-carbon);
+    outline: none;
+    box-shadow: 0 0 0 1px var(--color-carbon);
+  }
+
+  /* ------------------------------------------------------------ movimiento */
+
+  /* El único momento coreografiado: la EMISIÓN del cupón. Ocurre una vez, en
+     el instante en que el núcleo devuelve la reserva, y es lo que convierte
+     "se envió un formulario" en "me dieron un billete". */
+  @keyframes emitir {
+    from {
+      opacity: 0;
+      translate: 0 -10px;
+      clip-path: inset(0 0 100% 0);
+    }
+    to {
+      opacity: 1;
+      translate: 0 0;
+      clip-path: inset(0 0 0 0);
+    }
+  }
+
+  .emitido {
+    animation: emitir 420ms var(--salida) both;
+  }
+
+  /* El papel entrando en la máquina: un filete que se rellena y se va. Es la
+     espera de esta interfaz, y vive en el sistema y no dentro del componente
+     que la estrenó — la usan también el estado «confirmando» del pago y
+     cualquier espera futura, y una regla @keyframes dentro de un componente
+     solo existe mientras ESE componente está montado. */
+  @keyframes avanzar {
+    0% {
+      width: 0;
+    }
+    55% {
+      width: 100%;
+    }
+    100% {
+      width: 100%;
+      opacity: 0;
+    }
+  }
+
+  /* El sello cae y se asienta. Dos fotogramas y nada más: un tampón no rebota. */
+  @keyframes estampar {
+    from {
+      opacity: 0;
+      scale: 1.6;
+      rotate: -14deg;
+    }
+    to {
+      opacity: 0.85;
+      scale: 1;
+      rotate: -6deg;
+    }
+  }
+
+  .estampado {
+    animation: estampar 260ms var(--salida) both;
+  }
+}
+
+/* Quien pide menos movimiento recibe el mismo contenido sin la coreografía.
+   El cupón sigue apareciendo; simplemente no viaja. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

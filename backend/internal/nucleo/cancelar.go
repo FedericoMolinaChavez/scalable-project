@@ -76,6 +76,12 @@ func (s *Servicio) Cancelar(
 			estado           string
 			inicio           time.Time
 			horasCancelacion int
+
+			// La penalidad de la política CONGELADA en la reserva, no la
+			// vigente hoy (RF-15). Es lo que impide que un negocio endurezca su
+			// política el martes y se la cobre a quien reservó el lunes.
+			// Nullable: sin penalidad se devuelve todo.
+			penalidadPct *float64
 		)
 
 		// FOR UPDATE sobre la reserva: dos cancelaciones simultáneas de la
@@ -89,7 +95,8 @@ func (s *Servicio) Cancelar(
 		// indistinguibles, que es justo lo que evita usar identificadores
 		// ajenos para comprobar cuáles son reales.
 		err := tx.QueryRow(ctx, `
-			SELECT r.estado::text, lower(r.periodo), p.rango_cancelacion_horas
+			SELECT r.estado::text, lower(r.periodo),
+			       p.rango_cancelacion_horas, p.penalidad_pct
 			FROM negocio.reserva r
 			JOIN negocio.politica_version p
 			  ON p.tenant_id = r.tenant_id AND p.id = r.politica_version_id
@@ -98,7 +105,7 @@ func (s *Servicio) Cancelar(
 			  AND lower(r.contacto_email) = $2
 			FOR UPDATE OF r`,
 			reservaID, destino,
-		).Scan(&estado, &inicio, &horasCancelacion)
+		).Scan(&estado, &inicio, &horasCancelacion, &penalidadPct)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return datos.ErrNoEncontrado
 		}
@@ -141,6 +148,21 @@ func (s *Servicio) Cancelar(
 			return err
 		}
 
+		// El reembolso de RF-29, ANOTADO y no ejecutado.
+		//
+		// Va en esta misma transacción porque es la que sabe que el dinero hay
+		// que devolverlo: fuera de ella, un fallo entre la cancelación y la
+		// anotación dejaría una reserva cancelada y un cobro que nadie sabe que
+		// debe volver. Lo que NO ocurre aquí es la llamada a Stripe: eso lo hace
+		// el trabajador de reembolsos, con sus reintentos, porque una petición
+		// HTTP no puede quedarse esperando a un tercero.
+		//
+		// Por eso la respuesta de esta ruta no dice nada del dinero, tal como
+		// declara el contrato: en este instante todavía no se ha movido.
+		if err := anotarReembolso(ctx, tx, reservaID, penalidadPct); err != nil {
+			return err
+		}
+
 		reserva, err = reservas.Escanear(tx.QueryRow(ctx,
 			`SELECT `+reservas.Columnas+` FROM negocio.reserva WHERE id = $1`, reservaID))
 		if err != nil {
@@ -156,4 +178,52 @@ func (s *Servicio) Cancelar(
 	}
 
 	return reserva, nil
+}
+
+// anotarReembolso deja escrito que hay que devolver el dinero de una reserva
+// que se acaba de cancelar (RF-29).
+//
+// Tres decisiones caben en esta consulta y conviene verlas por separado.
+//
+// La primera es que solo mira pagos CONFIRMADOS. Una reserva cancelada mientras
+// estaba pendiente no tiene nada que devolver: su intento de cobro se cierra
+// solo cuando el conciliador lo alcanza, o nunca llegó a cobrar. Anotar un
+// reembolso ahí crearía una fila que el trabajador intentaría cinco veces
+// contra un cobro que no existe.
+//
+// La segunda es la penalidad. La política que se aplica es la que la reserva
+// CONGELÓ al crearse (RF-15), no la vigente hoy, y si lleva penalidad_pct el
+// negocio se queda esa parte: se devuelve el resto. Con penalidad del 100% no
+// se anota nada, porque un reembolso de cero no es un reembolso.
+//
+// La tercera es el ON CONFLICT, que es la idempotencia de RF-29 traída del
+// esquema: una fila por pago. Cancelar dos veces —o cancelar algo que el
+// webhook ya había mandado devolver por sin_cupo— no duplica la devolución.
+func anotarReembolso(
+	ctx context.Context, tx pgx.Tx, reservaID uuid.UUID, penalidadPct *float64,
+) error {
+	// Sin penalidad se devuelve el importe completo. El cálculo se hace en SQL
+	// sobre la columna numeric y no en Go: pasarlo por un float64 introduciría
+	// justo el error de redondeo que el esquema y el contrato se han cuidado de
+	// evitar en todo lo demás.
+	retencion := 0.0
+	if penalidadPct != nil {
+		retencion = *penalidadPct
+	}
+	if retencion >= 100 {
+		return nil
+	}
+
+	_, err := tx.Exec(ctx, `
+		INSERT INTO negocio.reembolso (tenant_id, pago_id, monto, motivo, estado)
+		SELECT p.tenant_id, p.id,
+		       round(p.monto * (100 - $2::numeric) / 100, 2),
+		       'cancelacion_usuario', 'pendiente'
+		FROM negocio.pago p
+		WHERE p.reserva_id = $1
+		  AND p.estado = 'confirmado'
+		  AND round(p.monto * (100 - $2::numeric) / 100, 2) > 0
+		ON CONFLICT (tenant_id, pago_id) DO NOTHING`,
+		reservaID, retencion)
+	return err
 }

@@ -35,7 +35,7 @@ package "Núcleo síncrono" {
 }
 
 package "Asíncrono" {
-  [Webhook de Pagos] as webhook
+  [Pagos\n(intención + webhook)] as webhook
   [Trabajadores] as work
 }
 
@@ -64,6 +64,7 @@ gw --> nucleo
 gw --> consulta
 gw --> disp
 gw --> config
+gw --> webhook
 
 identidad --> pgb
 nucleo    --> pgb
@@ -75,6 +76,7 @@ disp      --> redis
 pgb       --> pg
 
 webhook --> pgb
+webhook --> stripe
 webhook --> bus
 work    --> pgb
 work    --> bus
@@ -116,6 +118,7 @@ note bottom of work
   Conciliador de pagos (RF-33)
   Motor de notificaciones (RF-10)
   Procesador de reembolsos (RF-29)
+  Emisor de comprobantes (RF-34)
   Relay del outbox hacia NATS
   Rollup de métricas (RF-11)
   Lista de espera (RF-37)
@@ -131,6 +134,22 @@ note bottom of webhook
   su disponibilidad la acota Stripe.
   Por eso la reserva se confirma aquí
   y no en la ruta síncrona.
+  --
+  Habla con Stripe en las DOS direcciones,
+  y por eso el nombre creció: hacia fuera
+  abre el cobro (POST /v1/pagos/intencion),
+  hacia dentro lo confirma
+  (POST /v1/webhooks/stripe).
+  Abrir el cobro también depende de Stripe,
+  así que tampoco cabe en los 200 ms del
+  núcleo: es la misma razón, en el otro
+  sentido.
+  --
+  El webhook NO pasa por el router generado
+  desde el contrato: su firma se calcula
+  sobre los bytes exactos del cuerpo, y
+  decodificarlo antes de verificarla
+  rompería la verificación.
 end note
 
 note bottom of redis

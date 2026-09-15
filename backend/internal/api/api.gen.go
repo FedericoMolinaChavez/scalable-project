@@ -18,6 +18,24 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ComprobanteTipo.
+const (
+	NotaCredito ComprobanteTipo = "nota_credito"
+	Pago        ComprobanteTipo = "pago"
+)
+
+// Valid indicates whether the value is a known member of the ComprobanteTipo enum.
+func (e ComprobanteTipo) Valid() bool {
+	switch e {
+	case NotaCredito:
+		return true
+	case Pago:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EstadoCatalogo.
 const (
 	Activo   EstadoCatalogo = "activo"
@@ -30,6 +48,27 @@ func (e EstadoCatalogo) Valid() bool {
 	case Activo:
 		return true
 	case Inactivo:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EstadoPago.
+const (
+	Confirmado EstadoPago = "confirmado"
+	Fallido    EstadoPago = "fallido"
+	Iniciado   EstadoPago = "iniciado"
+)
+
+// Valid indicates whether the value is a known member of the EstadoPago enum.
+func (e EstadoPago) Valid() bool {
+	switch e {
+	case Confirmado:
+		return true
+	case Fallido:
+		return true
+	case Iniciado:
 		return true
 	default:
 		return false
@@ -80,6 +119,32 @@ type CanjeCodigo struct {
 	Destino openapi_types.Email `json:"destino"`
 }
 
+// Comprobante Comprobante de pago (RF-34). El documento vive en el almacén de objetos, no
+// en esta respuesta: lo que se entrega es un enlace firmado y de vida corta.
+type Comprobante struct {
+	EmitidoEn time.Time `json:"emitido_en"`
+
+	// Numero Correlativo por negocio y año.
+	//
+	// Examples: 2026-000042
+	Numero string          `json:"numero"`
+	Tipo   ComprobanteTipo `json:"tipo"`
+
+	// Url Enlace firmado al documento. Ausente mientras el documento todavía no se
+	// haya subido: la fila del comprobante se emite dentro de la transacción y
+	// el objeto se sube después, así que hay una ventana —de segundos— en la
+	// que el comprobante existe y el PDF no.
+	Url *string `json:"url,omitempty"`
+
+	// UrlExpiraEn Cuándo caduca el enlace. Corto a propósito: un enlace firmado es una
+	// credencial, y una credencial que no caduca es una credencial que se
+	// reenvía por chat y sigue sirviendo un año después.
+	UrlExpiraEn *time.Time `json:"url_expira_en,omitempty"`
+}
+
+// ComprobanteTipo defines model for Comprobante.Tipo.
+type ComprobanteTipo string
+
 // Contacto defines model for Contacto.
 type Contacto struct {
 	Email    openapi_types.Email `json:"email"`
@@ -114,6 +179,33 @@ type Disponibilidad struct {
 // EstadoCatalogo defines model for EstadoCatalogo.
 type EstadoCatalogo string
 
+// EstadoConfirmacion Dónde está la confirmación asíncrona de RF-33.
+//
+// Existe porque el pago se confirma por webhook, fuera del presupuesto de
+// latencia del núcleo: cuando Stripe.js devuelve "succeeded" al navegador, la
+// reserva todavía puede estar `pendiente` durante unos cientos de
+// milisegundos. Sin esta ruta, la interfaz no tiene forma de saber cuándo
+// dejar de esperar.
+//
+// Es pública, igual que crear la reserva: quien pregunta ya tiene el
+// identificador de una reserva que acaba de crear, y la respuesta no dice nada
+// que no sea suyo. No devuelve el contacto ni el importe.
+type EstadoConfirmacion struct {
+	// MotivoFallo Lo que dijo el proveedor cuando el cobro no salió. Presente solo con
+	// `pago_estado = fallido`, y con el texto de Stripe tal cual: reescribirlo
+	// aquí produciría dos vocabularios para el mismo rechazo.
+	MotivoFallo *string `json:"motivo_fallo,omitempty"`
+
+	// PagoEstado Estado del intento de cobro (ER-03).
+	PagoEstado *EstadoPago `json:"pago_estado,omitempty"`
+
+	// ReservaEstado Estados de RF-28.
+	ReservaEstado EstadoReserva `json:"reserva_estado"`
+}
+
+// EstadoPago Estado del intento de cobro (ER-03).
+type EstadoPago string
+
 // EstadoReserva Estados de RF-28.
 type EstadoReserva string
 
@@ -128,6 +220,44 @@ type Franja struct {
 	// perfectamente válidas.
 	Periodo   Periodo            `json:"periodo"`
 	RecursoId openapi_types.UUID `json:"recurso_id"`
+}
+
+// IntencionPago Lo que el navegador necesita para cobrar contra Stripe sin que la tarjeta
+// pase por este backend (RNF-05).
+//
+// Pedirla dos veces para la misma reserva devuelve la MISMA intención, no una
+// nueva: el índice `pago_un_intento_vivo_por_reserva` lo garantiza en el
+// motor. Sin eso, dos pestañas abiertas crearían dos PaymentIntent y se
+// podrían pagar los dos.
+type IntencionPago struct {
+	// ClavePublicable Clave publicable de Stripe (`pk_...`), la que inicializa Stripe.js.
+	//
+	// Viaja en la respuesta y no en una variable de compilación del frontend a
+	// propósito: la clave es del entorno, no del artefacto. Empotrarla al
+	// construir obliga a un build distinto por entorno y a redesplegar el
+	// frontend para rotarla. Es publicable —está pensada para vivir en el
+	// navegador— así que no hay nada que proteger al enviarla.
+	ClavePublicable string `json:"clave_publicable"`
+
+	// ClientSecret `client_secret` del PaymentIntent. Es una credencial de un solo
+	// propósito y de una sola reserva: solo sirve para confirmar ESE cobro, y
+	// no permite leer ni mover nada más en la cuenta de Stripe.
+	ClientSecret string `json:"client_secret"`
+
+	// Estado Estado del intento de cobro (ER-03).
+	Estado EstadoPago `json:"estado"`
+
+	// ExpiraEn Cuándo vence el bloqueo de la reserva (RF-27). Se repite aquí porque es
+	// lo que decide si vale la pena empezar a pagar: el reloj es parte del
+	// producto, no un detalle del flujo.
+	ExpiraEn *time.Time `json:"expira_en,omitempty"`
+
+	// Monto El monto va como cadena decimal, no como número. En JSON los números son de
+	// coma flotante y 80000.10 no se representa exactamente; con dinero eso acaba
+	// en un céntimo de diferencia entre lo que se cobra y lo que se muestra. La
+	// columna del esquema es `numeric`, que sí es exacta, y una cadena la preserva
+	// de extremo a extremo.
+	Monto Dinero `json:"monto"`
 }
 
 // ListaReservas defines model for ListaReservas.
@@ -297,6 +427,14 @@ type SolicitudCodigo struct {
 	Destino openapi_types.Email `json:"destino"`
 }
 
+// SolicitudIntencion Pedir la intención de pago de una reserva ya creada. Nada más: el importe
+// NO viaja aquí. Lo calcula el servidor desde el precio que la reserva congeló
+// al crearse (RF-31), porque un importe que llega del cliente es un importe
+// que el cliente elige.
+type SolicitudIntencion struct {
+	ReservaId openapi_types.UUID `json:"reserva_id"`
+}
+
 // TokenAcceso Lo que se entrega al acertar el código.
 //
 // Es de vigencia corta y no se puede revocar: un invitado no tiene sesión que
@@ -366,6 +504,24 @@ type ConsultarDisponibilidadParams struct {
 	XTenantId Tenant `json:"X-Tenant-Id"`
 }
 
+// CrearIntencionPagoParams defines parameters for CrearIntencionPago.
+type CrearIntencionPagoParams struct {
+	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+	// (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+	// de un cliente en producción permitiría leer los datos de cualquier otro
+	// tenant.
+	XTenantId Tenant `json:"X-Tenant-Id"`
+}
+
+// ConsultarConfirmacionParams defines parameters for ConsultarConfirmacion.
+type ConsultarConfirmacionParams struct {
+	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+	// (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+	// de un cliente en producción permitiría leer los datos de cualquier otro
+	// tenant.
+	XTenantId Tenant `json:"X-Tenant-Id"`
+}
+
 // ListarReservasParams defines parameters for ListarReservas.
 type ListarReservasParams struct {
 	Estado *[]EstadoReserva `form:"estado,omitempty" json:"estado,omitempty"`
@@ -418,6 +574,15 @@ type CancelarReservaParams struct {
 	XTenantId Tenant `json:"X-Tenant-Id"`
 }
 
+// ObtenerComprobanteParams defines parameters for ObtenerComprobante.
+type ObtenerComprobanteParams struct {
+	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
+	// (RF-12) el tenant se deriva del token y esta cabecera desaparece. Aceptarla
+	// de un cliente en producción permitiría leer los datos de cualquier otro
+	// tenant.
+	XTenantId Tenant `json:"X-Tenant-Id"`
+}
+
 // ListarSedesParams defines parameters for ListarSedes.
 type ListarSedesParams struct {
 	// XTenantId Tenant sobre el que se opera. Provisional: en cuanto exista autenticación
@@ -456,6 +621,9 @@ type CanjearCodigoParams struct {
 	XTenantId Tenant `json:"X-Tenant-Id"`
 }
 
+// CrearIntencionPagoJSONRequestBody defines body for CrearIntencionPago for application/json ContentType.
+type CrearIntencionPagoJSONRequestBody = SolicitudIntencion
+
 // CrearReservaJSONRequestBody defines body for CrearReserva for application/json ContentType.
 type CrearReservaJSONRequestBody = NuevaReserva
 
@@ -470,6 +638,12 @@ type ServerInterface interface {
 	// ConsultarDisponibilidad Franjas libres de un servicio en un rango
 	// (GET /v1/disponibilidad)
 	ConsultarDisponibilidad(w http.ResponseWriter, r *http.Request, params ConsultarDisponibilidadParams)
+	// CrearIntencionPago Preparar el cobro de una reserva pendiente (RF-01)
+	// (POST /v1/pagos/intencion)
+	CrearIntencionPago(w http.ResponseWriter, r *http.Request, params CrearIntencionPagoParams)
+	// ConsultarConfirmacion Si la confirmación asíncrona ya llegó (RF-33)
+	// (GET /v1/pagos/{reserva_id}/estado)
+	ConsultarConfirmacion(w http.ResponseWriter, r *http.Request, reservaId openapi_types.UUID, params ConsultarConfirmacionParams)
 	// ListarReservas Reservas de quien pide (RF-02, filtros de RF-09)
 	// (GET /v1/reservas)
 	ListarReservas(w http.ResponseWriter, r *http.Request, params ListarReservasParams)
@@ -482,6 +656,9 @@ type ServerInterface interface {
 	// CancelarReserva Cancelar una reserva (RF-06)
 	// (POST /v1/reservas/{id}/cancelacion)
 	CancelarReserva(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, params CancelarReservaParams)
+	// ObtenerComprobante Comprobante de pago de una reserva (RF-34)
+	// (GET /v1/reservas/{id}/comprobante)
+	ObtenerComprobante(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, params ObtenerComprobanteParams)
 	// ListarSedes Sedes del tenant
 	// (GET /v1/sedes)
 	ListarSedes(w http.ResponseWriter, r *http.Request, params ListarSedesParams)
@@ -580,6 +757,105 @@ func (siw *ServerInterfaceWrapper) ConsultarDisponibilidad(w http.ResponseWriter
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ConsultarDisponibilidad(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CrearIntencionPago operation middleware
+func (siw *ServerInterfaceWrapper) CrearIntencionPago(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CrearIntencionPagoParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Tenant-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Tenant-Id")]; found {
+		var XTenantId Tenant
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Tenant-Id", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Tenant-Id", valueList[0], &XTenantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Tenant-Id", Err: err})
+			return
+		}
+
+		params.XTenantId = XTenantId
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Tenant-Id is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Tenant-Id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CrearIntencionPago(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConsultarConfirmacion operation middleware
+func (siw *ServerInterfaceWrapper) ConsultarConfirmacion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "reserva_id" -------------
+	var reservaId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "reserva_id", r.PathValue("reserva_id"), &reservaId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reserva_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ConsultarConfirmacionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Tenant-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Tenant-Id")]; found {
+		var XTenantId Tenant
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Tenant-Id", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Tenant-Id", valueList[0], &XTenantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Tenant-Id", Err: err})
+			return
+		}
+
+		params.XTenantId = XTenantId
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Tenant-Id is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Tenant-Id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConsultarConfirmacion(w, r, reservaId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -866,6 +1142,60 @@ func (siw *ServerInterfaceWrapper) CancelarReserva(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CancelarReserva(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ObtenerComprobante operation middleware
+func (siw *ServerInterfaceWrapper) ObtenerComprobante(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ObtenerComprobanteParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Tenant-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Tenant-Id")]; found {
+		var XTenantId Tenant
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Tenant-Id", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Tenant-Id", valueList[0], &XTenantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Tenant-Id", Err: err})
+			return
+		}
+
+		params.XTenantId = XTenantId
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Tenant-Id is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Tenant-Id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ObtenerComprobante(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1197,6 +1527,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/reservas", wrapper.CrearReserva)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/reservas/{id}", wrapper.ObtenerReserva)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/reservas/{id}/cancelacion", wrapper.CancelarReserva)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/reservas/{id}/comprobante", wrapper.ObtenerComprobante)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/pagos/intencion", wrapper.CrearIntencionPago)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/pagos/{reserva_id}/estado", wrapper.ConsultarConfirmacion)
 
 	return m
 }
@@ -1279,6 +1612,195 @@ type ConsultarDisponibilidad500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ConsultarDisponibilidad500ApplicationProblemPlusJSONResponse) VisitConsultarDisponibilidadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearIntencionPagoRequestObject struct {
+	Params CrearIntencionPagoParams
+	Body   *CrearIntencionPagoJSONRequestBody
+}
+
+type CrearIntencionPagoResponseObject interface {
+	VisitCrearIntencionPagoResponse(w http.ResponseWriter) error
+}
+
+type CrearIntencionPago200JSONResponse IntencionPago
+
+func (response CrearIntencionPago200JSONResponse) VisitCrearIntencionPagoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearIntencionPago400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response CrearIntencionPago400ApplicationProblemPlusJSONResponse) VisitCrearIntencionPagoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearIntencionPago404ApplicationProblemPlusJSONResponse struct {
+	NoEncontradoApplicationProblemPlusJSONResponse
+}
+
+func (response CrearIntencionPago404ApplicationProblemPlusJSONResponse) VisitCrearIntencionPagoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearIntencionPago409ApplicationProblemPlusJSONResponse Problema
+
+func (response CrearIntencionPago409ApplicationProblemPlusJSONResponse) VisitCrearIntencionPagoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearIntencionPago429ApplicationProblemPlusJSONResponse struct {
+	DemasiadasPeticionesApplicationProblemPlusJSONResponse
+}
+
+func (response CrearIntencionPago429ApplicationProblemPlusJSONResponse) VisitCrearIntencionPagoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearIntencionPago500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response CrearIntencionPago500ApplicationProblemPlusJSONResponse) VisitCrearIntencionPagoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearIntencionPago502ApplicationProblemPlusJSONResponse Problema
+
+func (response CrearIntencionPago502ApplicationProblemPlusJSONResponse) VisitCrearIntencionPagoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(502)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConsultarConfirmacionRequestObject struct {
+	ReservaId openapi_types.UUID `json:"reserva_id"`
+	Params    ConsultarConfirmacionParams
+}
+
+type ConsultarConfirmacionResponseObject interface {
+	VisitConsultarConfirmacionResponse(w http.ResponseWriter) error
+}
+
+type ConsultarConfirmacion200JSONResponse EstadoConfirmacion
+
+func (response ConsultarConfirmacion200JSONResponse) VisitConsultarConfirmacionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConsultarConfirmacion400ApplicationProblemPlusJSONResponse struct {
+	PeticionInvalidaApplicationProblemPlusJSONResponse
+}
+
+func (response ConsultarConfirmacion400ApplicationProblemPlusJSONResponse) VisitConsultarConfirmacionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConsultarConfirmacion404ApplicationProblemPlusJSONResponse struct {
+	NoEncontradoApplicationProblemPlusJSONResponse
+}
+
+func (response ConsultarConfirmacion404ApplicationProblemPlusJSONResponse) VisitConsultarConfirmacionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConsultarConfirmacion500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response ConsultarConfirmacion500ApplicationProblemPlusJSONResponse) VisitConsultarConfirmacionResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -1652,6 +2174,75 @@ func (response CancelarReserva500ApplicationProblemPlusJSONResponse) VisitCancel
 	return err
 }
 
+type ObtenerComprobanteRequestObject struct {
+	Id     openapi_types.UUID `json:"id"`
+	Params ObtenerComprobanteParams
+}
+
+type ObtenerComprobanteResponseObject interface {
+	VisitObtenerComprobanteResponse(w http.ResponseWriter) error
+}
+
+type ObtenerComprobante200JSONResponse Comprobante
+
+func (response ObtenerComprobante200JSONResponse) VisitObtenerComprobanteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ObtenerComprobante401ApplicationProblemPlusJSONResponse struct {
+	NoAutorizadoApplicationProblemPlusJSONResponse
+}
+
+func (response ObtenerComprobante401ApplicationProblemPlusJSONResponse) VisitObtenerComprobanteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ObtenerComprobante404ApplicationProblemPlusJSONResponse Problema
+
+func (response ObtenerComprobante404ApplicationProblemPlusJSONResponse) VisitObtenerComprobanteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ObtenerComprobante500ApplicationProblemPlusJSONResponse struct {
+	ErrorInternoApplicationProblemPlusJSONResponse
+}
+
+func (response ObtenerComprobante500ApplicationProblemPlusJSONResponse) VisitObtenerComprobanteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListarSedesRequestObject struct {
 	Params ListarSedesParams
 }
@@ -1921,6 +2512,12 @@ type StrictServerInterface interface {
 	// ConsultarDisponibilidad Franjas libres de un servicio en un rango
 	// (GET /v1/disponibilidad)
 	ConsultarDisponibilidad(ctx context.Context, request ConsultarDisponibilidadRequestObject) (ConsultarDisponibilidadResponseObject, error)
+	// CrearIntencionPago Preparar el cobro de una reserva pendiente (RF-01)
+	// (POST /v1/pagos/intencion)
+	CrearIntencionPago(ctx context.Context, request CrearIntencionPagoRequestObject) (CrearIntencionPagoResponseObject, error)
+	// ConsultarConfirmacion Si la confirmación asíncrona ya llegó (RF-33)
+	// (GET /v1/pagos/{reserva_id}/estado)
+	ConsultarConfirmacion(ctx context.Context, request ConsultarConfirmacionRequestObject) (ConsultarConfirmacionResponseObject, error)
 	// ListarReservas Reservas de quien pide (RF-02, filtros de RF-09)
 	// (GET /v1/reservas)
 	ListarReservas(ctx context.Context, request ListarReservasRequestObject) (ListarReservasResponseObject, error)
@@ -1933,6 +2530,9 @@ type StrictServerInterface interface {
 	// CancelarReserva Cancelar una reserva (RF-06)
 	// (POST /v1/reservas/{id}/cancelacion)
 	CancelarReserva(ctx context.Context, request CancelarReservaRequestObject) (CancelarReservaResponseObject, error)
+	// ObtenerComprobante Comprobante de pago de una reserva (RF-34)
+	// (GET /v1/reservas/{id}/comprobante)
+	ObtenerComprobante(ctx context.Context, request ObtenerComprobanteRequestObject) (ObtenerComprobanteResponseObject, error)
 	// ListarSedes Sedes del tenant
 	// (GET /v1/sedes)
 	ListarSedes(ctx context.Context, request ListarSedesRequestObject) (ListarSedesResponseObject, error)
@@ -2005,6 +2605,66 @@ func (sh *strictHandler) ConsultarDisponibilidad(w http.ResponseWriter, r *http.
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ConsultarDisponibilidadResponseObject); ok {
 		if err := validResponse.VisitConsultarDisponibilidadResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CrearIntencionPago operation middleware
+func (sh *strictHandler) CrearIntencionPago(w http.ResponseWriter, r *http.Request, params CrearIntencionPagoParams) {
+	var request CrearIntencionPagoRequestObject
+
+	request.Params = params
+
+	var body CrearIntencionPagoJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CrearIntencionPago(ctx, request.(CrearIntencionPagoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CrearIntencionPago")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CrearIntencionPagoResponseObject); ok {
+		if err := validResponse.VisitCrearIntencionPagoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ConsultarConfirmacion operation middleware
+func (sh *strictHandler) ConsultarConfirmacion(w http.ResponseWriter, r *http.Request, reservaId openapi_types.UUID, params ConsultarConfirmacionParams) {
+	var request ConsultarConfirmacionRequestObject
+
+	request.ReservaId = reservaId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ConsultarConfirmacion(ctx, request.(ConsultarConfirmacionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ConsultarConfirmacion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ConsultarConfirmacionResponseObject); ok {
+		if err := validResponse.VisitConsultarConfirmacionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -2118,6 +2778,33 @@ func (sh *strictHandler) CancelarReserva(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CancelarReservaResponseObject); ok {
 		if err := validResponse.VisitCancelarReservaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ObtenerComprobante operation middleware
+func (sh *strictHandler) ObtenerComprobante(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, params ObtenerComprobanteParams) {
+	var request ObtenerComprobanteRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ObtenerComprobante(ctx, request.(ObtenerComprobanteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ObtenerComprobante")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ObtenerComprobanteResponseObject); ok {
+		if err := validResponse.VisitObtenerComprobanteResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

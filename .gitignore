@@ -21,6 +21,11 @@ node_modules/
 # versionarla haría que `task` se creyera al día en un clon recién hecho.
 /.task/
 
+# Artefactos de trabajo de las sesiones de diseño: capturas de revisión y las
+# láminas de referencia descargadas. Son evidencia de una revisión concreta, no
+# fuente. Lo que sí se versiona es su resultado: DESIGN.md.
+/.impeccable/
+
 # --- Entorno local ---
 .env
 .env.*

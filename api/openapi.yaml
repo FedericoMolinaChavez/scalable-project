@@ -32,6 +32,15 @@ tags:
     description: Creación y consulta de reservas (RF-01, RF-02, RF-03, RF-06)
   - name: sesiones
     description: Identificación del cliente por código de un solo uso (RF-02)
+  - name: pagos
+    description: |
+      Intención de cobro, seguimiento de la confirmación asíncrona y
+      comprobante (RF-01, RF-33, RF-34).
+
+      El webhook de Stripe no aparece en este contrato: lo llama Stripe y su
+      firma se comprueba sobre los bytes exactos del cuerpo, así que no puede
+      pasar por un manejador generado que lo decodifique antes. Ver
+      `rutas/pagos.yaml`.
 
 components:
   securitySchemes:
@@ -75,3 +84,12 @@ paths:
 
   /v1/reservas/{id}/cancelacion:
     $ref: './rutas/reservas.yaml#/cancelacion'
+
+  /v1/reservas/{id}/comprobante:
+    $ref: './rutas/pagos.yaml#/comprobante'
+
+  /v1/pagos/intencion:
+    $ref: './rutas/pagos.yaml#/intencion'
+
+  /v1/pagos/{reserva_id}/estado:
+    $ref: './rutas/pagos.yaml#/estado'

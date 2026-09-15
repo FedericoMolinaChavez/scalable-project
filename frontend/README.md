@@ -10,25 +10,35 @@ task front:lint
 task front:build
 ```
 
-Para que las llamadas a la API funcionen hacen falta los **tres** servicios del
-backend levantados:
+Para que las llamadas a la API funcionen hacen falta los servicios del backend
+levantados:
 
 ```bash
 task infra:up
-task back:run -- consulta    # :8081 — lecturas
+task back:run -- consulta    # :8081 — lecturas y el comprobante de RF-34
 task back:run -- nucleo      # :8080 — escrituras
 task back:run -- identidad   # :8082 — códigos y tokens
+task back:run -- pagos       # :8084 — Stripe (necesita claves en el .env)
 ```
 
-El código de «Mis reservas» llega a Mailpit: <http://localhost:8025>.
+Sin `pagos` todo funciona salvo el paso de pago, que responde un `502` explicado
+en pantalla: el horario sigue apartado y se puede reintentar. Es la degradación
+que la separación de ARQ-01 compra, y se puede ver a propósito.
 
-## Estado
+El código de «Mis reservas» y los avisos llegan a Mailpit:
+<http://localhost:8025>.
 
-**Es andamiaje, no diseño.** La estructura, el enrutado, el cliente de la API,
-los estados de carga y error y la ruta completa de reserva están montados y
-probados. La identidad visual —tipografía, color, espaciado, jerarquía— se
-define aparte. Lo que hay ahora es lo mínimo para que la aplicación sea legible
-mientras tanto, y está pensado para sustituirse.
+## El sistema visual
+
+Está en [../DESIGN.md](../DESIGN.md) y en `src/index.css`. El mundo es la
+cartera de billete de la era del jet: cupones de papel con cabecera de pestañas,
+campos reglados a filete, cifras en carbón violeta, tira roja perforada para lo
+provisional, y sello para lo anulado.
+
+No es un tema encima de la aplicación. Cada pieza corresponde a una verdad del
+modelo —el cupón que nunca se borra es `transicion_estado` siendo append-only,
+la tira perforada es el reloj de RF-27— así que **cambiar una pieza sin cambiar
+lo que significa rompe el sistema**, aunque siga siendo bonito.
 
 `Reservar` es la rebanada vertical completa: de ese componente al servicio de
 disponibilidad, de ahí al núcleo y de ahí a la restricción EXCLUDE de
@@ -43,8 +53,11 @@ src/
     cliente.ts          cliente HTTP tipado y ErrorApi
     clienteConsultas.ts configuración de TanStack Query
     consultas.ts        una queryOptions por endpoint (lecturas)
-    mutaciones.ts       la única escritura, y las claves de idempotencia
+    mutaciones.ts       las escrituras, y las claves de idempotencia
+    pagos.ts            intención, confirmación asíncrona y comprobante
   componentes/          reutilizables entre pantallas
+    cupon.tsx           el vocabulario del sistema visual
+    Pago.tsx            Stripe Elements bajo el reloj de RF-27
   formato/              presentación en la zona horaria de la sede
   paginas/              una por ruta
   pruebas/              utilidades y preparación de Vitest
@@ -67,10 +80,31 @@ sirve ambos desde el mismo origen (ARQ-01). El cliente no se comporta distinto
 en un sitio y en otro.
 
 **El proxy enruta por método, no solo por ruta.** `/v1/reservas` lo sirven dos
-procesos: el `POST` el núcleo (:8080) y el `GET` el de consulta (:8081). Es la
-frontera de ARQ-01, y el proxy de Vite no sabe expresarla con configuración, así
-que un plugin de desarrollo reescribe la URL de las escrituras antes de que el
-proxy la vea. Está comentado en `vite.config.ts`. No afecta a `vite build`.
+procesos: el `POST` el núcleo (:8080) y el `GET` el de consulta (:8081), y
+`/v1/pagos/*` va entero al de pagos (:8084). Es la frontera de ARQ-01, y el
+proxy de Vite no sabe expresarla con configuración, así que un plugin de
+desarrollo reescribe la URL de las escrituras antes de que el proxy la vea. Está
+comentado en `vite.config.ts`. No afecta a `vite build`.
+
+**La tarjeta no pasa por aquí.** Del backend solo sale un `client_secret`, y el
+número lo recoge un iframe de Stripe que habla directamente con Stripe (RNF-05).
+La clave publicable llega en la respuesta de la intención, no en una variable de
+compilación: es del entorno y no del artefacto, así que rotarla no obliga a
+reconstruir el frontend.
+
+**«Succeeded» de Stripe no es «confirmada» de este sistema.** Cuando Stripe.js
+dice que el cobro salió, la reserva sigue `pendiente` hasta que llegue el
+webhook (RF-33). La interfaz consulta `GET /v1/pagos/{id}/estado` hasta que
+cambie, con un límite: pasado ese límite deja de preguntar y lo dice, pero no
+declara el pago perdido, porque el conciliador acaba resolviéndolo por su
+cuenta.
+
+**La intención de pago se pide UNA vez.** Abrir un cobro es una escritura contra
+un tercero, y una consulta que falló está siempre obsoleta: con la
+configuración por defecto de TanStack Query, `refetchOnWindowFocus` la relanza
+cada vez que alguien cambia de pestaña y vuelve. Con Stripe caído eso es una
+tormenta de reintentos justo cuando menos lo aguanta. Ver los cinco `refetch*`
+apagados en `componentes/Pago.tsx`.
 
 **Las horas se muestran en la zona de la SEDE, nunca en la del navegador.** Un
 tenant define su zona y cada sede la suya (RF-38): una cita de las 10:00 es a
